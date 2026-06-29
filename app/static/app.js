@@ -165,7 +165,7 @@ async function renderTmdb() {
 
 function mediaGrid(items, type) {
   if (!items.length) return `<div class="empty">暂无数据，配置 TMDB API Key 后会显示榜单。</div>`;
-  const visibleItems = items.slice(0, 14);
+  const visibleItems = items.slice(0, 20);
   return `<div class="media-grid">${visibleItems.map((item) => {
     const title = item.name || item.title;
     const mediaType = item.media_type === "movie" || item.media_type === "tv" ? item.media_type : type;
@@ -290,8 +290,9 @@ function simpleList(items, empty) {
 function embyGrid(items, empty, kind) {
   if (!items || !items.length) return `<div class="empty">${empty}</div>`;
   return `<div class="emby-grid">${items.map((item) => {
-    const image = item.image_url ? `<img src="${item.image_url}" alt="${item.name || item.title || "Emby"}" />` : `<div class="emby-placeholder">${kind === "user" ? "用户" : "媒体"}</div>`;
-    return `<article class="emby-card">
+    const imageClass = kind === "library" ? "library-image" : "";
+    const image = item.image_url ? `<img class="${imageClass}" src="${item.image_url}" alt="${item.name || item.title || "Emby"}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'emby-placeholder', textContent:'${kind === "user" ? "用户" : "媒体"}'}))" />` : `<div class="emby-placeholder">${kind === "user" ? "用户" : "媒体"}</div>`;
+    return `<article class="emby-card ${kind === "library" ? "emby-library-card" : ""}">
       ${image}
       <div>
         <h3>${item.name || item.title || "项目"}</h3>
