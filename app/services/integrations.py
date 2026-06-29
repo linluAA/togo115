@@ -272,6 +272,28 @@ class Pan115Adapter:
         proxy = module_proxy("pan115")
         return httpx.AsyncClient(proxy=proxy or None, timeout=25, follow_redirects=True)
 
+    def _cookie_from_login(self, payload: dict[str, Any], client: httpx.AsyncClient) -> str:
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        cookie_value = data.get("cookie") or data.get("cookies") or payload.get("cookie") or payload.get("cookies")
+        parts: list[str] = []
+        if isinstance(cookie_value, str):
+            parts.extend(part.strip() for part in cookie_value.split(";") if part.strip())
+        elif isinstance(cookie_value, dict):
+            for key, value in cookie_value.items():
+                if isinstance(value, dict):
+                    value = value.get("value")
+                if value is not None and value != "":
+                    parts.append(f"{key}={value}")
+        elif isinstance(cookie_value, list):
+            for item in cookie_value:
+                if isinstance(item, dict) and item.get("name") and item.get("value") is not None:
+                    parts.append(f"{item['name']}={item['value']}")
+        for item in client.cookies.jar:
+            pair = f"{item.name}={item.value}"
+            if pair not in parts:
+                parts.append(pair)
+        return "; ".join(parts)
+
     async def qr_login_start(self, channel: str = "web") -> dict[str, Any]:
         async with self._client() as client:
             res = await client.get(self.QR_TOKEN_URL)
@@ -325,13 +347,18 @@ class Pan115Adapter:
                 login_url = self.QR_LOGIN_URL.format(channel=channel)
                 login = await client.post(login_url, data={"account": flow["uid"], "app": channel})
                 login.raise_for_status()
-                cookie = "; ".join(f"{cookie.name}={cookie.value}" for cookie in client.cookies.jar)
+                login_payload = login.json()
+                cookie = self._cookie_from_login(login_payload, client)
+                if not cookie:
+                    add_log("error", "115", "115 扫码登录未返回 Cookie", {"response": str(login_payload)[:500]})
+                    save_flow("115_qr", {**flow, "status": "cookie_missing"})
+                    return {"status": "cookie_missing", "detail": "115 登录接口未返回 Cookie"}
                 config = get_setting("115")
                 config["cookie"] = cookie
                 save_setting("115", config)
                 save_flow("115_qr", {**flow, "status": "authorized"})
                 add_log("info", "115", "115 扫码登录成功，Cookie 已保存")
-                return {"status": "authorized"}
+                return {"status": "authorized", "cookie": cookie}
         save_flow("115_qr", {**flow, "status": status or "waiting"})
         return {"status": status or "waiting", "qr_url": flow.get("qr_url")}
 

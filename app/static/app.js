@@ -9,6 +9,7 @@ const state = {
   tmdbMore: null,
   logsMode: "simple",
   settingsTab: "credentials",
+  panQrTimer: null,
 };
 
 const navItems = [
@@ -322,11 +323,13 @@ function embyGrid(items, empty, kind) {
     const image = kind === "user"
       ? ""
       : (item.image_url ? `<img class="library-image" src="${item.image_url}" alt="${item.name || item.title || "Emby"}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'emby-placeholder', textContent:'媒体'}))" />` : fallback);
+    const metaClass = kind === "library" ? "emby-library-meta" : "";
+    const description = kind === "library" ? "" : (item.description || item.collection_type || item.date_played || "");
     return `<article class="emby-card ${kind === "library" ? "emby-library-card" : ""}">
       ${image}
-      <div>
+      <div class="${metaClass}">
         <h3>${item.name || item.title || "项目"}</h3>
-        <p>${item.description || item.collection_type || item.date_played || ""}</p>
+        ${description ? `<p>${description}</p>` : ""}
       </div>
     </article>`;
   }).join("")}</div>`;
@@ -590,10 +593,12 @@ function enhanceIntegrationCards() {
 async function startPanQr() {
   const channel = $("#panQrChannel")?.value || "web";
   const box = $("#panQrBox");
+  if (state.panQrTimer) clearInterval(state.panQrTimer);
   box.innerHTML = `<span>正在生成二维码...</span>`;
   try {
     const data = await api("/api/115/qr-login", { method: "POST", body: JSON.stringify({ channel }) });
     box.innerHTML = `<img alt="115 QR" src="${data.qr_url}" onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent:'二维码图片加载失败，请查看日志里的 115 错误'}))" /><span>打开 115 App 扫码确认后点击检查状态</span>`;
+    state.panQrTimer = setInterval(checkPanStatus, 3000);
   } catch (error) {
     box.innerHTML = `<span>二维码生成失败：${error.message}</span>`;
   }
@@ -601,10 +606,25 @@ async function startPanQr() {
 
 async function checkPanStatus() {
   const data = await api("/api/115/status");
-  toast(`115 状态：${data.status}`);
+  const statusText = { "0": "等待扫码", "1": "已扫码，等待确认", "2": "已确认", "-1": "二维码已过期", "-2": "已取消", authorized: "已登录", cookie_missing: "未获取到 Cookie" }[data.status] || data.status;
+  const box = $("#panQrBox");
+  if (box && data.status !== "authorized") {
+    const label = box.querySelector(".qr-status-label");
+    if (label) label.textContent = `115 状态：${statusText}`;
+    else box.insertAdjacentHTML("beforeend", `<span class="qr-status-label">115 状态：${statusText}</span>`);
+  }
+  toast(`115 状态：${statusText}`);
   if (data.status === "authorized") {
+    if (state.panQrTimer) clearInterval(state.panQrTimer);
+    state.panQrTimer = null;
     state.settings = await api("/api/settings");
+    const cookieInput = document.querySelector('[data-save-settings="115"] [name="cookie"]');
+    if (cookieInput && data.cookie) cookieInput.value = data.cookie;
     renderSettings();
+    toast("115 Cookie 已自动保存");
+  } else if (["-1", "-2", "cookie_missing"].includes(String(data.status))) {
+    if (state.panQrTimer) clearInterval(state.panQrTimer);
+    state.panQrTimer = null;
   }
 }
 
