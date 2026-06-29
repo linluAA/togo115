@@ -566,6 +566,40 @@ class EmbyAdapter:
         res.raise_for_status()
         return res.json()
 
+    async def library_snapshot(self) -> dict[str, list[dict[str, Any]]]:
+        config = get_setting("emby")
+        api_key = config.get("api_key")
+        base_url = self._base_url(config)
+        if not base_url or not api_key:
+            return {"movies": [], "series": [], "episodes": []}
+        proxy = module_proxy("emby")
+        async with httpx.AsyncClient(proxy=proxy or None, timeout=30, follow_redirects=True) as client:
+            common_params = {
+                "Recursive": "true",
+                "Limit": "10000",
+                "Fields": "ProviderIds,OriginalTitle,SortName,SeriesId,SeriesName,ParentId",
+            }
+            movies_series = await self._get(
+                client,
+                base_url,
+                "/Items",
+                api_key,
+                {**common_params, "IncludeItemTypes": "Movie,Series"},
+            )
+            episodes = await self._get(
+                client,
+                base_url,
+                "/Items",
+                api_key,
+                {**common_params, "IncludeItemTypes": "Episode"},
+            )
+        items = movies_series.get("Items", [])
+        return {
+            "movies": [item for item in items if item.get("Type") == "Movie"],
+            "series": [item for item in items if item.get("Type") == "Series"],
+            "episodes": episodes.get("Items", []),
+        }
+
     async def dashboard(self) -> dict[str, Any]:
         config = get_setting("emby")
         api_key = config.get("api_key")

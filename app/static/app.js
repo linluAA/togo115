@@ -388,6 +388,16 @@ function renderSubscriptions() {
     state.subscriptionStatus = "all";
     renderSubscriptions();
   });
+  $("#syncEmbySubscriptions")?.addEventListener("click", async () => {
+    try {
+      const result = await api("/api/subscriptions/sync-emby", { method: "POST" });
+      await refreshBase();
+      renderSubscriptions();
+      toast(result.ok ? `媒体库同步完成，匹配 ${result.matched || 0} 个订阅` : `媒体库同步失败：${result.error || "请查看日志"}`);
+    } catch (error) {
+      toast(`媒体库同步失败：${error.message}`);
+    }
+  });
   document.querySelectorAll("[data-delete]").forEach((btn) => btn.addEventListener("click", async () => {
     await api(`/api/subscriptions/${btn.dataset.delete}`, { method: "DELETE" });
     await refreshBase();
@@ -421,9 +431,13 @@ function subscriptionCards() {
     return matchType && matchStatus;
   });
   const cards = filtered.map((item) => {
+      const embyCount = item.emby_count || 0;
+      const tmdbTotal = item.tmdb_total_count || 0;
       const library = item.media_type === "movie"
         ? (item.in_library ? "已入库" : "未入库")
-        : `${item.emby_count || 0}/${item.tmdb_total_count || 0}`;
+        : (item.in_library
+          ? (tmdbTotal ? `${embyCount}/${tmdbTotal} 集` : `已入库 ${embyCount} 集`)
+          : "未入库");
       const poster = item.poster_url || posterUrl({});
       const keywords = (item.keywords || []).join(", ") || "未设置关键词";
       return `<article class="subscription-card">
@@ -462,6 +476,7 @@ function subscriptionCards() {
           <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
           <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
         </select>
+        <button type="button" class="secondary" id="syncEmbySubscriptions">同步媒体库</button>
         <button type="button" class="secondary" id="subscriptionReset">重置</button>
       </div>
     </div>

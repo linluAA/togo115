@@ -12,7 +12,7 @@ from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan1
 from app.services.integrations import EmbyAdapter, Pan115Adapter, TelegramClientAdapter, TmdbAdapter
 import qrcode
 from app.services.monitor import monitor_service
-from app.services.subscription import create_subscription, delete_subscription, deliver_resource, get_subscription, list_subscriptions, search_and_attach_resources, update_subscription
+from app.services.subscription import create_subscription, delete_subscription, deliver_resource, get_subscription, list_subscriptions, search_and_attach_resources, sync_subscriptions_with_emby, update_subscription
 
 app = FastAPI(title="ToGo115")
 static_dir = Path(__file__).parent / "static"
@@ -102,6 +102,11 @@ async def put_setting(key: str, payload: SettingPayload, user: dict = Depends(cu
 @app.get("/api/subscriptions")
 async def subscriptions(user: dict = Depends(current_user)) -> list[dict]:
     return list_subscriptions()
+
+
+@app.post("/api/subscriptions/sync-emby")
+async def sync_subscription_emby_status(user: dict = Depends(current_user)) -> dict:
+    return await sync_subscriptions_with_emby()
 
 
 @app.post("/api/subscriptions")

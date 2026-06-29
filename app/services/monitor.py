@@ -1,16 +1,18 @@
 import asyncio
+import time
 from contextlib import suppress
 
 from app.config import settings
 from app.db import add_log
 from app.services.integrations import TelegramClientAdapter
-from app.services.subscription import list_subscriptions, search_and_attach_resources
+from app.services.subscription import list_subscriptions, search_and_attach_resources, sync_subscriptions_with_emby
 
 
 class MonitorService:
     def __init__(self) -> None:
         self._task: asyncio.Task | None = None
         self._stopping = asyncio.Event()
+        self._last_emby_sync = 0.0
 
     def start(self) -> None:
         if self._task and not self._task.done():
@@ -32,6 +34,9 @@ class MonitorService:
         while not self._stopping.is_set():
             try:
                 await telegram.ensure_monitoring()
+                if time.monotonic() - self._last_emby_sync > 600:
+                    await sync_subscriptions_with_emby()
+                    self._last_emby_sync = time.monotonic()
                 for subscription in list_subscriptions():
                     if subscription["status"] == "active":
                         await search_and_attach_resources(subscription["id"])

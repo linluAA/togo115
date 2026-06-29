@@ -2,7 +2,7 @@ import re
 
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
-from app.services.integrations import Pan115Adapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, get_setting
+from app.services.integrations import EmbyAdapter, Pan115Adapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, get_setting
 
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
@@ -71,6 +71,97 @@ def result_matches_subscription(subscription: dict, result: SearchResult, *extra
     if not title_term or not _term_in_text(title_term, raw_haystack, compact_haystack):
         return False
     return all(_term_in_text(term, raw_haystack, compact_haystack) for term in keyword_terms)
+
+
+def _emby_provider_tmdb_id(item: dict) -> str:
+    provider_ids = item.get("ProviderIds") or {}
+    for key in ("Tmdb", "TMDB", "TheMovieDb"):
+        value = provider_ids.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
+def _emby_names(item: dict) -> list[str]:
+    names = [item.get("Name"), item.get("OriginalTitle"), item.get("SortName"), item.get("SeriesName")]
+    return [str(name).strip() for name in names if name]
+
+
+def _emby_item_matches(subscription: dict, item: dict) -> bool:
+    subscription_tmdb_id = str(subscription.get("tmdb_id") or "")
+    item_tmdb_id = _emby_provider_tmdb_id(item)
+    if subscription_tmdb_id and item_tmdb_id and subscription_tmdb_id == item_tmdb_id:
+        return True
+    subscription_title = _compact_match_text(subscription.get("title"))
+    if not subscription_title:
+        return False
+    for name in _emby_names(item):
+        item_title = _compact_match_text(name)
+        if item_title == subscription_title:
+            return True
+        if len(subscription_title) >= 4 and subscription_title in item_title:
+            return True
+    return False
+
+
+async def sync_subscriptions_with_emby() -> dict:
+    subscriptions = list_subscriptions()
+    if not subscriptions:
+        return {"ok": True, "updated": 0, "matched": 0}
+    try:
+        snapshot = await EmbyAdapter().library_snapshot()
+    except Exception as exc:
+        add_log("error", "emby", "Emby 订阅入库状态同步失败", {"error": str(exc)})
+        return {"ok": False, "updated": 0, "matched": 0, "error": str(exc)}
+
+    movies = snapshot.get("movies", [])
+    series = snapshot.get("series", [])
+    episodes = snapshot.get("episodes", [])
+    episode_count_by_series_id: dict[str, int] = {}
+    episode_count_by_series_name: dict[str, int] = {}
+    for episode in episodes:
+        series_id = str(episode.get("SeriesId") or episode.get("ParentId") or "")
+        if series_id:
+            episode_count_by_series_id[series_id] = episode_count_by_series_id.get(series_id, 0) + 1
+        series_name = _compact_match_text(episode.get("SeriesName"))
+        if series_name:
+            episode_count_by_series_name[series_name] = episode_count_by_series_name.get(series_name, 0) + 1
+
+    updated = 0
+    matched = 0
+    now = utc_now()
+    with db() as conn:
+        for subscription in subscriptions:
+            if subscription["media_type"] == "movie":
+                match = next((item for item in movies if _emby_item_matches(subscription, item)), None)
+                in_library = 1 if match else 0
+                emby_count = 1 if match else 0
+            else:
+                match = next((item for item in series if _emby_item_matches(subscription, item)), None)
+                series_id = str(match.get("Id") or "") if match else ""
+                emby_count = episode_count_by_series_id.get(series_id, 0)
+                if match and not emby_count:
+                    for name in _emby_names(match):
+                        emby_count = episode_count_by_series_name.get(_compact_match_text(name), 0)
+                        if emby_count:
+                            break
+                in_library = 1 if match or emby_count else 0
+            if in_library:
+                matched += 1
+            if subscription.get("in_library") == bool(in_library) and int(subscription.get("emby_count") or 0) == emby_count:
+                continue
+            conn.execute(
+                """
+                UPDATE subscriptions
+                SET in_library = ?, emby_count = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (in_library, emby_count, now, subscription["id"]),
+            )
+            updated += 1
+    if updated:
+        add_log("info", "emby", "订阅入库状态已同步", {"updated": updated, "matched": matched})
+    return {"ok": True, "updated": updated, "matched": matched}
 
 
 async def create_subscription(payload: SubscriptionCreate) -> dict:
