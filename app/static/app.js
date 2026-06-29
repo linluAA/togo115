@@ -7,6 +7,7 @@ const state = {
   mediaPayloads: new Map(),
   tmdbSearch: [],
   logsMode: "simple",
+  settingsTab: "credentials",
 };
 
 const navItems = [
@@ -374,19 +375,39 @@ async function renderLogs() {
 }
 
 function renderSettings() {
-  $("#view").innerHTML = `<div class="settings">
-    ${settingsCard("账号安全", "credentials", [
+  const tabs = [
+    ["credentials", "账号安全"],
+    ["delivery", "推送方式"],
+    ["115", "115 网盘"],
+    ["telegram", "Telegram"],
+    ["tmdb", "TMDB"],
+    ["proxy", "代理设置"],
+    ["tg_bot", "TG Bot"],
+    ["emby", "媒体库"],
+  ];
+  const cards = {
+    credentials: settingsCard("账号安全", "credentials", [
       ["username", "账号", state.user.username],
       ["password", "新密码", "", "password"],
-    ])}
-    ${settingsCard("推送方式", "delivery", [["mode", "全局推送方式"]])}
-    ${settingsCard("115 网盘", "115", [["cookie", "Cookie"], ["target_path", "默认转存目录"], ["qr_login", "扫码登录状态"]])}
-    ${settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道，多个用逗号分隔"], ["history_limit", "历史搜索条数"]])}
-    ${settingsCard("TMDB", "tmdb", [["api_key", "API Key"]])}
-    ${settingsCard("代理设置", "proxy", [["tmdb", "TMDB 代理"], ["telegram", "Telegram 代理"], ["pan115", "115 代理"], ["emby", "Emby 代理"]])}
-    ${settingsCard("TG Bot", "tg_bot", [["bot_token", "Bot Token"], ["bot_username", "机器人用户名"], ["allowed_chat_id", "允许的 Chat ID"]])}
-    ${settingsCard("媒体库", "emby", [["server_url", "Emby 地址"], ["api_key", "API Key"], ["user_id", "用户 ID"]])}
-  </div>`;
+    ]),
+    delivery: settingsCard("推送方式", "delivery", [["mode", "全局推送方式"]]),
+    115: settingsCard("115 网盘", "115", [["cookie", "Cookie"], ["target_path", "默认转存目录"], ["qr_login", "扫码登录状态"]]),
+    telegram: settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道，多个用逗号分隔"], ["history_limit", "历史搜索条数"]]),
+    tmdb: settingsCard("TMDB", "tmdb", [["api_key", "API Key"]]),
+    proxy: settingsCard("代理设置", "proxy", [["tmdb", "TMDB 代理"], ["telegram", "Telegram 代理"], ["pan115", "115 代理"], ["emby", "Emby 代理"]]),
+    tg_bot: settingsCard("TG Bot", "tg_bot", [["bot_token", "Bot Token"], ["bot_username", "机器人用户名"], ["allowed_chat_id", "允许的 Chat ID"]]),
+    emby: settingsCard("媒体库", "emby", [["server_url", "Emby 地址"], ["api_key", "API Key"], ["user_id", "用户 ID"]]),
+  };
+  $("#view").innerHTML = `
+    <nav class="settings-tabs">
+      ${tabs.map(([key, label]) => `<button class="${state.settingsTab === key ? "active" : ""}" data-settings-tab="${key}">${label}</button>`).join("")}
+    </nav>
+    <div class="settings settings-single">${cards[state.settingsTab]}</div>
+  `;
+  document.querySelectorAll("[data-settings-tab]").forEach((btn) => btn.addEventListener("click", () => {
+    state.settingsTab = btn.dataset.settingsTab;
+    renderSettings();
+  }));
   document.querySelectorAll("[data-save-settings]").forEach((form) => form.addEventListener("submit", saveSettings));
   enhanceIntegrationCards();
 }
