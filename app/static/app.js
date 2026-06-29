@@ -488,13 +488,16 @@ function resourceTable() {
   if (!state.resources.length) return `<div class="empty">还没有发现资源链接。</div>`;
   return `<table class="table">
     <thead><tr><th>订阅</th><th>链接</th><th>来源</th><th>状态</th><th>操作</th></tr></thead>
-    <tbody>${state.resources.map((item) => `<tr>
+    <tbody>${state.resources.map((item) => {
+      const pillClass = item.status === "delivered" ? "pill-delivered" : item.status === "failed" ? "pill-failed" : "pill-pending";
+      return `<tr>
       <td data-label="订阅">${item.subscription_title}</td>
       <td data-label="链接"><a href="${item.url}" target="_blank" rel="noreferrer">${item.url}</a></td>
       <td data-label="来源">${item.source}<br><span class="muted">${item.message_id || ""}</span></td>
-      <td data-label="状态"><span class="pill">${item.status}</span></td>
+      <td data-label="状态"><span class="pill ${pillClass}">${item.status}</span></td>
       <td data-label="操作"><button class="secondary" data-deliver="${item.id}">重试</button></td>
-    </tr>`).join("")}</tbody>
+    </tr>`;
+    }).join("")}</tbody>
   </table>`;
 }
 
