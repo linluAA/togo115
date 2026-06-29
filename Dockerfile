@@ -9,6 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+RUN python -m compileall -q app
 RUN mkdir -p /data
 
 ENV TOGO115_DATA_DIR=/data \

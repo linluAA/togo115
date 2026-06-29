@@ -1,6 +1,11 @@
+import re
+
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
 from app.services.integrations import Pan115Adapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, get_setting
+
+
+MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 
 
 def normalize_subscription(row) -> dict:
@@ -20,6 +25,36 @@ def get_subscription(subscription_id: int) -> dict | None:
     with db() as conn:
         row = conn.execute("SELECT * FROM subscriptions WHERE id = ?", (subscription_id,)).fetchone()
     return normalize_subscription(row) if row else None
+
+
+def _compact_match_text(value: str | None) -> str:
+    return MATCH_DROP_RE.sub("", str(value or "").casefold())
+
+
+def _subscription_terms(subscription: dict) -> list[tuple[str, str]]:
+    terms: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for term in [subscription.get("title"), *(subscription.get("keywords") or [])]:
+        raw = str(term or "").strip()
+        compact = _compact_match_text(raw)
+        if not raw or len(compact) < 2 or compact in seen:
+            continue
+        seen.add(compact)
+        terms.append((raw.casefold(), compact))
+    return terms
+
+
+def result_matches_subscription(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
+    text = "\n".join(
+        part
+        for part in [getattr(result, "context", ""), result.title, *extra_texts]
+        if part
+    )
+    if not text:
+        return False
+    raw_haystack = text.casefold()
+    compact_haystack = _compact_match_text(text)
+    return any(raw_term in raw_haystack or compact_term in compact_haystack for raw_term, compact_term in _subscription_terms(subscription))
 
 
 async def create_subscription(payload: SubscriptionCreate) -> dict:
@@ -80,9 +115,10 @@ async def search_and_attach_resources(subscription_id: int) -> list[dict]:
         return []
     client = TelegramClientAdapter()
     results = await client.search_history(subscription["title"], subscription["keywords"])
+    matched_results = [result for result in results if result_matches_subscription(subscription, result)]
     created = []
     with db() as conn:
-        for result in results:
+        for result in matched_results:
             exists = conn.execute("SELECT id FROM resources WHERE url = ? AND subscription_id = ?", (result.url, subscription_id)).fetchone()
             if exists:
                 continue
@@ -92,6 +128,9 @@ async def search_and_attach_resources(subscription_id: int) -> list[dict]:
             )
             created.append({**result.__dict__, "resource_id": cursor.lastrowid})
         conn.execute("UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?", (utc_now(), utc_now(), subscription_id))
+    skipped = len(results) - len(matched_results)
+    if skipped:
+        add_log("debug", "subscription", "历史搜索结果未匹配订阅标题/关键词，已跳过", {"id": subscription_id, "skipped": skipped})
     if created:
         add_log("info", "subscription", "发现新的 115 资源链接", {"id": subscription_id, "count": len(created)})
         for item in created:
@@ -104,12 +143,10 @@ async def attach_results_to_matching_subscriptions(results: list[SearchResult], 
     attached = 0
     resource_ids: list[int] = []
     for subscription in subscriptions:
-        haystack = f"{message_text}\n{subscription['title']}".lower()
-        keywords = [subscription["title"], *subscription.get("keywords", [])]
-        if not any(keyword and keyword.lower() in haystack for keyword in keywords):
-            continue
         with db() as conn:
             for result in results:
+                if not result_matches_subscription(subscription, result, message_text):
+                    continue
                 exists = conn.execute("SELECT id FROM resources WHERE url = ? AND subscription_id = ?", (result.url, subscription["id"])).fetchone()
                 if exists:
                     continue

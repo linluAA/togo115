@@ -65,6 +65,7 @@ class SearchResult:
     url: str
     source: str
     message_id: str | None = None
+    context: str = ""
 
 
 def extract_115_links(text: str | None) -> list[str]:
@@ -249,22 +250,25 @@ class TelegramClientAdapter:
         return results
 
     async def _links_from_message(self, client: TelegramClient, message: Any, source: str) -> list[SearchResult]:
-        links = extract_115_links(message.raw_text)
-        if not links and getattr(message, "buttons", None):
-            links.extend(await self._click_buttons_for_links(message))
-        unique = list(dict.fromkeys(links))
+        message_text = message.raw_text or ""
+        link_contexts: dict[str, str] = {link: message_text for link in extract_115_links(message_text)}
+        if not link_contexts and getattr(message, "buttons", None):
+            for link, button_text in await self._click_buttons_for_links(message):
+                context = "\n".join(part for part in (message_text, button_text) if part)
+                link_contexts.setdefault(link, context)
         return [
             SearchResult(
-                title=(message.raw_text or "Telegram 资源")[:120],
+                title=(context or "Telegram 资源")[:120],
                 url=link,
                 source=str(source),
                 message_id=str(message.id),
+                context=context,
             )
-            for link in unique
+            for link, context in link_contexts.items()
         ]
 
-    async def _click_buttons_for_links(self, message: Any) -> list[str]:
-        links: list[str] = []
+    async def _click_buttons_for_links(self, message: Any) -> list[tuple[str, str]]:
+        links: list[tuple[str, str]] = []
         for row_index, row in enumerate(message.buttons or []):
             for col_index, button in enumerate(row):
                 label = getattr(button, "text", "") or ""
@@ -273,7 +277,7 @@ class TelegramClientAdapter:
                 try:
                     response = await message.click(row_index, col_index)
                     text = getattr(response, "raw_text", None) or getattr(response, "message", None) or (response if isinstance(response, str) else None)
-                    links.extend(extract_115_links(text))
+                    links.extend((link, text or label) for link in extract_115_links(text))
                 except Exception as exc:
                     add_log("debug", "telegram", "点击 Telegram 消息按钮未取得链接", {"message_id": message.id, "button": label, "error": str(exc)})
         return links
