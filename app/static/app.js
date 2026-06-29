@@ -493,7 +493,15 @@ function enhanceIntegrationCards() {
           <option value="android">115生活_安卓端 - android</option>
           <option value="115android">115_安卓端 - 115android</option>
           <option value="ipad">115生活_苹果平板端 - ipad</option>
+          <option value="115ipad">115_苹果平板端 - 115ipad</option>
           <option value="alipaymini">115生活_支付宝小程序 - alipaymini</option>
+          <option value="wechatmini">115生活_微信小程序 - wechatmini</option>
+          <option value="qandroid">115生活_安卓电视端 - qandroid</option>
+          <option value="tv">115生活_TV端 - tv</option>
+          <option value="mac">115生活_MAC端 - mac</option>
+          <option value="windows">115生活_Windows端 - windows</option>
+          <option value="linux">115生活_Linux端 - linux</option>
+          <option value="harmony">115生活_鸿蒙端 - harmony</option>
         </select>
       </label>
       <div class="inline-actions">
@@ -525,7 +533,7 @@ function enhanceIntegrationCards() {
   const proxyForm = document.querySelector('[data-save-settings="proxy"]');
   if (proxyForm) {
     proxyForm.insertAdjacentHTML("beforeend", `
-      <button type="button" class="secondary" id="proxyTestBtn">测试 GitHub / Google 延迟</button>
+      <button type="button" class="secondary" id="proxyTestBtn">延迟测试</button>
       <div class="proxy-test-result" id="proxyTestResult"></div>
     `);
     $("#proxyTestBtn").addEventListener("click", testProxyLatency);
