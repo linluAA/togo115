@@ -399,24 +399,40 @@ function resourceTable() {
 async function renderLogs() {
   const root = $("#view");
   root.innerHTML = `
-    <section class="toolbar">
-      <button class="${state.logsMode === "simple" ? "" : "secondary"}" data-mode="simple">简易日志</button>
-      <button class="${state.logsMode === "debug" ? "" : "secondary"}" data-mode="debug">Debug</button>
+    <section class="log-toolbar">
+      <span class="log-status">● 已连接</span>
+      <input id="logFilter" placeholder="输入过滤关键字" />
+      <button class="${state.logsMode === "simple" ? "active" : ""}" data-mode="simple">重要</button>
+      <button class="${state.logsMode === "debug" ? "active" : ""}" data-mode="debug">全部</button>
+      <button class="danger" id="clearLogView">清空</button>
     </section>
-    <div class="log-list"><div class="empty">正在读取日志...</div></div>
+    <div class="log-terminal"><div class="log-list"><div class="empty">正在读取日志...</div></div></div>
   `;
   root.querySelectorAll("[data-mode]").forEach((btn) => btn.addEventListener("click", () => {
     state.logsMode = btn.dataset.mode;
     renderLogs();
   }));
   const logs = await api(`/api/logs?mode=${state.logsMode}`);
-  root.querySelector(".log-list").innerHTML = logs.length ? logs.map((log) => `
-    <div class="log-item ${log.level}">
-      <strong>${log.level.toUpperCase()} · ${log.scope}</strong>
-      <div>${log.message}</div>
-      <small class="muted">${new Date(log.created_at).toLocaleString()}</small>
-    </div>
-  `).join("") : `<div class="empty">暂无日志</div>`;
+  renderLogRows(logs);
+  $("#logFilter").addEventListener("input", () => renderLogRows(logs));
+  $("#clearLogView").addEventListener("click", () => {
+    root.querySelector(".log-list").innerHTML = "";
+  });
+}
+
+function renderLogRows(logs) {
+  const keyword = $("#logFilter")?.value.trim().toLowerCase() || "";
+  const filtered = keyword ? logs.filter((log) => `${log.level} ${log.scope} ${log.message}`.toLowerCase().includes(keyword)) : logs;
+  $(".log-list").innerHTML = filtered.length ? filtered.map((log, index) => {
+    const time = new Date(log.created_at).toLocaleString();
+    return `<div class="log-line ${log.level}">
+      <span class="line-no">${index + 1}</span>
+      <span class="level">${log.level.toUpperCase()}</span>
+      <span class="time">${time}</span>
+      <span class="scope">${log.scope}</span>
+      <span class="message">${log.message}</span>
+    </div>`;
+  }).join("") : `<div class="log-empty">暂无日志</div>`;
 }
 
 function renderSettings() {
@@ -571,8 +587,14 @@ function enhanceIntegrationCards() {
 
 async function startPanQr() {
   const channel = $("#panQrChannel")?.value || "web";
-  const data = await api("/api/115/qr-login", { method: "POST", body: JSON.stringify({ channel }) });
-  $("#panQrBox").innerHTML = `<img alt="115 QR" src="${data.qr_url}" /><span>打开 115 App 扫码确认后点击检查状态</span>`;
+  const box = $("#panQrBox");
+  box.innerHTML = `<span>正在生成二维码...</span>`;
+  try {
+    const data = await api("/api/115/qr-login", { method: "POST", body: JSON.stringify({ channel }) });
+    box.innerHTML = `<img alt="115 QR" src="${data.qr_url}" /><span>打开 115 App 扫码确认后点击检查状态</span>`;
+  } catch (error) {
+    box.innerHTML = `<span>二维码生成失败：${error.message}</span>`;
+  }
 }
 
 async function checkPanStatus() {

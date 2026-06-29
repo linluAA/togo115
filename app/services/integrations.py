@@ -281,7 +281,7 @@ class Pan115Adapter:
         sign = data.get("sign")
         if not uid or not token or not sign:
             raise RuntimeError("115 扫码 token 获取失败")
-        qr_url = f"https://qrcodeapi.115.com/api/1.0/web/1.0/qrcode?uid={uid}"
+        qr_url = f"https://qrcodeapi.115.com/api/1.0/web/1.0/qrcode?uid={uid}&token={token}&sign={sign}"
         save_flow("115_qr", {"uid": uid, "token": token, "sign": sign, "qr_url": qr_url, "status": "waiting", "channel": channel})
         add_log("info", "115", "115 扫码登录已创建", {"channel": channel})
         return {"qr_url": qr_url, "status": "waiting", "channel": channel}
