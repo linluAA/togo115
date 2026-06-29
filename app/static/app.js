@@ -11,6 +11,7 @@ const state = {
   settingsTab: "credentials",
   panQrTimer: null,
   tgLoginTimer: null,
+  panFolder: { cid: "0", path: "/" },
 };
 
 const navItems = [
@@ -22,6 +23,16 @@ const navItems = [
 ];
 
 const $ = (selector) => document.querySelector(selector);
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[char]));
+}
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -489,6 +500,25 @@ function settingsCard(title, key, fields) {
 }
 
 function fieldHtml(key, name, label, current, type = "text") {
+  if (key === "115" && name === "target_path") {
+    const cid = state.settings["115"]?.value?.target_cid || "0";
+    const path = current || "/";
+    state.panFolder = { cid: String(cid), path };
+    return `<fieldset class="folder-picker"><legend>${label}</legend>
+      <div class="folder-current" id="panFolderCurrent">${escapeHtml(path)}</div>
+      <input type="hidden" name="target_path" id="panTargetPath" value="${escapeHtml(path)}" />
+      <input type="hidden" name="target_cid" id="panTargetCid" value="${escapeHtml(cid)}" />
+      <div class="inline-actions">
+        <button type="button" class="secondary" id="panFolderRoot">根目录</button>
+        <button type="button" class="secondary" id="loadPanFolders">选择目录</button>
+      </div>
+      <div class="dialog-list folder-list" id="panFolderList"></div>
+    </fieldset>`;
+  }
+  if (key === "115" && name === "qr_login") {
+    const status = current || (state.settings["115"]?.value?.cookie ? "已登录" : "未登录");
+    return `<label>${label}<input type="text" name="${name}" value="${status}" readonly /></label>`;
+  }
   if (key === "delivery" && name === "mode") {
     const selected = current || "115";
     return `<label>${label}<select name="mode">
@@ -591,6 +621,10 @@ function enhanceIntegrationCards() {
   }
   const loadDialogs = $("#loadTelegramDialogs");
   if (loadDialogs) loadDialogs.addEventListener("click", loadTelegramDialogs);
+  const loadFolders = $("#loadPanFolders");
+  if (loadFolders) loadFolders.addEventListener("click", () => loadPanFolders(state.panFolder.cid || "0", state.panFolder.path || "/"));
+  const folderRoot = $("#panFolderRoot");
+  if (folderRoot) folderRoot.addEventListener("click", () => selectPanFolder("0", "/"));
   const proxyForm = document.querySelector('[data-save-settings="proxy"]');
   if (proxyForm) {
     proxyForm.insertAdjacentHTML("beforeend", `
@@ -619,12 +653,14 @@ async function checkPanStatus() {
   const data = await api("/api/115/status");
   const statusText = { "0": "等待扫码", "1": "已扫码，等待确认", "2": "已确认", "-1": "二维码已过期", "-2": "已取消", authorized: "已登录", cookie_missing: "未获取到 Cookie" }[data.status] || data.status;
   const box = $("#panQrBox");
+  const statusInput = document.querySelector('[data-save-settings="115"] [name="qr_login"]');
+  if (statusInput) statusInput.value = statusText;
   if (box && data.status !== "authorized") {
     const label = box.querySelector(".qr-status-label");
     if (label) label.textContent = `115 状态：${statusText}`;
     else box.insertAdjacentHTML("beforeend", `<span class="qr-status-label">115 状态：${statusText}</span>`);
   }
-  toast(`115 状态：${statusText}`);
+  if (!state.panQrTimer || data.status === "authorized") toast(`115 状态：${statusText}`);
   if (data.status === "authorized") {
     if (state.panQrTimer) clearInterval(state.panQrTimer);
     state.panQrTimer = null;
@@ -669,7 +705,7 @@ async function checkTgStatus() {
     if (label) label.textContent = `Telegram 状态：${data.status}`;
     else box.insertAdjacentHTML("beforeend", `<span class="qr-status-label">Telegram 状态：${data.status}</span>`);
   }
-  toast(data.authorized ? "Telegram 已登录" : `Telegram 未登录：${data.status || "waiting"}`);
+  if (!state.tgLoginTimer) toast(data.authorized ? "Telegram 已登录" : `Telegram 未登录：${data.status || "waiting"}`);
 }
 
 async function sendTgCode() {
@@ -716,15 +752,55 @@ async function loadTelegramDialogs() {
   const box = $("#telegramDialogList");
   box.innerHTML = `<div class="muted">正在读取...</div>`;
   const selected = new Set((box.dataset.selected || "").split(",").filter(Boolean));
-  const data = await api("/api/telegram/dialogs");
-  const dialogs = data.dialogs || [];
-  box.innerHTML = dialogs.length ? dialogs.map((item) => `
-    <label>
-      <input type="checkbox" name="sources" value="${item.source}" ${selected.has(item.source) ? "checked" : ""} />
-      <span>${item.title}</span>
-      <small>${item.type}${item.username ? ` · @${item.username}` : ""}</small>
-    </label>
-  `).join("") : `<div class="muted">没有读取到群组/频道，请确认 Telegram 已登录。</div>`;
+  try {
+    const status = await api("/api/telegram/status");
+    if (!status.authorized) {
+      box.innerHTML = `<div class="muted">Telegram 未登录：${status.status || "not_authorized"}</div>`;
+      return;
+    }
+    const data = await api("/api/telegram/dialogs");
+    const dialogs = data.dialogs || [];
+    box.innerHTML = dialogs.length ? dialogs.map((item) => `
+      <label>
+        <input type="checkbox" name="sources" value="${item.source}" ${selected.has(item.source) ? "checked" : ""} />
+        <span>${item.title}</span>
+        <small>${item.type}${item.username ? ` · @${item.username}` : ""}</small>
+      </label>
+    `).join("") : `<div class="muted">没有读取到群组/频道。</div>`;
+  } catch (error) {
+    box.innerHTML = `<div class="muted">群组/频道读取失败：${error.message}</div>`;
+  }
+}
+
+function selectPanFolder(cid, path) {
+  state.panFolder = { cid: String(cid), path };
+  const pathInput = $("#panTargetPath");
+  const cidInput = $("#panTargetCid");
+  const current = $("#panFolderCurrent");
+  if (pathInput) pathInput.value = path;
+  if (cidInput) cidInput.value = cid;
+  if (current) current.textContent = path;
+  toast(`已选择目录：${path}`);
+}
+
+async function loadPanFolders(cid = "0", basePath = "/") {
+  const box = $("#panFolderList");
+  box.innerHTML = `<div class="muted">正在读取目录...</div>`;
+  try {
+    const data = await api(`/api/115/folders?cid=${encodeURIComponent(cid)}`);
+    const folders = data.folders || [];
+    const parent = basePath !== "/" ? `<button type="button" class="folder-row" data-cid="0" data-path="/">返回根目录</button>` : "";
+    box.innerHTML = parent + (folders.length ? folders.map((item) => {
+      const path = `${basePath.replace(/\/$/, "")}/${item.name}`.replace(/^$/, "/");
+      return `<button type="button" class="folder-row" data-cid="${escapeHtml(item.id)}" data-path="${escapeHtml(path)}">${escapeHtml(item.name)}</button>`;
+    }).join("") : `<div class="muted">当前目录没有子目录。</div>`);
+    box.querySelectorAll(".folder-row").forEach((btn) => btn.addEventListener("click", () => {
+      selectPanFolder(btn.dataset.cid, btn.dataset.path);
+      loadPanFolders(btn.dataset.cid, btn.dataset.path);
+    }));
+  } catch (error) {
+    box.innerHTML = `<div class="muted">目录读取失败：${error.message}</div>`;
+  }
 }
 
 async function testProxyLatency() {

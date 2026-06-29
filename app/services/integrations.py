@@ -103,13 +103,14 @@ class TelegramClientAdapter:
         return config
 
     async def client(self) -> TelegramClient:
-        if self._client and self._client.is_connected():
-            return self._client
+        cls = type(self)
+        if cls._client and cls._client.is_connected():
+            return cls._client
         config = self._config()
         proxy = self._telethon_proxy(module_proxy("telegram"))
-        self._client = TelegramClient(str(self._session_path()), int(config["api_id"]), config["api_hash"], proxy=proxy)
-        await self._client.connect()
-        return self._client
+        cls._client = TelegramClient(str(self._session_path()), int(config["api_id"]), config["api_hash"], proxy=proxy)
+        await cls._client.connect()
+        return cls._client
 
     def _telethon_proxy(self, proxy_url: str | None):
         if not proxy_url:
@@ -196,7 +197,12 @@ class TelegramClientAdapter:
 
     async def login_status(self) -> dict[str, Any]:
         flow = get_flow("telegram_login")
-        return {"authorized": await self.is_authorized(), **flow}
+        authorized = await self.is_authorized()
+        status = "authorized" if authorized else flow.get("status") or "not_authorized"
+        if not authorized and status == "authorized":
+            status = "not_authorized"
+            save_flow("telegram_login", {**flow, "status": status})
+        return {**flow, "authorized": authorized, "status": status}
 
     async def dialogs(self) -> list[dict[str, Any]]:
         client = await self.client()
@@ -275,7 +281,8 @@ class TelegramClientAdapter:
     async def ensure_monitoring(self) -> None:
         if not await self.is_authorized():
             return
-        if self._listener_task and not self._listener_task.done():
+        cls = type(self)
+        if cls._listener_task and not cls._listener_task.done():
             add_log("debug", "telegram", "Telegram 监控心跳正常")
             return
         client = await self.client()
@@ -284,16 +291,16 @@ class TelegramClientAdapter:
         if not dialogs:
             return
 
-        if not self._handler_registered:
+        if not cls._handler_registered:
             @client.on(events.NewMessage(chats=dialogs))
             async def handler(event) -> None:
                 from app.services.subscription import attach_results_to_matching_subscriptions
                 results = await self._links_from_message(client, event.message, str(event.chat_id))
                 if results:
                     await attach_results_to_matching_subscriptions(results, event.message.raw_text or "")
-            self._handler_registered = True
+            cls._handler_registered = True
 
-        self._listener_task = asyncio.create_task(client.run_until_disconnected())
+        cls._listener_task = asyncio.create_task(client.run_until_disconnected())
         add_log("info", "telegram", "Telegram 实时监控已启动", {"sources": dialogs})
 
 
@@ -304,6 +311,7 @@ class Pan115Adapter:
     QR_LOGIN_URL = "https://passportapi.115.com/app/1.0/{channel}/1.0/login/qrcode/"
     SHARE_RECEIVE_URL = "https://webapi.115.com/share/receive"
     FILE_ADD_URL = "https://webapi.115.com/files/add"
+    FILES_LIST_URL = "https://webapi.115.com/files"
 
     def _client(self) -> httpx.AsyncClient:
         proxy = module_proxy("pan115")
@@ -371,6 +379,9 @@ class Pan115Adapter:
 
     async def qr_login_status(self) -> dict[str, Any]:
         flow = get_flow("115_qr")
+        config = get_setting("115")
+        if not flow and config.get("cookie"):
+            return {"status": "authorized", "cookie": config.get("cookie")}
         if not flow:
             return {"status": "not_started"}
         params = {"uid": flow["uid"], "time": flow.get("time"), "sign": flow["sign"]}
@@ -390,14 +401,56 @@ class Pan115Adapter:
                     add_log("error", "115", "115 扫码登录未返回 Cookie", {"response": str(login_payload)[:500]})
                     save_flow("115_qr", {**flow, "status": "cookie_missing"})
                     return {"status": "cookie_missing", "detail": "115 登录接口未返回 Cookie"}
-                config = get_setting("115")
                 config["cookie"] = cookie
+                config["qr_login"] = "已登录"
                 save_setting("115", config)
                 save_flow("115_qr", {**flow, "status": "authorized"})
                 add_log("info", "115", "115 扫码登录成功，Cookie 已保存")
                 return {"status": "authorized", "cookie": cookie}
         save_flow("115_qr", {**flow, "status": status or "waiting"})
         return {"status": status or "waiting", "qr_url": flow.get("qr_url")}
+
+    def _folder_item(self, item: dict[str, Any]) -> dict[str, str] | None:
+        cid = item.get("cid") or item.get("file_id") or item.get("fid") or item.get("id")
+        name = item.get("n") or item.get("name") or item.get("file_name") or item.get("title")
+        is_dir = item.get("is_dir")
+        if is_dir is None:
+            is_dir = item.get("fc") == "0" or item.get("ico") == "folder" or bool(item.get("cid") and not item.get("fid"))
+        if not is_dir or cid is None or not name:
+            return None
+        return {"id": str(cid), "name": str(name)}
+
+    async def list_folders(self, cid: str = "0") -> dict[str, Any]:
+        config = get_setting("115")
+        cookie = config.get("cookie")
+        if not cookie:
+            raise RuntimeError("115 Cookie 尚未配置，请先扫码登录")
+        params = {
+            "aid": 1,
+            "cid": cid or "0",
+            "offset": 0,
+            "limit": 200,
+            "show_dir": 1,
+            "qid": 0,
+            "type": "",
+            "format": "json",
+            "r_all": 1,
+            "o": "file_name",
+            "suffix": "",
+            "asc": 1,
+            "cur": 1,
+            "natsort": 1,
+        }
+        async with self._client() as client:
+            res = await client.get(self.FILES_LIST_URL, params=params, headers={"Cookie": cookie})
+            res.raise_for_status()
+            raw = res.json()
+        data = raw.get("data", raw)
+        items = data.get("list", data) if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            raise RuntimeError(f"115 目录列表返回异常：{str(raw)[:240]}")
+        folders = [folder for item in items if isinstance(item, dict) and (folder := self._folder_item(item))]
+        return {"cid": str(cid or "0"), "folders": folders}
 
     async def ensure_folder(self, target_path: str | None) -> str:
         if not target_path or target_path == "/":
@@ -422,7 +475,9 @@ class Pan115Adapter:
             add_log("warning", "115", "115 Cookie 尚未配置，无法自动转存", {"link": link})
             return False
         share_code, receive_code = parse_115_share_link(link)
-        cid = await self.ensure_folder(target_path or config.get("target_path"))
+        cid = str(config.get("target_cid") or "")
+        if not cid:
+            cid = await self.ensure_folder(target_path or config.get("target_path"))
         payload = {"share_code": share_code, "receive_code": receive_code or "", "cid": cid}
         async with self._client() as client:
             res = await client.post(self.SHARE_RECEIVE_URL, data=payload, headers={"Cookie": cookie, "Referer": link})

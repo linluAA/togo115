@@ -280,6 +280,15 @@ async def pan115_status(user: dict = Depends(current_user)) -> dict:
     return await Pan115Adapter().qr_login_status()
 
 
+@app.get("/api/115/folders")
+async def pan115_folders(cid: str = "0", user: dict = Depends(current_user)) -> dict:
+    try:
+        return await Pan115Adapter().list_folders(cid)
+    except Exception as exc:
+        add_log("error", "115", "115 目录列表获取失败", {"error": str(exc), "cid": cid})
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @app.post("/api/115/save")
 async def pan115_save(payload: Pan115SaveRequest, user: dict = Depends(current_user)) -> dict:
     ok = await Pan115Adapter().transfer(payload.link, payload.target_path)

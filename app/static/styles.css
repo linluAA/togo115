@@ -591,6 +591,35 @@ label input[type="checkbox"] {
   color: var(--muted);
 }
 
+.folder-picker {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+
+.folder-picker legend {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.folder-current {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font-weight: 700;
+}
+
+.folder-row {
+  width: 100%;
+  color: var(--ink);
+  background: #f3f6f2;
+  text-align: left;
+}
+
 .proxy-test-result {
   display: grid;
   gap: 8px;
