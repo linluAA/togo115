@@ -2,7 +2,7 @@ from fastapi import HTTPException, Request, Response, status
 from itsdangerous import BadSignature, URLSafeSerializer
 
 from app.config import settings
-from app.db import db, pwd_context, row_to_dict, utc_now
+from app.db import db, hash_password, row_to_dict, utc_now, verify_password
 
 serializer = URLSafeSerializer(settings.secret_key, salt="togo115-session")
 
@@ -12,7 +12,7 @@ def authenticate(username: str, password: str) -> bool:
         user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     if not user:
         return False
-    return pwd_context.verify(password, user["password_hash"])
+    return verify_password(password, user["password_hash"])
 
 
 def login_response(response: Response, username: str) -> None:
@@ -49,5 +49,5 @@ def update_credentials(username: str, password: str) -> None:
     with db() as conn:
         conn.execute(
             "UPDATE users SET username = ?, password_hash = ?, updated_at = ? WHERE id = 1",
-            (username, pwd_context.hash(password), utc_now()),
+            (username, hash_password(password), utc_now()),
         )
