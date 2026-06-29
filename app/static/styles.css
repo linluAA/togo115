@@ -509,6 +509,20 @@ label input[type="checkbox"] {
   gap: 8px;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.tg-phone-login,
+.tg-password-login {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
 .qr-box {
   display: grid;
   gap: 10px;

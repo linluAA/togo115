@@ -30,7 +30,7 @@ http://localhost:8000
 - TMDB：配置 API Key 后读取热门剧集和电影，支持一键订阅。
 - 我的订阅：区分电视剧和电影，支持添加、取消、编辑关键词、手动触发搜索。
 - 日志：支持简易日志和 Debug 日志切换。
-- 设置：账号安全、115 Cookie/扫码、Telegram API/扫码、TMDB、代理、TG Bot、Emby。
+- 设置：账号安全、115 Cookie/扫码、Telegram API/手机号验证码/扫码、TMDB、代理、TG Bot、Emby。
 - 后台监控：定时检查订阅并调用 Telegram 历史搜索；Telegram 登录后会启动实时监听，异常会记录日志并自动进入下一轮。
 - Bot 命令接口：`/api/bot/command` 支持 subscribe/list/cancel 的服务端入口。
 
@@ -39,7 +39,7 @@ http://localhost:8000
 - `API ID` / `API HASH`：从 Telegram 官方开发者后台获取。
 - `群组/频道`：填写 username、邀请加入后的频道名，或 Telethon 可识别的 chat id，多个用英文逗号分隔。
 - `历史搜索条数`：每个关键词在每个来源内读取的历史消息数量。
-- 保存配置后点击“TG 扫码”，用 Telegram 扫码登录；如果账号开启两步验证，输入密码后点“提交密码”。
+- 保存配置后可用手机号接收 Telegram 验证码登录，也可点击“TG 扫码”生成二维码登录；如果账号开启两步验证，系统会在需要时显示密码输入框。
 
 系统会用 `iter_messages(search=...)` 搜索历史消息；如果消息文本没有 115 链接但带按钮，会尝试点击包含 `115`、`链接`、`查看`、`打开`、`资源`、`link` 的按钮并从响应里提取 115 分享链接。
 

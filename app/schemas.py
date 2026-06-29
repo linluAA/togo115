@@ -50,6 +50,15 @@ class TelegramPasswordRequest(BaseModel):
     password: str
 
 
+class TelegramCodeRequest(BaseModel):
+    phone: str
+
+
+class TelegramCodeLoginRequest(BaseModel):
+    phone: str
+    code: str
+
+
 class Pan115SaveRequest(BaseModel):
     link: str
     target_path: str | None = None

@@ -10,6 +10,7 @@ const state = {
   logsMode: "simple",
   settingsTab: "credentials",
   panQrTimer: null,
+  tgLoginTimer: null,
 };
 
 const navItems = [
@@ -570,12 +571,22 @@ function enhanceIntegrationCards() {
         <button type="button" class="secondary" id="tgQrBtn">TG 扫码</button>
         <button type="button" class="secondary" id="tgStatusBtn">检查状态</button>
       </div>
-      <label>两步验证密码 <input id="tgPassword" type="password" /></label>
-      <button type="button" class="secondary" id="tgPasswordBtn">提交密码</button>
+      <div class="tg-phone-login">
+        <label>手机号 <input id="tgPhone" type="tel" placeholder="+8613800000000" autocomplete="tel" /></label>
+        <button type="button" class="secondary" id="tgSendCodeBtn">发送验证码</button>
+        <label>验证码 <input id="tgCode" inputmode="numeric" autocomplete="one-time-code" /></label>
+        <button type="button" class="secondary" id="tgCodeLoginBtn">验证码登录</button>
+      </div>
+      <div class="tg-password-login hidden" id="tgPasswordPanel">
+        <label>两步验证密码 <input id="tgPassword" type="password" /></label>
+        <button type="button" class="secondary" id="tgPasswordBtn">提交密码</button>
+      </div>
       <div class="qr-box" id="tgQrBox">尚未生成二维码</div>
     `);
     $("#tgQrBtn").addEventListener("click", startTgQr);
     $("#tgStatusBtn").addEventListener("click", checkTgStatus);
+    $("#tgSendCodeBtn").addEventListener("click", sendTgCode);
+    $("#tgCodeLoginBtn").addEventListener("click", loginTgCode);
     $("#tgPasswordBtn").addEventListener("click", submitTgPassword);
   }
   const loadDialogs = $("#loadTelegramDialogs");
@@ -629,21 +640,76 @@ async function checkPanStatus() {
 }
 
 async function startTgQr() {
-  const data = await api("/api/telegram/qr-login", { method: "POST" });
-  const qr = encodeURIComponent(data.url);
-  $("#tgQrBox").innerHTML = `<img alt="Telegram QR" src="/api/qr?data=${qr}" /><span>用 Telegram 扫码登录，必要时提交两步验证密码</span>`;
+  const box = $("#tgQrBox");
+  if (state.tgLoginTimer) clearInterval(state.tgLoginTimer);
+  box.innerHTML = `<span>正在生成二维码...</span>`;
+  try {
+    const data = await api("/api/telegram/qr-login", { method: "POST" });
+    box.innerHTML = `<img alt="Telegram QR" src="${data.qr_url}" onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent:'二维码图片加载失败'}))" /><span>用 Telegram 扫码登录</span>`;
+    state.tgLoginTimer = setInterval(checkTgStatus, 3000);
+  } catch (error) {
+    box.innerHTML = `<span>二维码生成失败：${error.message}</span>`;
+  }
 }
 
 async function checkTgStatus() {
   const data = await api("/api/telegram/status");
+  const box = $("#tgQrBox");
+  if (data.status === "password_required") {
+    if (state.tgLoginTimer) clearInterval(state.tgLoginTimer);
+    state.tgLoginTimer = null;
+    $("#tgPasswordPanel")?.classList.remove("hidden");
+  }
+  if (data.authorized) {
+    if (state.tgLoginTimer) clearInterval(state.tgLoginTimer);
+    state.tgLoginTimer = null;
+    if (box) box.innerHTML = `<span>Telegram 已登录</span>`;
+  } else if (box && data.status && data.status !== "waiting") {
+    const label = box.querySelector(".qr-status-label");
+    if (label) label.textContent = `Telegram 状态：${data.status}`;
+    else box.insertAdjacentHTML("beforeend", `<span class="qr-status-label">Telegram 状态：${data.status}</span>`);
+  }
   toast(data.authorized ? "Telegram 已登录" : `Telegram 未登录：${data.status || "waiting"}`);
+}
+
+async function sendTgCode() {
+  const phone = $("#tgPhone").value.trim();
+  if (!phone) return toast("请输入手机号");
+  try {
+    await api("/api/telegram/send-code", { method: "POST", body: JSON.stringify({ phone }) });
+    toast("验证码已发送");
+  } catch (error) {
+    toast(`验证码发送失败：${error.message}`);
+  }
+}
+
+async function loginTgCode() {
+  const phone = $("#tgPhone").value.trim();
+  const code = $("#tgCode").value.trim();
+  if (!phone || !code) return toast("请输入手机号和验证码");
+  try {
+    const data = await api("/api/telegram/code-login", { method: "POST", body: JSON.stringify({ phone, code }) });
+    if (data.status === "password_required") {
+      $("#tgPasswordPanel")?.classList.remove("hidden");
+      toast("请输入两步验证密码");
+      return;
+    }
+    toast("Telegram 已登录");
+  } catch (error) {
+    toast(`验证码登录失败：${error.message}`);
+  }
 }
 
 async function submitTgPassword() {
   const password = $("#tgPassword").value;
   if (!password) return toast("请输入两步验证密码");
-  await api("/api/telegram/password", { method: "POST", body: JSON.stringify({ password }) });
-  toast("密码已提交");
+  try {
+    await api("/api/telegram/password", { method: "POST", body: JSON.stringify({ password }) });
+    $("#tgPasswordPanel")?.classList.add("hidden");
+    toast("Telegram 已登录");
+  } catch (error) {
+    toast(`两步验证失败：${error.message}`);
+  }
 }
 
 async function loadTelegramDialogs() {

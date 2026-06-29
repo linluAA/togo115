@@ -138,27 +138,64 @@ class TelegramClientAdapter:
     async def qr_login_start(self) -> dict[str, Any]:
         client = await self.client()
         qr = await client.qr_login()
-        save_flow("telegram_qr", {"url": qr.url, "started_at": utc_now()})
+        qr_url = f"/api/qr?data={quote(str(qr.url), safe='')}"
+        save_flow("telegram_login", {"method": "qr", "url": qr.url, "qr_url": qr_url, "status": "waiting", "started_at": utc_now()})
         async def waiter() -> None:
             try:
                 await qr.wait(timeout=120)
+                save_flow("telegram_login", {"method": "qr", "url": qr.url, "qr_url": qr_url, "status": "authorized", "started_at": utc_now()})
                 add_log("info", "telegram", "Telegram 扫码登录成功")
             except SessionPasswordNeededError:
                 add_log("warning", "telegram", "Telegram 需要两步验证密码")
-                save_flow("telegram_qr", {"url": qr.url, "status": "password_required", "started_at": utc_now()})
+                save_flow("telegram_login", {"method": "qr", "url": qr.url, "qr_url": qr_url, "status": "password_required", "started_at": utc_now()})
             except Exception as exc:
+                save_flow("telegram_login", {"method": "qr", "url": qr.url, "qr_url": qr_url, "status": "failed", "error": str(exc), "started_at": utc_now()})
                 add_log("warning", "telegram", "Telegram 扫码登录等待结束", {"error": str(exc)})
         asyncio.create_task(waiter())
-        return {"url": qr.url, "status": "waiting"}
+        return {"url": qr.url, "qr_url": qr_url, "status": "waiting"}
+
+    async def send_login_code(self, phone: str) -> dict[str, Any]:
+        client = await self.client()
+        sent = await client.send_code_request(phone)
+        save_flow(
+            "telegram_login",
+            {
+                "method": "phone",
+                "phone": phone,
+                "phone_code_hash": sent.phone_code_hash,
+                "status": "code_sent",
+                "started_at": utc_now(),
+            },
+        )
+        add_log("info", "telegram", "Telegram 手机验证码已发送")
+        return {"status": "code_sent"}
+
+    async def sign_in_code(self, phone: str, code: str) -> dict[str, Any]:
+        client = await self.client()
+        flow = get_flow("telegram_login")
+        phone_code_hash = flow.get("phone_code_hash")
+        if not phone_code_hash or flow.get("phone") != phone:
+            raise RuntimeError("请先发送 Telegram 手机验证码")
+        try:
+            await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
+        except SessionPasswordNeededError:
+            save_flow("telegram_login", {**flow, "status": "password_required"})
+            add_log("warning", "telegram", "Telegram 手机验证码通过，需要两步验证密码")
+            return {"status": "password_required"}
+        save_flow("telegram_login", {**flow, "status": "authorized"})
+        add_log("info", "telegram", "Telegram 手机验证码登录成功")
+        return {"status": "authorized"}
 
     async def sign_in_password(self, password: str) -> bool:
         client = await self.client()
         await client.sign_in(password=password)
+        flow = get_flow("telegram_login")
+        save_flow("telegram_login", {**flow, "status": "authorized"})
         add_log("info", "telegram", "Telegram 两步验证登录成功")
         return True
 
     async def login_status(self) -> dict[str, Any]:
-        flow = get_flow("telegram_qr")
+        flow = get_flow("telegram_login")
         return {"authorized": await self.is_authorized(), **flow}
 
     async def dialogs(self) -> list[dict[str, Any]]:

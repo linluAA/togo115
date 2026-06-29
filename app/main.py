@@ -8,7 +8,7 @@ import httpx
 
 from app.auth import authenticate, current_user, login_response, logout_response, update_credentials
 from app.db import add_log, db, init_db, json_dumps, json_loads, row_to_dict, utc_now
-from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionCreate, SubscriptionUpdate, TelegramPasswordRequest
+from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest, TelegramPasswordRequest
 from app.services.integrations import EmbyAdapter, Pan115Adapter, TelegramClientAdapter, TmdbAdapter
 import qrcode
 from app.services.monitor import monitor_service
@@ -211,7 +211,29 @@ async def proxy_test(payload: ProxyTestRequest, user: dict = Depends(current_use
 
 @app.post("/api/telegram/qr-login")
 async def telegram_qr_login(user: dict = Depends(current_user)) -> dict:
-    return await TelegramClientAdapter().qr_login_start()
+    try:
+        return await TelegramClientAdapter().qr_login_start()
+    except Exception as exc:
+        add_log("error", "telegram", "Telegram 扫码登录创建失败", {"error": str(exc)})
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/telegram/send-code")
+async def telegram_send_code(payload: TelegramCodeRequest, user: dict = Depends(current_user)) -> dict:
+    try:
+        return await TelegramClientAdapter().send_login_code(payload.phone)
+    except Exception as exc:
+        add_log("error", "telegram", "Telegram 手机验证码发送失败", {"error": str(exc)})
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/telegram/code-login")
+async def telegram_code_login(payload: TelegramCodeLoginRequest, user: dict = Depends(current_user)) -> dict:
+    try:
+        return await TelegramClientAdapter().sign_in_code(payload.phone, payload.code)
+    except Exception as exc:
+        add_log("error", "telegram", "Telegram 手机验证码登录失败", {"error": str(exc)})
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/telegram/status")
@@ -226,8 +248,12 @@ async def telegram_dialogs(user: dict = Depends(current_user)) -> dict:
 
 @app.post("/api/telegram/password")
 async def telegram_password(payload: TelegramPasswordRequest, user: dict = Depends(current_user)) -> dict:
-    ok = await TelegramClientAdapter().sign_in_password(payload.password)
-    return {"ok": ok}
+    try:
+        ok = await TelegramClientAdapter().sign_in_password(payload.password)
+        return {"ok": ok}
+    except Exception as exc:
+        add_log("error", "telegram", "Telegram 两步验证登录失败", {"error": str(exc)})
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/115/qr-login")
