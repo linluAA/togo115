@@ -161,6 +161,18 @@ async def tmdb_trending(user: dict = Depends(current_user)) -> dict:
     return await TmdbAdapter().trending()
 
 
+@app.get("/api/tmdb/search")
+async def tmdb_search(q: str, media_type: str = "multi", user: dict = Depends(current_user)) -> dict:
+    return {"results": await TmdbAdapter().search(q, media_type)}
+
+
+@app.get("/api/tmdb/{media_type}/{tmdb_id}")
+async def tmdb_detail(media_type: str, tmdb_id: int, user: dict = Depends(current_user)) -> dict:
+    if media_type not in ("tv", "movie"):
+        raise HTTPException(status_code=400, detail="不支持的媒体类型")
+    return await TmdbAdapter().detail(media_type, tmdb_id)
+
+
 @app.get("/api/emby/dashboard")
 async def emby_dashboard(user: dict = Depends(current_user)) -> dict:
     return await EmbyAdapter().dashboard()
