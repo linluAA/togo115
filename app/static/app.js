@@ -165,7 +165,8 @@ async function renderTmdb() {
 
 function mediaGrid(items, type) {
   if (!items.length) return `<div class="empty">暂无数据，配置 TMDB API Key 后会显示榜单。</div>`;
-  return `<div class="grid">${items.slice(0, 12).map((item) => {
+  const visibleItems = items.slice(0, 14);
+  return `<div class="media-grid">${visibleItems.map((item) => {
     const title = item.name || item.title;
     const mediaType = item.media_type === "movie" || item.media_type === "tv" ? item.media_type : type;
     const payloadId = `${mediaType}-${item.id}`;

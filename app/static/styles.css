@@ -206,6 +206,14 @@ label input[type="checkbox"] {
   gap: 16px;
 }
 
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 18px 16px;
+  align-items: start;
+  margin-bottom: 22px;
+}
+
 .card {
   border: 1px solid var(--line);
   border-radius: 8px;
