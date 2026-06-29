@@ -188,6 +188,11 @@ async def telegram_status(user: dict = Depends(current_user)) -> dict:
     return await TelegramClientAdapter().login_status()
 
 
+@app.get("/api/telegram/dialogs")
+async def telegram_dialogs(user: dict = Depends(current_user)) -> dict:
+    return {"dialogs": await TelegramClientAdapter().dialogs()}
+
+
 @app.post("/api/telegram/password")
 async def telegram_password(payload: TelegramPasswordRequest, user: dict = Depends(current_user)) -> dict:
     ok = await TelegramClientAdapter().sign_in_password(payload.password)
