@@ -322,6 +322,51 @@ label input[type="checkbox"] {
   font-size: 28px;
 }
 
+.emby-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.emby-card {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 12px;
+  align-items: center;
+  min-height: 92px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.emby-card img,
+.emby-placeholder {
+  width: 74px;
+  height: 74px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #dfe5e1;
+}
+
+.emby-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.emby-card h3 {
+  margin: 0 0 5px;
+  font-size: 15px;
+}
+
+.emby-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

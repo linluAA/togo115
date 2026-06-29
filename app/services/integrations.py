@@ -407,9 +407,114 @@ class TmdbAdapter:
 
 
 class EmbyAdapter:
+    def _base_url(self, config: dict[str, Any]) -> str:
+        return str(config.get("server_url", "")).rstrip("/")
+
+    async def _get(self, client: httpx.AsyncClient, base_url: str, path: str, api_key: str, params: dict[str, Any] | None = None) -> Any:
+        query = {"api_key": api_key, **(params or {})}
+        res = await client.get(f"{base_url}{path}", params=query, headers={"X-Emby-Token": api_key})
+        res.raise_for_status()
+        return res.json()
+
     async def dashboard(self) -> dict[str, Any]:
         config = get_setting("emby")
-        if not config.get("server_url") or not config.get("api_key"):
+        api_key = config.get("api_key")
+        base_url = self._base_url(config)
+        if not base_url or not api_key:
             return {"media_count": 0, "libraries": [], "users": [], "history": []}
-        add_log("debug", "emby", "Emby 看板数据待同步", {"server_url": config.get("server_url")})
-        return {"media_count": 0, "libraries": [], "users": [], "history": []}
+        proxy = module_proxy("emby")
+        try:
+            async with httpx.AsyncClient(proxy=proxy or None, timeout=20, follow_redirects=True) as client:
+                counts = await self._get(client, base_url, "/Items/Counts", api_key)
+                folders = await self._get(client, base_url, "/Library/VirtualFolders", api_key)
+                users_raw = await self._get(client, base_url, "/Users", api_key)
+
+                libraries = []
+                for folder in folders:
+                    item_id = folder.get("ItemId")
+                    libraries.append(
+                        {
+                            "id": item_id,
+                            "name": folder.get("Name") or "媒体库",
+                            "collection_type": folder.get("CollectionType") or "",
+                            "description": folder.get("CollectionType") or "",
+                            "image_url": f"/api/emby/image/{item_id}" if item_id else "",
+                        }
+                    )
+
+                users = [
+                    {
+                        "id": user.get("Id"),
+                        "name": user.get("Name") or "用户",
+                        "description": "已禁用" if user.get("Policy", {}).get("IsDisabled") else "正常",
+                        "image_url": f"/api/emby/user-image/{user.get('Id')}" if user.get("Id") else "",
+                    }
+                    for user in users_raw
+                ]
+
+                history: list[dict[str, Any]] = []
+                for user in users[:3]:
+                    if not user.get("id"):
+                        continue
+                    played = await self._get(
+                        client,
+                        base_url,
+                        f"/Users/{user['id']}/Items",
+                        api_key,
+                        {
+                            "Recursive": "true",
+                            "Filters": "IsPlayed",
+                            "SortBy": "DatePlayed",
+                            "SortOrder": "Descending",
+                            "Limit": 8,
+                            "Fields": "DatePlayed,PrimaryImageAspectRatio",
+                        },
+                    )
+                    for item in played.get("Items", []):
+                        history.append(
+                            {
+                                "id": item.get("Id"),
+                                "name": item.get("Name") or "媒体",
+                                "title": item.get("SeriesName") or item.get("Name") or "媒体",
+                                "description": user["name"],
+                                "date_played": item.get("UserData", {}).get("LastPlayedDate"),
+                                "image_url": f"/api/emby/image/{item.get('Id')}" if item.get("Id") else "",
+                            }
+                        )
+
+            media_count = sum(int(counts.get(key) or 0) for key in ("MovieCount", "SeriesCount", "EpisodeCount", "SongCount", "AlbumCount"))
+            add_log("info", "emby", "Emby 看板数据同步完成", {"libraries": len(libraries), "users": len(users), "history": len(history)})
+            return {
+                "media_count": media_count,
+                "counts": counts,
+                "libraries": libraries,
+                "users": users,
+                "history": sorted(history, key=lambda x: x.get("date_played") or "", reverse=True)[:16],
+            }
+        except Exception as exc:
+            add_log("error", "emby", "Emby 看板数据获取失败", {"error": str(exc), "server_url": base_url})
+            return {"media_count": 0, "libraries": [], "users": [], "history": [], "error": str(exc)}
+
+    async def image_response(self, item_id: str) -> tuple[bytes, str]:
+        config = get_setting("emby")
+        api_key = config.get("api_key")
+        base_url = self._base_url(config)
+        if not base_url or not api_key:
+            return b"", "image/jpeg"
+        proxy = module_proxy("emby")
+        async with httpx.AsyncClient(proxy=proxy or None, timeout=20, follow_redirects=True) as client:
+            res = await client.get(f"{base_url}/Items/{item_id}/Images/Primary", params={"api_key": api_key, "maxWidth": 480}, headers={"X-Emby-Token": api_key})
+            res.raise_for_status()
+            return res.content, res.headers.get("content-type", "image/jpeg")
+
+    async def user_image_response(self, user_id: str) -> tuple[bytes, str]:
+        config = get_setting("emby")
+        api_key = config.get("api_key")
+        base_url = self._base_url(config)
+        if not base_url or not api_key:
+            return b"", "image/jpeg"
+        proxy = module_proxy("emby")
+        async with httpx.AsyncClient(proxy=proxy or None, timeout=20, follow_redirects=True) as client:
+            res = await client.get(f"{base_url}/Users/{user_id}/Images/Primary", params={"api_key": api_key, "maxWidth": 240}, headers={"X-Emby-Token": api_key})
+            res.raise_for_status()
+            return res.content, res.headers.get("content-type", "image/jpeg")

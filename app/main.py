@@ -178,6 +178,18 @@ async def emby_dashboard(user: dict = Depends(current_user)) -> dict:
     return await EmbyAdapter().dashboard()
 
 
+@app.get("/api/emby/image/{item_id}")
+async def emby_image(item_id: str, user: dict = Depends(current_user)) -> StreamingResponse:
+    content, media_type = await EmbyAdapter().image_response(item_id)
+    return StreamingResponse(BytesIO(content), media_type=media_type)
+
+
+@app.get("/api/emby/user-image/{user_id}")
+async def emby_user_image(user_id: str, user: dict = Depends(current_user)) -> StreamingResponse:
+    content, media_type = await EmbyAdapter().user_image_response(user_id)
+    return StreamingResponse(BytesIO(content), media_type=media_type)
+
+
 @app.post("/api/telegram/qr-login")
 async def telegram_qr_login(user: dict = Depends(current_user)) -> dict:
     return await TelegramClientAdapter().qr_login_start()

@@ -269,21 +269,36 @@ async function renderEmby() {
   root.innerHTML = `<div class="empty">正在读取 Emby 看板...</div>`;
   const data = await api("/api/emby/dashboard");
   root.innerHTML = `
+    ${data.error ? `<div class="empty">Emby 数据获取失败：${data.error}</div>` : ""}
     <section class="stats">
       <div class="stat"><span>媒体总数</span><b>${data.media_count || 0}</b></div>
       <div class="stat"><span>媒体库</span><b>${(data.libraries || []).length}</b></div>
       <div class="stat"><span>用户</span><b>${(data.users || []).length}</b></div>
       <div class="stat"><span>观看记录</span><b>${(data.history || []).length}</b></div>
     </section>
-    <section class="section"><h3>媒体库封面</h3>${simpleList(data.libraries, "暂无媒体库数据")}</section>
-    <section class="section"><h3>用户</h3>${simpleList(data.users, "暂无用户数据")}</section>
-    <section class="section"><h3>观看历史</h3>${simpleList(data.history, "暂无观看历史")}</section>
+    <section class="section"><h3>媒体库封面</h3>${embyGrid(data.libraries, "暂无媒体库数据", "library")}</section>
+    <section class="section"><h3>用户</h3>${embyGrid(data.users, "暂无用户数据", "user")}</section>
+    <section class="section"><h3>观看历史</h3>${embyGrid(data.history, "暂无观看历史", "history")}</section>
   `;
 }
 
 function simpleList(items, empty) {
   if (!items || !items.length) return `<div class="empty">${empty}</div>`;
   return `<div class="grid">${items.map((item) => `<div class="card"><div class="card-body"><h3>${item.name || item.title || "项目"}</h3><p class="muted">${item.description || ""}</p></div></div>`).join("")}</div>`;
+}
+
+function embyGrid(items, empty, kind) {
+  if (!items || !items.length) return `<div class="empty">${empty}</div>`;
+  return `<div class="emby-grid">${items.map((item) => {
+    const image = item.image_url ? `<img src="${item.image_url}" alt="${item.name || item.title || "Emby"}" />` : `<div class="emby-placeholder">${kind === "user" ? "用户" : "媒体"}</div>`;
+    return `<article class="emby-card">
+      ${image}
+      <div>
+        <h3>${item.name || item.title || "项目"}</h3>
+        <p>${item.description || item.collection_type || item.date_played || ""}</p>
+      </div>
+    </article>`;
+  }).join("")}</div>`;
 }
 
 function renderSubscriptions() {
