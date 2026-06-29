@@ -31,17 +31,30 @@ def _compact_match_text(value: str | None) -> str:
     return MATCH_DROP_RE.sub("", str(value or "").casefold())
 
 
-def _subscription_terms(subscription: dict) -> list[tuple[str, str]]:
-    terms: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    for term in [subscription.get("title"), *(subscription.get("keywords") or [])]:
-        raw = str(term or "").strip()
-        compact = _compact_match_text(raw)
-        if not raw or len(compact) < 2 or compact in seen:
+def _match_term(term: str | None) -> tuple[str, str] | None:
+    raw = str(term or "").strip()
+    compact = _compact_match_text(raw)
+    if not raw or not compact:
+        return None
+    return raw.casefold(), compact
+
+
+def _term_in_text(term: tuple[str, str], raw_haystack: str, compact_haystack: str) -> bool:
+    raw_term, compact_term = term
+    return raw_term in raw_haystack or compact_term in compact_haystack
+
+
+def _subscription_required_terms(subscription: dict) -> tuple[tuple[str, str] | None, list[tuple[str, str]]]:
+    title_term = _match_term(subscription.get("title"))
+    seen = {title_term[1]} if title_term else set()
+    keyword_terms: list[tuple[str, str]] = []
+    for keyword in subscription.get("keywords") or []:
+        term = _match_term(keyword)
+        if not term or len(term[1]) < 2 or term[1] in seen:
             continue
-        seen.add(compact)
-        terms.append((raw.casefold(), compact))
-    return terms
+        seen.add(term[1])
+        keyword_terms.append(term)
+    return title_term, keyword_terms
 
 
 def result_matches_subscription(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
@@ -54,7 +67,10 @@ def result_matches_subscription(subscription: dict, result: SearchResult, *extra
         return False
     raw_haystack = text.casefold()
     compact_haystack = _compact_match_text(text)
-    return any(raw_term in raw_haystack or compact_term in compact_haystack for raw_term, compact_term in _subscription_terms(subscription))
+    title_term, keyword_terms = _subscription_required_terms(subscription)
+    if not title_term or not _term_in_text(title_term, raw_haystack, compact_haystack):
+        return False
+    return all(_term_in_text(term, raw_haystack, compact_haystack) for term in keyword_terms)
 
 
 async def create_subscription(payload: SubscriptionCreate) -> dict:

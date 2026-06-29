@@ -240,7 +240,8 @@ class TelegramClientAdapter:
         if not dialogs:
             add_log("warning", "telegram", "未配置 Telegram 群组/频道 sources")
             return []
-        queries = [title, *keywords]
+        clean_keywords = [item.strip() for item in keywords if item and item.strip() and item.strip() != title]
+        queries = [title, *(f"{title} {keyword}" for keyword in clean_keywords)]
         results: list[SearchResult] = []
         for dialog in dialogs:
             for query in dict.fromkeys(queries):
