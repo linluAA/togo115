@@ -1,19 +1,47 @@
 import json
+import base64
+import hashlib
+import hmac
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Iterator
-
-from passlib.context import CryptContext
 
 from app.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+PASSWORD_PREFIX = "pbkdf2_sha256"
+PASSWORD_ITERATIONS = 260_000
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
+    return "$".join(
+        [
+            PASSWORD_PREFIX,
+            str(PASSWORD_ITERATIONS),
+            base64.b64encode(salt).decode("ascii"),
+            base64.b64encode(digest).decode("ascii"),
+        ]
+    )
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        prefix, iterations, salt_b64, digest_b64 = stored_hash.split("$", 3)
+        if prefix != PASSWORD_PREFIX:
+            return False
+        salt = base64.b64decode(salt_b64)
+        expected = base64.b64decode(digest_b64)
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iterations))
+        return hmac.compare_digest(actual, expected)
+    except Exception:
+        return False
 
 
 def get_connection() -> sqlite3.Connection:
@@ -124,7 +152,7 @@ def init_db() -> None:
             now = utc_now()
             conn.execute(
                 "INSERT INTO users (id, username, password_hash, created_at, updated_at) VALUES (1, ?, ?, ?, ?)",
-                ("admin", pwd_context.hash("admin123"), now, now),
+                ("admin", hash_password("admin123"), now, now),
             )
 
 
