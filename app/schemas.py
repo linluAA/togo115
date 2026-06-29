@@ -53,3 +53,12 @@ class TelegramPasswordRequest(BaseModel):
 class Pan115SaveRequest(BaseModel):
     link: str
     target_path: str | None = None
+
+
+class Pan115QrRequest(BaseModel):
+    channel: str = "web"
+
+
+class ProxyTestRequest(BaseModel):
+    url: str
+    modules: list[str] = Field(default_factory=list)

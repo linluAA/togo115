@@ -4,10 +4,11 @@ from io import BytesIO
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+import httpx
 
 from app.auth import authenticate, current_user, login_response, logout_response, update_credentials
 from app.db import add_log, db, init_db, json_dumps, json_loads, row_to_dict, utc_now
-from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115SaveRequest, SearchRequest, SettingPayload, SubscriptionCreate, SubscriptionUpdate, TelegramPasswordRequest
+from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionCreate, SubscriptionUpdate, TelegramPasswordRequest
 from app.services.integrations import EmbyAdapter, Pan115Adapter, TelegramClientAdapter, TmdbAdapter
 import qrcode
 from app.services.monitor import monitor_service
@@ -190,6 +191,24 @@ async def emby_user_image(user_id: str, user: dict = Depends(current_user)) -> S
     return StreamingResponse(BytesIO(content), media_type=media_type)
 
 
+@app.post("/api/proxy/test")
+async def proxy_test(payload: ProxyTestRequest, user: dict = Depends(current_user)) -> dict:
+    import time
+
+    targets = {"github": "https://github.com", "google": "https://www.google.com/generate_204"}
+    results = {}
+    proxy = payload.url if payload.url else None
+    async with httpx.AsyncClient(proxy=proxy, timeout=10, follow_redirects=True) as client:
+        for name, url in targets.items():
+            started = time.perf_counter()
+            try:
+                res = await client.get(url)
+                results[name] = {"ok": True, "status": res.status_code, "latency_ms": round((time.perf_counter() - started) * 1000)}
+            except Exception as exc:
+                results[name] = {"ok": False, "error": str(exc), "latency_ms": None}
+    return {"results": results}
+
+
 @app.post("/api/telegram/qr-login")
 async def telegram_qr_login(user: dict = Depends(current_user)) -> dict:
     return await TelegramClientAdapter().qr_login_start()
@@ -212,8 +231,8 @@ async def telegram_password(payload: TelegramPasswordRequest, user: dict = Depen
 
 
 @app.post("/api/115/qr-login")
-async def pan115_qr_login(user: dict = Depends(current_user)) -> dict:
-    return await Pan115Adapter().qr_login_start()
+async def pan115_qr_login(payload: Pan115QrRequest, user: dict = Depends(current_user)) -> dict:
+    return await Pan115Adapter().qr_login_start(payload.channel)
 
 
 @app.get("/api/115/status")

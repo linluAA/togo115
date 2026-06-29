@@ -263,7 +263,7 @@ class TelegramClientAdapter:
 class Pan115Adapter:
     QR_TOKEN_URL = "https://qrcodeapi.115.com/api/1.0/web/1.0/token/"
     QR_STATUS_URL = "https://qrcodeapi.115.com/get/status/"
-    QR_LOGIN_URL = "https://passportapi.115.com/app/1.0/web/1.0/login/qrcode/"
+    QR_LOGIN_URL = "https://passportapi.115.com/app/1.0/{channel}/1.0/login/qrcode/"
     SHARE_RECEIVE_URL = "https://webapi.115.com/share/receive"
     FILE_ADD_URL = "https://webapi.115.com/files/add"
 
@@ -271,7 +271,7 @@ class Pan115Adapter:
         proxy = module_proxy("pan115")
         return httpx.AsyncClient(proxy=proxy or None, timeout=25, follow_redirects=True)
 
-    async def qr_login_start(self) -> dict[str, Any]:
+    async def qr_login_start(self, channel: str = "web") -> dict[str, Any]:
         async with self._client() as client:
             res = await client.get(self.QR_TOKEN_URL)
             res.raise_for_status()
@@ -282,9 +282,9 @@ class Pan115Adapter:
         if not uid or not token or not sign:
             raise RuntimeError("115 扫码 token 获取失败")
         qr_url = f"https://qrcodeapi.115.com/api/1.0/web/1.0/qrcode?uid={uid}"
-        save_flow("115_qr", {"uid": uid, "token": token, "sign": sign, "qr_url": qr_url, "status": "waiting"})
-        add_log("info", "115", "115 扫码登录已创建")
-        return {"qr_url": qr_url, "status": "waiting"}
+        save_flow("115_qr", {"uid": uid, "token": token, "sign": sign, "qr_url": qr_url, "status": "waiting", "channel": channel})
+        add_log("info", "115", "115 扫码登录已创建", {"channel": channel})
+        return {"qr_url": qr_url, "status": "waiting", "channel": channel}
 
     async def qr_login_status(self) -> dict[str, Any]:
         flow = get_flow("115_qr")
@@ -297,7 +297,9 @@ class Pan115Adapter:
             data = res.json().get("data", res.json())
             status = str(data.get("status") or data.get("code") or "")
             if status in ("2", "confirmed", "login"):
-                login = await client.post(self.QR_LOGIN_URL, data={"account": flow["uid"], "app": "web"})
+                channel = flow.get("channel") or "web"
+                login_url = self.QR_LOGIN_URL.format(channel=channel)
+                login = await client.post(login_url, data={"account": flow["uid"], "app": channel})
                 login.raise_for_status()
                 cookie = "; ".join(f"{cookie.name}={cookie.value}" for cookie in client.cookies.jar)
                 config = get_setting("115")

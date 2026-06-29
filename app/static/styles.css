@@ -520,6 +520,26 @@ label input[type="checkbox"] {
   color: var(--muted);
 }
 
+.proxy-test-result {
+  display: grid;
+  gap: 8px;
+}
+
+.latency-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.latency-row span {
+  color: var(--muted);
+  text-align: right;
+}
+
 .log-list {
   display: grid;
   gap: 8px;

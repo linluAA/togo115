@@ -485,6 +485,17 @@ function enhanceIntegrationCards() {
   const pan = document.querySelector('[data-save-settings="115"]');
   if (pan) {
     pan.insertAdjacentHTML("beforeend", `
+      <label>扫码登录渠道
+        <select id="panQrChannel">
+          <option value="web">115生活_网页端 - web</option>
+          <option value="ios">115生活_苹果端 - ios</option>
+          <option value="115ios">115_苹果端 - 115ios</option>
+          <option value="android">115生活_安卓端 - android</option>
+          <option value="115android">115_安卓端 - 115android</option>
+          <option value="ipad">115生活_苹果平板端 - ipad</option>
+          <option value="alipaymini">115生活_支付宝小程序 - alipaymini</option>
+        </select>
+      </label>
       <div class="inline-actions">
         <button type="button" class="secondary" id="panQrBtn">115 扫码</button>
         <button type="button" class="secondary" id="panStatusBtn">检查状态</button>
@@ -511,10 +522,19 @@ function enhanceIntegrationCards() {
   }
   const loadDialogs = $("#loadTelegramDialogs");
   if (loadDialogs) loadDialogs.addEventListener("click", loadTelegramDialogs);
+  const proxyForm = document.querySelector('[data-save-settings="proxy"]');
+  if (proxyForm) {
+    proxyForm.insertAdjacentHTML("beforeend", `
+      <button type="button" class="secondary" id="proxyTestBtn">测试 GitHub / Google 延迟</button>
+      <div class="proxy-test-result" id="proxyTestResult"></div>
+    `);
+    $("#proxyTestBtn").addEventListener("click", testProxyLatency);
+  }
 }
 
 async function startPanQr() {
-  const data = await api("/api/115/qr-login", { method: "POST" });
+  const channel = $("#panQrChannel")?.value || "web";
+  const data = await api("/api/115/qr-login", { method: "POST", body: JSON.stringify({ channel }) });
   $("#panQrBox").innerHTML = `<img alt="115 QR" src="${data.qr_url}" /><span>打开 115 App 扫码确认后点击检查状态</span>`;
 }
 
@@ -558,6 +578,26 @@ async function loadTelegramDialogs() {
       <small>${item.type}${item.username ? ` · @${item.username}` : ""}</small>
     </label>
   `).join("") : `<div class="muted">没有读取到群组/频道，请确认 Telegram 已登录。</div>`;
+}
+
+async function testProxyLatency() {
+  const form = document.querySelector('[data-save-settings="proxy"]');
+  const formData = new FormData(form);
+  const url = formData.get("url") || "";
+  const modules = formData.getAll("modules");
+  const resultBox = $("#proxyTestResult");
+  resultBox.innerHTML = `<div class="muted">正在测试...</div>`;
+  try {
+    const data = await api("/api/proxy/test", { method: "POST", body: JSON.stringify({ url, modules }) });
+    const github = data.results.github;
+    const google = data.results.google;
+    resultBox.innerHTML = `
+      <div class="latency-row"><strong>GitHub</strong><span>${github.ok ? `${github.latency_ms} ms` : github.error}</span></div>
+      <div class="latency-row"><strong>Google</strong><span>${google.ok ? `${google.latency_ms} ms` : google.error}</span></div>
+    `;
+  } catch (error) {
+    resultBox.innerHTML = `<div class="muted">${error.message}</div>`;
+  }
 }
 
 boot();
