@@ -1,6 +1,7 @@
 import asyncio
 import re
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -75,8 +76,11 @@ def extract_115_links(text: str | None) -> list[str]:
     links: list[str] = []
     for match in PAN115_URL_RE.findall(text):
         link = match.rstrip("，。；,.;")
-        if link not in seen:
-            seen.add(link)
+        # 优化8: URL 标准化去重，忽略末尾斜杠和 query 参数顺序差异
+        parsed = urlparse(link)
+        normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}".lower()
+        if normalized not in seen:
+            seen.add(normalized)
             links.append(link)
     return links
 
@@ -243,9 +247,14 @@ class TelegramClientAdapter:
         clean_keywords = [item.strip() for item in keywords if item and item.strip() and item.strip() != title]
         queries = [title, *(f"{title} {keyword}" for keyword in clean_keywords)]
         results: list[SearchResult] = []
+        # 优化2: 按消息 ID 去重，避免同一消息被多个关键词重复匹配
+        seen_messages: set[int] = set()
         for dialog in dialogs:
             for query in dict.fromkeys(queries):
                 async for message in client.iter_messages(dialog, search=query, limit=int(config.get("history_limit") or 80)):
+                    if message.id in seen_messages:
+                        continue
+                    seen_messages.add(message.id)
                     results.extend(await self._links_from_message(client, message, dialog))
         add_log("info", "telegram", "Telegram 历史搜索完成", {"title": title, "count": len(results)})
         return results
@@ -283,18 +292,32 @@ class TelegramClientAdapter:
                     add_log("debug", "telegram", "点击 Telegram 消息按钮未取得链接", {"message_id": message.id, "button": label, "error": str(exc)})
         return links
 
+    # Bug 6 fix: 记录已注册监听的 sources，配置变更时重建监听
+    _registered_sources: list[str] | None = None
+
     async def ensure_monitoring(self) -> None:
         if not await self.is_authorized():
             return
         cls = type(self)
-        if cls._listener_task and not cls._listener_task.done():
-            add_log("debug", "telegram", "Telegram 监控心跳正常")
-            return
         client = await self.client()
         config = self._config()
         dialogs = [x.strip() for x in str(config.get("sources", "")).split(",") if x.strip()]
         if not dialogs:
             return
+
+        # Bug 6 fix: 如果 sources 配置发生变化，需要重新注册 handler
+        sources_changed = cls._registered_sources != dialogs
+        if cls._listener_task and not cls._listener_task.done():
+            if not sources_changed:
+                add_log("debug", "telegram", "Telegram 监控心跳正常")
+                return
+            # sources 变更，取消旧监听任务
+            add_log("info", "telegram", "Telegram sources 配置已变更，重新启动监控", {"old": cls._registered_sources, "new": dialogs})
+            cls._listener_task.cancel()
+            with suppress(Exception):
+                await cls._listener_task
+            cls._listener_task = None
+            cls._handler_registered = False
 
         if not cls._handler_registered:
             @client.on(events.NewMessage(chats=dialogs))
@@ -304,6 +327,7 @@ class TelegramClientAdapter:
                 if results:
                     await attach_results_to_matching_subscriptions(results, event.message.raw_text or "")
             cls._handler_registered = True
+            cls._registered_sources = dialogs
 
         cls._listener_task = asyncio.create_task(client.run_until_disconnected())
         add_log("info", "telegram", "Telegram 实时监控已启动", {"sources": dialogs})
@@ -386,7 +410,8 @@ class Pan115Adapter:
         flow = get_flow("115_qr")
         config = get_setting("115")
         if not flow and config.get("cookie"):
-            return {"status": "authorized", "cookie": config.get("cookie")}
+            # 安全2 fix: 不在 API 响应中返回完整 Cookie
+            return {"status": "authorized"}
         if not flow:
             return {"status": "not_started"}
         params = {"uid": flow["uid"], "time": flow.get("time"), "sign": flow["sign"]}
@@ -411,7 +436,8 @@ class Pan115Adapter:
                 save_setting("115", config)
                 save_flow("115_qr", {**flow, "status": "authorized"})
                 add_log("info", "115", "115 扫码登录成功，Cookie 已保存")
-                return {"status": "authorized", "cookie": cookie}
+                # 安全2 fix: 扫码登录成功后不在响应中返回 Cookie
+                return {"status": "authorized"}
         save_flow("115_qr", {**flow, "status": status or "waiting"})
         return {"status": status or "waiting", "qr_url": flow.get("qr_url")}
 
@@ -512,7 +538,8 @@ class TelegramBotAdapter:
 
 
 class TmdbAdapter:
-    async def _client(self) -> httpx.AsyncClient:
+    # Bug 7 fix: 无 await 操作，async def 改为普通 def
+    def _client(self) -> httpx.AsyncClient:
         proxy = module_proxy("tmdb")
         return httpx.AsyncClient(proxy=proxy or None, timeout=20)
 
@@ -523,7 +550,7 @@ class TmdbAdapter:
         api_key = self._api_key()
         if not api_key:
             return {"tv": [], "movie": []}
-        async with await self._client() as client:
+        async with self._client() as client:
             tv = await client.get("https://api.themoviedb.org/3/trending/tv/week", params={"api_key": api_key, "language": "zh-CN"})
             movie = await client.get("https://api.themoviedb.org/3/trending/movie/week", params={"api_key": api_key, "language": "zh-CN"})
         tv.raise_for_status()
@@ -535,7 +562,7 @@ class TmdbAdapter:
         if not api_key or not query.strip():
             return []
         endpoint = "multi" if media_type not in ("tv", "movie") else media_type
-        async with await self._client() as client:
+        async with self._client() as client:
             res = await client.get(
                 f"https://api.themoviedb.org/3/search/{endpoint}",
                 params={"api_key": api_key, "language": "zh-CN", "query": query, "include_adult": "false"},
@@ -547,7 +574,7 @@ class TmdbAdapter:
         api_key = self._api_key()
         if not api_key:
             return {}
-        async with await self._client() as client:
+        async with self._client() as client:
             res = await client.get(
                 f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}",
                 params={"api_key": api_key, "language": "zh-CN", "append_to_response": "credits,videos"},

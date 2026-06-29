@@ -49,6 +49,8 @@ def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(settings.database_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # 优化6: 启用 WAL 模式，提升并发读写性能
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
@@ -147,6 +149,8 @@ def init_db() -> None:
             );
             """
         )
+        # 优化6: 创建日志查询索引，加速按级别过滤
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level, id DESC)")
         user = conn.execute("SELECT id FROM users WHERE id = 1").fetchone()
         if user is None:
             now = utc_now()
