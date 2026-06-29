@@ -462,6 +462,131 @@ label input[type="checkbox"] {
   font-weight: 700;
 }
 
+.subscription-panel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.subscription-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0 2px;
+}
+
+.subscription-toolbar h3 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.subscription-toolbar p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.subscription-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.subscription-filters select {
+  width: 142px;
+}
+
+.subscription-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 22px 18px;
+  align-items: start;
+}
+
+.subscription-card {
+  min-width: 0;
+}
+
+.subscription-poster {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #dfe5e1;
+  box-shadow: 0 14px 36px rgba(28, 42, 44, .12);
+}
+
+.subscription-poster img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+.subscription-badges {
+  position: absolute;
+  inset: 10px 10px auto 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subscription-badge {
+  padding: 4px 7px;
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(11, 25, 27, .72);
+  font-size: 12px;
+  font-weight: 800;
+  backdrop-filter: blur(10px);
+}
+
+.subscription-badge.active {
+  background: rgba(47, 143, 88, .92);
+}
+
+.subscription-badge.paused {
+  background: rgba(196, 135, 34, .92);
+}
+
+.subscription-info {
+  padding: 10px 2px 8px;
+}
+
+.subscription-info h3 {
+  margin: 0 0 4px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subscription-info p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subscription-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.subscription-actions button {
+  min-width: 0;
+  padding: 7px 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .settings {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
@@ -560,6 +685,30 @@ label input[type="checkbox"] {
   gap: 8px;
   color: var(--ink);
   font-weight: 500;
+}
+
+.selected-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: var(--brand-dark);
+  background: #dff1ef;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .dialog-list {

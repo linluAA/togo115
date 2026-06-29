@@ -9,6 +9,8 @@ const state = {
   tmdbMore: null,
   logsMode: "simple",
   settingsTab: "credentials",
+  subscriptionType: "all",
+  subscriptionStatus: "all",
   panQrTimer: null,
   tgLoginTimer: null,
   panFolder: { cid: "0", path: "/" },
@@ -32,6 +34,22 @@ function escapeHtml(value) {
     '"': "&quot;",
     "'": "&#39;",
   }[char]));
+}
+
+function telegramDialogLabels() {
+  try {
+    return JSON.parse(localStorage.getItem("telegramDialogLabels") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function rememberTelegramDialogs(dialogs) {
+  const labels = telegramDialogLabels();
+  dialogs.forEach((item) => {
+    if (item.source) labels[item.source] = item.title || item.username || item.source;
+  });
+  localStorage.setItem("telegramDialogLabels", JSON.stringify(labels));
 }
 
 async function api(path, options = {}) {
@@ -349,12 +367,27 @@ function embyGrid(items, empty, kind) {
 
 function renderSubscriptions() {
   $("#view").innerHTML = `
-    ${subscriptionTable()}
+    ${subscriptionCards()}
     <section class="section">
       <h3>最近发现的资源</h3>
       ${resourceTable()}
     </section>
   `;
+  const typeFilter = $("#subscriptionTypeFilter");
+  const statusFilter = $("#subscriptionStatusFilter");
+  if (typeFilter) typeFilter.addEventListener("change", () => {
+    state.subscriptionType = typeFilter.value;
+    renderSubscriptions();
+  });
+  if (statusFilter) statusFilter.addEventListener("change", () => {
+    state.subscriptionStatus = statusFilter.value;
+    renderSubscriptions();
+  });
+  $("#subscriptionReset")?.addEventListener("click", () => {
+    state.subscriptionType = "all";
+    state.subscriptionStatus = "all";
+    renderSubscriptions();
+  });
   document.querySelectorAll("[data-delete]").forEach((btn) => btn.addEventListener("click", async () => {
     await api(`/api/subscriptions/${btn.dataset.delete}`, { method: "DELETE" });
     await refreshBase();
@@ -380,23 +413,60 @@ function renderSubscriptions() {
   }));
 }
 
-function subscriptionTable() {
+function subscriptionCards() {
   if (!state.subscriptions.length) return `<div class="empty">还没有订阅。可以从 TMDB 榜单或搜索结果里添加。</div>`;
-  return `<table class="table">
-    <thead><tr><th>名称</th><th>类型</th><th>入库状态</th><th>关键词</th><th>操作</th></tr></thead>
-    <tbody>${state.subscriptions.map((item) => {
+  const filtered = state.subscriptions.filter((item) => {
+    const matchType = state.subscriptionType === "all" || item.media_type === state.subscriptionType;
+    const matchStatus = state.subscriptionStatus === "all" || item.status === state.subscriptionStatus;
+    return matchType && matchStatus;
+  });
+  const cards = filtered.map((item) => {
       const library = item.media_type === "movie"
         ? (item.in_library ? "已入库" : "未入库")
         : `${item.emby_count || 0}/${item.tmdb_total_count || 0}`;
-      return `<tr>
-        <td><strong>${item.title}</strong><br><span class="muted">${item.status}</span></td>
-        <td><span class="pill">${item.media_type === "tv" ? "电视剧" : "电影"}</span></td>
-        <td>${library}</td>
-        <td>${(item.keywords || []).join(", ")}</td>
-        <td><div class="row-actions"><button class="secondary" data-search="${item.id}">搜索</button><button class="secondary" data-edit="${item.id}">关键词</button><button class="danger" data-delete="${item.id}">取消订阅</button></div></td>
-      </tr>`;
-    }).join("")}</tbody>
-  </table>`;
+      const poster = item.poster_url || posterUrl({});
+      const keywords = (item.keywords || []).join(", ") || "未设置关键词";
+      return `<article class="subscription-card">
+        <div class="subscription-poster">
+          <img src="${escapeHtml(poster)}" alt="${escapeHtml(item.title)}" />
+          <div class="subscription-badges">
+            <span class="subscription-badge">${item.media_type === "tv" ? "电视剧" : "电影"}</span>
+            <span class="subscription-badge ${item.status === "active" ? "active" : "paused"}">${item.status === "active" ? "订阅中" : "已暂停"}</span>
+          </div>
+        </div>
+        <div class="subscription-info">
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(library)} · ${escapeHtml(keywords)}</p>
+        </div>
+        <div class="subscription-actions">
+          <button class="secondary" data-search="${item.id}">搜索</button>
+          <button class="secondary" data-edit="${item.id}">关键词</button>
+          <button class="danger" data-delete="${item.id}">取消</button>
+        </div>
+      </article>`;
+    }).join("");
+  return `<section class="subscription-panel">
+    <div class="subscription-toolbar">
+      <div>
+        <h3>我的订阅</h3>
+        <p>${state.subscriptions.length} 个订阅，当前显示 ${filtered.length} 个</p>
+      </div>
+      <div class="subscription-filters">
+        <select id="subscriptionTypeFilter" aria-label="订阅类型">
+          <option value="all" ${state.subscriptionType === "all" ? "selected" : ""}>全部类型</option>
+          <option value="tv" ${state.subscriptionType === "tv" ? "selected" : ""}>电视剧</option>
+          <option value="movie" ${state.subscriptionType === "movie" ? "selected" : ""}>电影</option>
+        </select>
+        <select id="subscriptionStatusFilter" aria-label="订阅状态">
+          <option value="all" ${state.subscriptionStatus === "all" ? "selected" : ""}>全部状态</option>
+          <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
+          <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
+        </select>
+        <button type="button" class="secondary" id="subscriptionReset">重置</button>
+      </div>
+    </div>
+    ${filtered.length ? `<div class="subscription-grid">${cards}</div>` : `<div class="empty">当前筛选没有订阅。</div>`}
+  </section>`;
 }
 
 function resourceTable() {
@@ -535,10 +605,17 @@ function fieldHtml(key, name, label, current, type = "text") {
   }
   if (key === "telegram" && name === "sources") {
     const selected = String(current || "").split(",").filter(Boolean);
+    const labels = telegramDialogLabels();
+    const selectedSummary = selected.length
+      ? `<div class="selected-sources">${selected.map((source) => `<span class="source-chip" title="${escapeHtml(source)}">${escapeHtml(labels[source] || source)}</span>`).join("")}</div>
+        ${selected.map((source) => `<input type="hidden" name="sources" value="${escapeHtml(source)}" />`).join("")}`
+      : `<div class="muted">登录 Telegram 后点击加载列表，然后勾选要监控的群组/频道。</div>`;
+    const buttonText = selected.length ? "重新选择群组/频道" : "加载群组/频道";
+    const listClass = selected.length ? "dialog-list hidden" : "dialog-list";
     return `<fieldset class="check-group" id="telegramSources"><legend>${label}</legend>
-      <div class="muted">登录 Telegram 后点击加载列表，然后勾选要监控的群组/频道。</div>
-      <button type="button" class="secondary" id="loadTelegramDialogs">加载群组/频道</button>
-      <div class="dialog-list" id="telegramDialogList" data-selected="${selected.join(",")}"></div>
+      ${selectedSummary}
+      <button type="button" class="secondary" id="loadTelegramDialogs">${buttonText}</button>
+      <div class="${listClass}" id="telegramDialogList" data-selected="${escapeHtml(selected.join(","))}"></div>
     </fieldset>`;
   }
   return `<label>${label}<input type="${type}" name="${name}" value="${current}" /></label>`;
@@ -560,6 +637,7 @@ async function saveSettings(event) {
     state.settings = await api("/api/settings");
   }
   toast("已保存");
+  if (key === "telegram") renderSettings();
 }
 
 function enhanceIntegrationCards() {
@@ -750,6 +828,8 @@ async function submitTgPassword() {
 
 async function loadTelegramDialogs() {
   const box = $("#telegramDialogList");
+  const picker = $("#telegramSources");
+  box.classList.remove("hidden");
   box.innerHTML = `<div class="muted">正在读取...</div>`;
   const selected = new Set((box.dataset.selected || "").split(",").filter(Boolean));
   try {
@@ -760,11 +840,13 @@ async function loadTelegramDialogs() {
     }
     const data = await api("/api/telegram/dialogs");
     const dialogs = data.dialogs || [];
+    rememberTelegramDialogs(dialogs);
+    if (dialogs.length) picker?.querySelectorAll('input[type="hidden"][name="sources"]').forEach((input) => input.remove());
     box.innerHTML = dialogs.length ? dialogs.map((item) => `
       <label>
-        <input type="checkbox" name="sources" value="${item.source}" ${selected.has(item.source) ? "checked" : ""} />
-        <span>${item.title}</span>
-        <small>${item.type}${item.username ? ` · @${item.username}` : ""}</small>
+        <input type="checkbox" name="sources" value="${escapeHtml(item.source)}" ${selected.has(item.source) ? "checked" : ""} />
+        <span>${escapeHtml(item.title)}</span>
+        <small>${escapeHtml(item.type)}${item.username ? ` · @${escapeHtml(item.username)}` : ""}</small>
       </label>
     `).join("") : `<div class="muted">没有读取到群组/频道。</div>`;
   } catch (error) {
