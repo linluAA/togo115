@@ -286,28 +286,12 @@ function simpleList(items, empty) {
 
 function renderSubscriptions() {
   $("#view").innerHTML = `
-    <section class="toolbar">
-      <label>名称 <input id="newTitle" placeholder="订阅剧集或电影" /></label>
-      <label>关键词 <input id="newKeywords" placeholder="多个关键词用逗号分隔" /></label>
-      <label>类型 <select id="newType"><option value="tv">电视剧</option><option value="movie">电影</option></select></label>
-      <label>推送 <select id="newDelivery"><option value="115">转存到 115</option><option value="telegram_bot">发送到 TG Bot</option></select></label>
-      <button id="addSub">添加</button>
-    </section>
     ${subscriptionTable()}
     <section class="section">
       <h3>最近发现的资源</h3>
       ${resourceTable()}
     </section>
   `;
-  $("#addSub").addEventListener("click", async () => {
-    const title = $("#newTitle").value.trim();
-    if (!title) return toast("请输入名称");
-    const keywords = $("#newKeywords").value.split(",").map((x) => x.trim()).filter(Boolean);
-    await api("/api/subscriptions", { method: "POST", body: JSON.stringify({ title, media_type: $("#newType").value, keywords, delivery_mode: $("#newDelivery").value }) });
-    await refreshBase();
-    renderSubscriptions();
-    toast("订阅已添加");
-  });
   document.querySelectorAll("[data-delete]").forEach((btn) => btn.addEventListener("click", async () => {
     await api(`/api/subscriptions/${btn.dataset.delete}`, { method: "DELETE" });
     await refreshBase();
@@ -334,9 +318,9 @@ function renderSubscriptions() {
 }
 
 function subscriptionTable() {
-  if (!state.subscriptions.length) return `<div class="empty">还没有订阅。可以从 TMDB 榜单或上方表单添加。</div>`;
+  if (!state.subscriptions.length) return `<div class="empty">还没有订阅。可以从 TMDB 榜单或搜索结果里添加。</div>`;
   return `<table class="table">
-    <thead><tr><th>名称</th><th>类型</th><th>入库状态</th><th>关键词</th><th>推送</th><th>操作</th></tr></thead>
+    <thead><tr><th>名称</th><th>类型</th><th>入库状态</th><th>关键词</th><th>操作</th></tr></thead>
     <tbody>${state.subscriptions.map((item) => {
       const library = item.media_type === "movie"
         ? (item.in_library ? "已入库" : "未入库")
@@ -346,8 +330,7 @@ function subscriptionTable() {
         <td><span class="pill">${item.media_type === "tv" ? "电视剧" : "电影"}</span></td>
         <td>${library}</td>
         <td>${(item.keywords || []).join(", ")}</td>
-        <td>${item.delivery_mode === "115" ? "转存 115" : "TG Bot"}</td>
-        <td><div class="row-actions"><button class="secondary" data-search="${item.id}">搜索</button><button class="secondary" data-edit="${item.id}">关键词</button><button class="danger" data-delete="${item.id}">取消</button></div></td>
+        <td><div class="row-actions"><button class="secondary" data-search="${item.id}">搜索</button><button class="secondary" data-edit="${item.id}">关键词</button><button class="danger" data-delete="${item.id}">取消订阅</button></div></td>
       </tr>`;
     }).join("")}</tbody>
   </table>`;
@@ -396,6 +379,7 @@ function renderSettings() {
       ["username", "账号", state.user.username],
       ["password", "新密码", "", "password"],
     ])}
+    ${settingsCard("推送方式", "delivery", [["mode", "全局推送方式"]])}
     ${settingsCard("115 网盘", "115", [["cookie", "Cookie"], ["target_path", "默认转存目录"], ["qr_login", "扫码登录状态"]])}
     ${settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道，多个用逗号分隔"], ["history_limit", "历史搜索条数"]])}
     ${settingsCard("TMDB", "tmdb", [["api_key", "API Key"]])}
@@ -411,9 +395,20 @@ function settingsCard(title, key, fields) {
   const value = state.settings[key]?.value || {};
   return `<form class="card form-grid" data-save-settings="${key}">
     <h3>${title}</h3>
-    ${fields.map(([name, label, fallback = "", type = "text"]) => `<label>${label}<input type="${type}" name="${name}" value="${value[name] || fallback || ""}" /></label>`).join("")}
+    ${fields.map(([name, label, fallback = "", type = "text"]) => fieldHtml(key, name, label, value[name] || fallback || "", type)).join("")}
     <button type="submit">保存</button>
   </form>`;
+}
+
+function fieldHtml(key, name, label, current, type = "text") {
+  if (key === "delivery" && name === "mode") {
+    const selected = current || "115";
+    return `<label>${label}<select name="mode">
+      <option value="115" ${selected === "115" ? "selected" : ""}>转存到 115</option>
+      <option value="telegram_bot" ${selected === "telegram_bot" ? "selected" : ""}>发送到 TG Bot</option>
+    </select></label>`;
+  }
+  return `<label>${label}<input type="${type}" name="${name}" value="${current}" /></label>`;
 }
 
 async function saveSettings(event) {
