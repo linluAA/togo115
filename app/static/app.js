@@ -392,11 +392,11 @@ function renderSettings() {
     ]),
     delivery: settingsCard("推送方式", "delivery", [["mode", "全局推送方式"]]),
     115: settingsCard("115 网盘", "115", [["cookie", "Cookie"], ["target_path", "默认转存目录"], ["qr_login", "扫码登录状态"]]),
-    telegram: settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道，多个用逗号分隔"], ["history_limit", "历史搜索条数"]]),
+    telegram: settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道"], ["history_limit", "历史搜索条数"]]),
     tmdb: settingsCard("TMDB", "tmdb", [["api_key", "API Key"]]),
-    proxy: settingsCard("代理设置", "proxy", [["tmdb", "TMDB 代理"], ["telegram", "Telegram 代理"], ["pan115", "115 代理"], ["emby", "Emby 代理"]]),
+    proxy: settingsCard("代理设置", "proxy", [["url", "代理地址"], ["modules", "启用代理的模块"]]),
     tg_bot: settingsCard("TG Bot", "tg_bot", [["bot_token", "Bot Token"], ["bot_username", "机器人用户名"], ["allowed_chat_id", "允许的 Chat ID"]]),
-    emby: settingsCard("媒体库", "emby", [["server_url", "Emby 地址"], ["api_key", "API Key"], ["user_id", "用户 ID"]]),
+    emby: settingsCard("媒体库", "emby", [["server_url", "Emby 地址"], ["api_key", "API Key"]]),
   };
   $("#view").innerHTML = `
     <nav class="settings-tabs">
@@ -429,6 +429,21 @@ function fieldHtml(key, name, label, current, type = "text") {
       <option value="telegram_bot" ${selected === "telegram_bot" ? "selected" : ""}>发送到 TG Bot</option>
     </select></label>`;
   }
+  if (key === "proxy" && name === "modules") {
+    const selected = Array.isArray(current) ? current : String(current || "").split(",").filter(Boolean);
+    const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["emby", "Emby"]];
+    return `<fieldset class="check-group"><legend>${label}</legend>
+      ${options.map(([value, text]) => `<label><input type="checkbox" name="modules" value="${value}" ${selected.includes(value) ? "checked" : ""} /> ${text}</label>`).join("")}
+    </fieldset>`;
+  }
+  if (key === "telegram" && name === "sources") {
+    const selected = String(current || "").split(",").filter(Boolean);
+    return `<fieldset class="check-group" id="telegramSources"><legend>${label}</legend>
+      <div class="muted">登录 Telegram 后点击加载列表，然后勾选要监控的群组/频道。</div>
+      <button type="button" class="secondary" id="loadTelegramDialogs">加载群组/频道</button>
+      <div class="dialog-list" id="telegramDialogList" data-selected="${selected.join(",")}"></div>
+    </fieldset>`;
+  }
   return `<label>${label}<input type="${type}" name="${name}" value="${current}" /></label>`;
 }
 
@@ -436,6 +451,10 @@ async function saveSettings(event) {
   event.preventDefault();
   const key = event.currentTarget.dataset.saveSettings;
   const value = Object.fromEntries(new FormData(event.currentTarget));
+  const moduleValues = new FormData(event.currentTarget).getAll("modules");
+  if (key === "proxy") value.modules = moduleValues;
+  const sourceValues = new FormData(event.currentTarget).getAll("sources");
+  if (key === "telegram") value.sources = sourceValues.join(",");
   if (key === "credentials") {
     await api("/api/auth/credentials", { method: "PUT", body: JSON.stringify(value) });
     state.user = await api("/api/auth/me");
@@ -454,13 +473,10 @@ function enhanceIntegrationCards() {
         <button type="button" class="secondary" id="panQrBtn">115 扫码</button>
         <button type="button" class="secondary" id="panStatusBtn">检查状态</button>
       </div>
-      <label>手动转存测试 <input id="panSaveLink" placeholder="https://115.com/s/..." /></label>
-      <button type="button" class="secondary" id="panSaveBtn">测试转存</button>
       <div class="qr-box" id="panQrBox">尚未生成二维码</div>
     `);
     $("#panQrBtn").addEventListener("click", startPanQr);
     $("#panStatusBtn").addEventListener("click", checkPanStatus);
-    $("#panSaveBtn").addEventListener("click", savePanLink);
   }
   const tg = document.querySelector('[data-save-settings="telegram"]');
   if (tg) {
@@ -477,6 +493,8 @@ function enhanceIntegrationCards() {
     $("#tgStatusBtn").addEventListener("click", checkTgStatus);
     $("#tgPasswordBtn").addEventListener("click", submitTgPassword);
   }
+  const loadDialogs = $("#loadTelegramDialogs");
+  if (loadDialogs) loadDialogs.addEventListener("click", loadTelegramDialogs);
 }
 
 async function startPanQr() {
@@ -491,13 +509,6 @@ async function checkPanStatus() {
     state.settings = await api("/api/settings");
     renderSettings();
   }
-}
-
-async function savePanLink() {
-  const link = $("#panSaveLink").value.trim();
-  if (!link) return toast("请输入 115 分享链接");
-  const data = await api("/api/115/save", { method: "POST", body: JSON.stringify({ link }) });
-  toast(data.ok ? "转存请求成功" : "转存失败，请看日志");
 }
 
 async function startTgQr() {
@@ -516,6 +527,21 @@ async function submitTgPassword() {
   if (!password) return toast("请输入两步验证密码");
   await api("/api/telegram/password", { method: "POST", body: JSON.stringify({ password }) });
   toast("密码已提交");
+}
+
+async function loadTelegramDialogs() {
+  const box = $("#telegramDialogList");
+  box.innerHTML = `<div class="muted">正在读取...</div>`;
+  const selected = new Set((box.dataset.selected || "").split(",").filter(Boolean));
+  const data = await api("/api/telegram/dialogs");
+  const dialogs = data.dialogs || [];
+  box.innerHTML = dialogs.length ? dialogs.map((item) => `
+    <label>
+      <input type="checkbox" name="sources" value="${item.source}" ${selected.has(item.source) ? "checked" : ""} />
+      <span>${item.title}</span>
+      <small>${item.type}${item.username ? ` · @${item.username}` : ""}</small>
+    </label>
+  `).join("") : `<div class="muted">没有读取到群组/频道，请确认 Telegram 已登录。</div>`;
 }
 
 boot();
