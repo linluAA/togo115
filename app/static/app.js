@@ -5,6 +5,7 @@ const state = {
   subscriptions: [],
   resources: [],
   mediaPayloads: new Map(),
+  tmdbSearch: [],
   logsMode: "simple",
 };
 
@@ -43,6 +44,10 @@ function toast(message) {
 
 function posterUrl(item) {
   return item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80";
+}
+
+function backdropUrl(item) {
+  return item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : posterUrl(item);
 }
 
 async function boot() {
@@ -131,31 +136,29 @@ async function renderTmdb() {
   const root = $("#view");
   root.innerHTML = `
     <section class="toolbar">
-      <label>输入名称搜索订阅 <input id="quickTitle" placeholder="例如：庆余年 第二季 / Dune" /></label>
-      <label>类型 <select id="quickType"><option value="tv">电视剧</option><option value="movie">电影</option></select></label>
-      <button id="quickSub">订阅</button>
+      <label>搜索 TMDB <input id="tmdbQuery" placeholder="输入剧集或电影名称" /></label>
+      <button id="tmdbSearchBtn">搜索</button>
     </section>
-    <section class="section"><div class="empty">正在读取 TMDB 榜单...</div></section>
+    <section class="section" id="searchSection"></section>
+    <section class="section" id="trendingSection"><div class="empty">正在读取 TMDB 榜单...</div></section>
   `;
-  $("#quickSub").addEventListener("click", () => quickSubscribe());
+  $("#tmdbSearchBtn").addEventListener("click", () => searchTmdb());
+  $("#tmdbQuery").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") searchTmdb();
+  });
   try {
     const data = await api("/api/tmdb/trending");
     const tv = data.tv || [];
     const movie = data.movie || [];
-    root.querySelector(".section").innerHTML = `
+    $("#trendingSection").innerHTML = `
       <h3>热门剧集</h3>
       ${mediaGrid(tv, "tv")}
       <h3>热门电影</h3>
       ${mediaGrid(movie, "movie")}
     `;
-    root.querySelectorAll("[data-subscribe]").forEach((btn) => btn.addEventListener("click", async () => {
-      const item = state.mediaPayloads.get(btn.dataset.subscribe);
-      await api("/api/subscriptions", { method: "POST", body: JSON.stringify(item) });
-      await refreshBase();
-      toast("已创建订阅并开始搜索历史消息");
-    }));
+    bindMediaActions(root);
   } catch (error) {
-    root.querySelector(".section").innerHTML = `<div class="empty">TMDB 未配置或暂时不可用。你仍然可以手动输入名称订阅。</div>`;
+    $("#trendingSection").innerHTML = `<div class="empty">TMDB 未配置或暂时不可用。配置 API Key 后可搜索和订阅。</div>`;
   }
 }
 
@@ -163,36 +166,100 @@ function mediaGrid(items, type) {
   if (!items.length) return `<div class="empty">暂无数据，配置 TMDB API Key 后会显示榜单。</div>`;
   return `<div class="grid">${items.slice(0, 12).map((item) => {
     const title = item.name || item.title;
-    const payloadId = `${type}-${item.id}`;
+    const mediaType = item.media_type === "movie" || item.media_type === "tv" ? item.media_type : type;
+    const payloadId = `${mediaType}-${item.id}`;
     const payload = {
       title,
-      media_type: type,
+      media_type: mediaType,
       tmdb_id: item.id,
       poster_url: posterUrl(item),
       overview: item.overview || "",
       keywords: [title],
     };
     state.mediaPayloads.set(payloadId, payload);
-    return `<article class="card">
-      <img class="poster" src="${posterUrl(item)}" alt="${title}" />
-      <div class="card-body">
+    return `<article class="media-card">
+      <button class="poster-button" data-detail="${payloadId}" aria-label="查看 ${title} 详情">
+        <img class="poster" src="${posterUrl(item)}" alt="${title}" />
+        <span class="poster-overlay">
+          <span data-subscribe="${payloadId}">订阅</span>
+          <span>详情</span>
+        </span>
+      </button>
+      <div class="media-meta">
         <h3>${title}</h3>
-        <p class="muted">${(item.overview || "暂无简介").slice(0, 72)}</p>
-        <button data-subscribe="${payloadId}">订阅</button>
+        <p>${mediaType === "tv" ? "电视剧" : "电影"} · ${(item.first_air_date || item.release_date || "").slice(0, 4) || "未知"}</p>
       </div>
     </article>`;
   }).join("")}</div>`;
 }
 
-async function quickSubscribe() {
-  const title = $("#quickTitle").value.trim();
-  if (!title) return toast("请输入名称");
-  await api("/api/subscriptions", {
-    method: "POST",
-    body: JSON.stringify({ title, media_type: $("#quickType").value, keywords: [title] }),
-  });
+function bindMediaActions(root = document) {
+  root.querySelectorAll("[data-subscribe]").forEach((btn) => btn.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const item = state.mediaPayloads.get(btn.dataset.subscribe);
+    await subscribeMedia(item);
+  }));
+  root.querySelectorAll("[data-detail]").forEach((btn) => btn.addEventListener("click", () => showMediaDetail(btn.dataset.detail)));
+}
+
+async function subscribeMedia(item) {
+  if (!item) return;
+  await api("/api/subscriptions", { method: "POST", body: JSON.stringify(item) });
   await refreshBase();
-  toast("订阅已创建");
+  toast("已创建订阅并开始搜索历史消息");
+}
+
+async function searchTmdb() {
+  const query = $("#tmdbQuery").value.trim();
+  if (!query) return toast("请输入搜索内容");
+  const section = $("#searchSection");
+  section.innerHTML = `<div class="empty">正在搜索...</div>`;
+  const data = await api(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
+  state.tmdbSearch = data.results || [];
+  section.innerHTML = `<h3>搜索结果</h3>${mediaGrid(state.tmdbSearch, "tv")}`;
+  bindMediaActions(section);
+}
+
+async function showMediaDetail(payloadId) {
+  const payload = state.mediaPayloads.get(payloadId);
+  if (!payload) return;
+  let detail = {};
+  try {
+    detail = await api(`/api/tmdb/${payload.media_type}/${payload.tmdb_id}`);
+  } catch {
+    detail = payload;
+  }
+  const title = detail.name || detail.title || payload.title;
+  const seasons = payload.media_type === "tv" && detail.number_of_episodes ? `<span>${detail.number_of_episodes} 集</span>` : "";
+  const runtime = payload.media_type === "movie" && detail.runtime ? `<span>${detail.runtime} 分钟</span>` : "";
+  document.body.insertAdjacentHTML("beforeend", `
+    <div class="modal-backdrop" id="mediaModal">
+      <section class="detail-panel">
+        <button class="detail-close" id="detailClose">×</button>
+        <div class="detail-hero" style="background-image: linear-gradient(90deg, rgba(16,47,49,.92), rgba(16,47,49,.52)), url('${backdropUrl(detail)}')">
+          <img src="${posterUrl(detail)}" alt="${title}" />
+          <div>
+            <h2>${title}</h2>
+            <div class="detail-facts">
+              <span>${payload.media_type === "tv" ? "电视剧" : "电影"}</span>
+              <span>${(detail.first_air_date || detail.release_date || "").slice(0, 4) || "未知年份"}</span>
+              ${seasons}${runtime}
+            </div>
+            <p>${detail.overview || payload.overview || "暂无简介"}</p>
+            <button id="detailSubscribe">订阅</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  `);
+  $("#detailClose").addEventListener("click", () => $("#mediaModal").remove());
+  $("#mediaModal").addEventListener("click", (event) => {
+    if (event.target.id === "mediaModal") $("#mediaModal").remove();
+  });
+  $("#detailSubscribe").addEventListener("click", async () => {
+    await subscribeMedia(payload);
+    $("#mediaModal").remove();
+  });
 }
 
 async function renderEmby() {
