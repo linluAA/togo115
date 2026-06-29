@@ -1,6 +1,6 @@
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
-from app.services.integrations import Pan115Adapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter
+from app.services.integrations import Pan115Adapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, get_setting
 
 
 def normalize_subscription(row) -> dict:
@@ -129,12 +129,14 @@ async def attach_results_to_matching_subscriptions(results: list[SearchResult], 
 async def deliver_resource(resource_id: int) -> bool:
     with db() as conn:
         resource = conn.execute(
-            "SELECT r.*, s.delivery_mode, s.target_path FROM resources r JOIN subscriptions s ON s.id = r.subscription_id WHERE r.id = ?",
+            "SELECT r.*, s.target_path FROM resources r JOIN subscriptions s ON s.id = r.subscription_id WHERE r.id = ?",
             (resource_id,),
         ).fetchone()
     if not resource:
         return False
-    if resource["delivery_mode"] == "telegram_bot":
+    delivery = get_setting("delivery", {"mode": "115"})
+    delivery_mode = delivery.get("mode") or "115"
+    if delivery_mode == "telegram_bot":
         ok = await TelegramBotAdapter().forward_to_bot(resource["url"])
     else:
         ok = await Pan115Adapter().transfer(resource["url"], resource["target_path"])
