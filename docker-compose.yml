@@ -1,0 +1,12 @@
+services:
+  togo115:
+    build: .
+    container_name: togo115
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      TOGO115_SECRET_KEY: "please-change-this-secret"
+      TOGO115_MONITOR_INTERVAL_SECONDS: "60"
+    volumes:
+      - ./data:/data
