@@ -263,6 +263,7 @@ class TelegramClientAdapter:
 class Pan115Adapter:
     QR_TOKEN_URL = "https://qrcodeapi.115.com/api/1.0/web/1.0/token/"
     QR_STATUS_URL = "https://qrcodeapi.115.com/get/status/"
+    QR_IMAGE_URL = "https://qrcodeapi.115.com/api/1.0/{channel}/1.0/qrcode"
     QR_LOGIN_URL = "https://passportapi.115.com/app/1.0/{channel}/1.0/login/qrcode/"
     SHARE_RECEIVE_URL = "https://webapi.115.com/share/receive"
     FILE_ADD_URL = "https://webapi.115.com/files/add"
@@ -281,10 +282,27 @@ class Pan115Adapter:
         sign = data.get("sign")
         if not uid or not token or not sign:
             raise RuntimeError("115 扫码 token 获取失败")
-        qr_url = f"https://qrcodeapi.115.com/api/1.0/web/1.0/qrcode?uid={uid}&token={token}&sign={sign}"
+        qr_url = f"/api/115/qrcode-image?uid={uid}&channel={channel}"
         save_flow("115_qr", {"uid": uid, "token": token, "sign": sign, "qr_url": qr_url, "status": "waiting", "channel": channel})
         add_log("info", "115", "115 扫码登录已创建", {"channel": channel})
         return {"qr_url": qr_url, "status": "waiting", "channel": channel}
+
+    async def qrcode_image(self, uid: str, channel: str = "web") -> tuple[bytes, str]:
+        tried: list[str] = []
+        channels = list(dict.fromkeys([channel, "mac", "web"]))
+        async with self._client() as client:
+            for item in channels:
+                tried.append(item)
+                url = self.QR_IMAGE_URL.format(channel=item)
+                try:
+                    res = await client.get(url, params={"uid": uid})
+                    content_type = res.headers.get("content-type", "image/png")
+                    if res.status_code == 200 and content_type.startswith("image/") and res.content:
+                        return res.content, content_type
+                    add_log("warning", "115", "115 二维码图片获取失败，尝试下一个渠道", {"channel": item, "status": res.status_code, "body": res.text[:120]})
+                except Exception as exc:
+                    add_log("warning", "115", "115 二维码图片请求异常，尝试下一个渠道", {"channel": item, "error": str(exc)})
+        raise RuntimeError(f"二维码图片获取失败，已尝试渠道：{', '.join(tried)}")
 
     async def qr_login_status(self) -> dict[str, Any]:
         flow = get_flow("115_qr")

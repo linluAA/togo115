@@ -293,22 +293,32 @@ label input[type="checkbox"] {
 .more-card {
   display: grid;
   place-content: center;
-  gap: 8px;
+  gap: 12px;
   min-height: 260px;
   padding: 18px;
-  border: 1px dashed var(--line);
+  border: 1px solid #cfe0dc;
   border-radius: 8px;
   color: var(--brand-dark);
-  background: #edf5f3;
+  background: linear-gradient(180deg, #f3faf8, #e7f2ef);
 }
 
-.more-card span {
-  font-size: 18px;
+.more-card .arrow {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--brand);
+  font-size: 34px;
+  line-height: 1;
+  box-shadow: 0 12px 26px rgba(22,124,128,.22);
+}
+
+.more-card .more-text {
+  font-size: 16px;
   font-weight: 900;
-}
-
-.more-card small {
-  color: var(--muted);
 }
 
 .card-body {
@@ -349,6 +359,10 @@ label input[type="checkbox"] {
   gap: 16px;
 }
 
+.emby-library-grid {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
 .emby-card {
   display: grid;
   gap: 10px;
@@ -357,6 +371,12 @@ label input[type="checkbox"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.emby-library-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .emby-card img,
@@ -368,10 +388,16 @@ label input[type="checkbox"] {
   background: #dfe5e1;
 }
 
-.emby-card img.library-image {
-  height: 150px;
+.emby-library-card img.library-image {
+  height: 132px;
   object-fit: contain;
-  padding: 6px;
+  padding: 0;
+  background: #1f2422;
+  border-radius: 8px;
+}
+
+.emby-library-card div {
+  padding: 0 2px;
 }
 
 .emby-placeholder {

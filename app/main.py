@@ -232,7 +232,21 @@ async def telegram_password(payload: TelegramPasswordRequest, user: dict = Depen
 
 @app.post("/api/115/qr-login")
 async def pan115_qr_login(payload: Pan115QrRequest, user: dict = Depends(current_user)) -> dict:
-    return await Pan115Adapter().qr_login_start(payload.channel)
+    try:
+        return await Pan115Adapter().qr_login_start(payload.channel)
+    except Exception as exc:
+        add_log("error", "115", "115 扫码登录创建失败", {"error": str(exc)})
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/115/qrcode-image")
+async def pan115_qrcode_image(uid: str, channel: str = "web", user: dict = Depends(current_user)) -> StreamingResponse:
+    try:
+        content, media_type = await Pan115Adapter().qrcode_image(uid, channel)
+        return StreamingResponse(BytesIO(content), media_type=media_type)
+    except Exception as exc:
+        add_log("error", "115", "115 二维码图片生成失败", {"error": str(exc), "uid": uid, "channel": channel})
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/115/status")

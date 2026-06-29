@@ -213,7 +213,7 @@ function mediaGrid(items, type, options = {}) {
       </div>
     </article>`;
   }).join("");
-  const more = options.more ? `<button class="more-card" data-more="${type}"><span>查看更多</span><small>${type === "movie" ? "电影" : "剧集"}</small></button>` : "";
+  const more = options.more ? `<button class="more-card" data-more="${type}" aria-label="查看更多"><span class="arrow">→</span><span class="more-text">查看更多</span></button>` : "";
   return `<div class="media-grid">${cards}${more}</div>`;
 }
 
@@ -317,9 +317,11 @@ function simpleList(items, empty) {
 
 function embyGrid(items, empty, kind) {
   if (!items || !items.length) return `<div class="empty">${empty}</div>`;
-  return `<div class="emby-grid">${items.map((item) => {
-    const imageClass = kind === "library" ? "library-image" : "";
-    const image = item.image_url ? `<img class="${imageClass}" src="${item.image_url}" alt="${item.name || item.title || "Emby"}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'emby-placeholder', textContent:'${kind === "user" ? "用户" : "媒体"}'}))" />` : `<div class="emby-placeholder">${kind === "user" ? "用户" : "媒体"}</div>`;
+  return `<div class="emby-grid ${kind === "library" ? "emby-library-grid" : ""}">${items.map((item) => {
+    const fallback = kind === "user" ? "" : `<div class="emby-placeholder">媒体</div>`;
+    const image = kind === "user"
+      ? ""
+      : (item.image_url ? `<img class="library-image" src="${item.image_url}" alt="${item.name || item.title || "Emby"}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'emby-placeholder', textContent:'媒体'}))" />` : fallback);
     return `<article class="emby-card ${kind === "library" ? "emby-library-card" : ""}">
       ${image}
       <div>
@@ -591,7 +593,7 @@ async function startPanQr() {
   box.innerHTML = `<span>正在生成二维码...</span>`;
   try {
     const data = await api("/api/115/qr-login", { method: "POST", body: JSON.stringify({ channel }) });
-    box.innerHTML = `<img alt="115 QR" src="${data.qr_url}" /><span>打开 115 App 扫码确认后点击检查状态</span>`;
+    box.innerHTML = `<img alt="115 QR" src="${data.qr_url}" onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent:'二维码图片加载失败，请查看日志里的 115 错误'}))" /><span>打开 115 App 扫码确认后点击检查状态</span>`;
   } catch (error) {
     box.innerHTML = `<span>二维码生成失败：${error.message}</span>`;
   }
