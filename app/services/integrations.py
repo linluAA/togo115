@@ -51,6 +51,14 @@ def save_flow(provider: str, payload: dict[str, Any]) -> None:
         )
 
 
+def module_proxy(module: str) -> str | None:
+    proxy = get_setting("proxy")
+    modules = proxy.get("modules") or []
+    if isinstance(modules, str):
+        modules = [x.strip() for x in modules.split(",") if x.strip()]
+    return proxy.get("url") if module in modules else None
+
+
 @dataclass
 class SearchResult:
     title: str
@@ -98,7 +106,7 @@ class TelegramClientAdapter:
         if self._client and self._client.is_connected():
             return self._client
         config = self._config()
-        proxy = self._telethon_proxy(get_setting("proxy").get("telegram"))
+        proxy = self._telethon_proxy(module_proxy("telegram"))
         self._client = TelegramClient(str(self._session_path()), int(config["api_id"]), config["api_hash"], proxy=proxy)
         await self._client.connect()
         return self._client
@@ -152,6 +160,27 @@ class TelegramClientAdapter:
     async def login_status(self) -> dict[str, Any]:
         flow = get_flow("telegram_qr")
         return {"authorized": await self.is_authorized(), **flow}
+
+    async def dialogs(self) -> list[dict[str, Any]]:
+        client = await self.client()
+        if not await client.is_user_authorized():
+            return []
+        items: list[dict[str, Any]] = []
+        async for dialog in client.iter_dialogs():
+            entity = dialog.entity
+            if not (getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False)):
+                continue
+            identifier = getattr(entity, "username", None) or str(entity.id)
+            items.append(
+                {
+                    "id": str(entity.id),
+                    "title": dialog.name,
+                    "username": getattr(entity, "username", None),
+                    "source": identifier,
+                    "type": "频道" if getattr(entity, "broadcast", False) else "群组",
+                }
+            )
+        return items
 
     async def search_history(self, title: str, keywords: list[str]) -> list[SearchResult]:
         try:
@@ -239,7 +268,7 @@ class Pan115Adapter:
     FILE_ADD_URL = "https://webapi.115.com/files/add"
 
     def _client(self) -> httpx.AsyncClient:
-        proxy = get_setting("proxy").get("pan115")
+        proxy = module_proxy("pan115")
         return httpx.AsyncClient(proxy=proxy or None, timeout=25, follow_redirects=True)
 
     async def qr_login_start(self) -> dict[str, Any]:
@@ -334,7 +363,7 @@ class TelegramBotAdapter:
 
 class TmdbAdapter:
     async def _client(self) -> httpx.AsyncClient:
-        proxy = get_setting("proxy").get("tmdb")
+        proxy = module_proxy("tmdb")
         return httpx.AsyncClient(proxy=proxy or None, timeout=20)
 
     def _api_key(self) -> str | None:
