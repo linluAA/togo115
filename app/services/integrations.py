@@ -333,18 +333,48 @@ class TelegramBotAdapter:
 
 
 class TmdbAdapter:
+    async def _client(self) -> httpx.AsyncClient:
+        proxy = get_setting("proxy").get("tmdb")
+        return httpx.AsyncClient(proxy=proxy or None, timeout=20)
+
+    def _api_key(self) -> str | None:
+        return get_setting("tmdb").get("api_key")
+
     async def trending(self) -> dict[str, list[dict[str, Any]]]:
-        config = get_setting("tmdb")
-        api_key = config.get("api_key")
+        api_key = self._api_key()
         if not api_key:
             return {"tv": [], "movie": []}
-        proxy = get_setting("proxy").get("tmdb")
-        async with httpx.AsyncClient(proxy=proxy or None, timeout=20) as client:
+        async with await self._client() as client:
             tv = await client.get("https://api.themoviedb.org/3/trending/tv/week", params={"api_key": api_key, "language": "zh-CN"})
             movie = await client.get("https://api.themoviedb.org/3/trending/movie/week", params={"api_key": api_key, "language": "zh-CN"})
         tv.raise_for_status()
         movie.raise_for_status()
         return {"tv": tv.json().get("results", []), "movie": movie.json().get("results", [])}
+
+    async def search(self, query: str, media_type: str = "multi") -> list[dict[str, Any]]:
+        api_key = self._api_key()
+        if not api_key or not query.strip():
+            return []
+        endpoint = "multi" if media_type not in ("tv", "movie") else media_type
+        async with await self._client() as client:
+            res = await client.get(
+                f"https://api.themoviedb.org/3/search/{endpoint}",
+                params={"api_key": api_key, "language": "zh-CN", "query": query, "include_adult": "false"},
+            )
+        res.raise_for_status()
+        return [item for item in res.json().get("results", []) if item.get("media_type", endpoint) in ("tv", "movie")]
+
+    async def detail(self, media_type: str, tmdb_id: int) -> dict[str, Any]:
+        api_key = self._api_key()
+        if not api_key:
+            return {}
+        async with await self._client() as client:
+            res = await client.get(
+                f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}",
+                params={"api_key": api_key, "language": "zh-CN", "append_to_response": "credits,videos"},
+            )
+        res.raise_for_status()
+        return res.json()
 
 
 class EmbyAdapter:
