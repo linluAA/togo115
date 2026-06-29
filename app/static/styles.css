@@ -210,7 +210,7 @@ label input[type="checkbox"] {
   display: grid;
   grid-template-columns: repeat(7, minmax(120px, 1fr));
   gap: 18px 16px;
-  align-items: start;
+  align-items: stretch;
   margin-bottom: 22px;
 }
 
@@ -222,6 +222,8 @@ label input[type="checkbox"] {
 }
 
 .media-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
   min-width: 0;
 }
 
@@ -276,6 +278,7 @@ label input[type="checkbox"] {
 }
 
 .media-meta {
+  min-height: 60px;
   padding: 10px 2px 2px;
 }
 
@@ -293,8 +296,10 @@ label input[type="checkbox"] {
 .more-card {
   display: grid;
   place-content: center;
+  align-self: stretch;
   gap: 12px;
-  min-height: 260px;
+  width: 100%;
+  min-height: 100%;
   padding: 18px;
   border: 1px solid #cfe0dc;
   border-radius: 8px;
@@ -390,9 +395,9 @@ label input[type="checkbox"] {
 
 .emby-library-card img.library-image {
   height: 132px;
-  object-fit: contain;
+  object-fit: cover;
   padding: 0;
-  background: #1f2422;
+  background: transparent;
   border-radius: 8px;
 }
 

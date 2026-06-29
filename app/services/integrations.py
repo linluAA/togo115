@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 from telethon import TelegramClient, events
@@ -276,14 +276,20 @@ class Pan115Adapter:
         async with self._client() as client:
             res = await client.get(self.QR_TOKEN_URL)
             res.raise_for_status()
-            data = res.json().get("data", res.json())
+            raw = res.json()
+            data = raw.get("data", raw)
         uid = data.get("uid")
-        token = data.get("token")
+        qrcode_value = data.get("qrcode")
+        token_time = data.get("time")
         sign = data.get("sign")
-        if not uid or not token or not sign:
-            raise RuntimeError("115 扫码 token 获取失败")
-        qr_url = f"/api/115/qrcode-image?uid={uid}&channel={channel}"
-        save_flow("115_qr", {"uid": uid, "token": token, "sign": sign, "qr_url": qr_url, "status": "waiting", "channel": channel})
+        if not uid or not token_time or not sign:
+            raise RuntimeError(f"115 扫码 token 获取失败：{str(raw)[:240]}")
+        qr_url = (
+            f"/api/qr?data={quote(str(qrcode_value), safe='')}"
+            if qrcode_value
+            else f"/api/115/qrcode-image?uid={uid}&channel={channel}"
+        )
+        save_flow("115_qr", {"uid": uid, "time": token_time, "sign": sign, "qrcode": qrcode_value, "qr_url": qr_url, "status": "waiting", "channel": channel})
         add_log("info", "115", "115 扫码登录已创建", {"channel": channel})
         return {"qr_url": qr_url, "status": "waiting", "channel": channel}
 
@@ -308,7 +314,7 @@ class Pan115Adapter:
         flow = get_flow("115_qr")
         if not flow:
             return {"status": "not_started"}
-        params = {"uid": flow["uid"], "time": int(time.time() * 1000), "sign": flow["sign"]}
+        params = {"uid": flow["uid"], "time": flow.get("time"), "sign": flow["sign"]}
         async with self._client() as client:
             res = await client.get(self.QR_STATUS_URL, params=params)
             res.raise_for_status()
