@@ -6,6 +6,7 @@ const state = {
   resources: [],
   mediaPayloads: new Map(),
   tmdbSearch: [],
+  tmdbMore: null,
   logsMode: "simple",
   settingsTab: "credentials",
 };
@@ -133,8 +134,26 @@ function renderView() {
   if (state.view === "settings") renderSettings();
 }
 
+function sectionTitle(type) {
+  return type === "movie" ? "热门电影" : "热门剧集";
+}
+
 async function renderTmdb() {
   const root = $("#view");
+  if (state.tmdbMore) {
+    root.innerHTML = `
+      <section class="toolbar compact-toolbar">
+        <button class="secondary" id="backToTmdb">返回榜单</button>
+      </section>
+      <section class="section"><h3>${sectionTitle(state.tmdbMore.type)}</h3>${mediaGrid(state.tmdbMore.items, state.tmdbMore.type, { limit: 40, more: false })}</section>
+    `;
+    $("#backToTmdb").addEventListener("click", () => {
+      state.tmdbMore = null;
+      renderTmdb();
+    });
+    bindMediaActions(root);
+    return;
+  }
   root.innerHTML = `
     <section class="toolbar">
       <label>搜索 TMDB <input id="tmdbQuery" placeholder="输入剧集或电影名称" /></label>
@@ -153,9 +172,9 @@ async function renderTmdb() {
     const movie = data.movie || [];
     $("#trendingSection").innerHTML = `
       <h3>热门剧集</h3>
-      ${mediaGrid(tv, "tv")}
+      ${mediaGrid(tv, "tv", { limit: 13, more: true })}
       <h3>热门电影</h3>
-      ${mediaGrid(movie, "movie")}
+      ${mediaGrid(movie, "movie", { limit: 13, more: true })}
     `;
     bindMediaActions(root);
   } catch (error) {
@@ -163,10 +182,11 @@ async function renderTmdb() {
   }
 }
 
-function mediaGrid(items, type) {
+function mediaGrid(items, type, options = {}) {
   if (!items.length) return `<div class="empty">暂无数据，配置 TMDB API Key 后会显示榜单。</div>`;
-  const visibleItems = items.slice(0, 20);
-  return `<div class="media-grid">${visibleItems.map((item) => {
+  const limit = options.limit || 20;
+  const visibleItems = items.slice(0, limit);
+  const cards = visibleItems.map((item) => {
     const title = item.name || item.title;
     const mediaType = item.media_type === "movie" || item.media_type === "tv" ? item.media_type : type;
     const payloadId = `${mediaType}-${item.id}`;
@@ -192,7 +212,9 @@ function mediaGrid(items, type) {
         <p>${mediaType === "tv" ? "电视剧" : "电影"} · ${(item.first_air_date || item.release_date || "").slice(0, 4) || "未知"}</p>
       </div>
     </article>`;
-  }).join("")}</div>`;
+  }).join("");
+  const more = options.more ? `<button class="more-card" data-more="${type}"><span>查看更多</span><small>${type === "movie" ? "电影" : "剧集"}</small></button>` : "";
+  return `<div class="media-grid">${cards}${more}</div>`;
 }
 
 function bindMediaActions(root = document) {
@@ -202,6 +224,12 @@ function bindMediaActions(root = document) {
     await subscribeMedia(item);
   }));
   root.querySelectorAll("[data-detail]").forEach((btn) => btn.addEventListener("click", () => showMediaDetail(btn.dataset.detail)));
+  root.querySelectorAll("[data-more]").forEach((btn) => btn.addEventListener("click", async () => {
+    const type = btn.dataset.more;
+    const data = await api("/api/tmdb/trending");
+    state.tmdbMore = { type, items: data[type] || [] };
+    renderTmdb();
+  }));
 }
 
 async function subscribeMedia(item) {

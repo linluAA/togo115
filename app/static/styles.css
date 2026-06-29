@@ -208,16 +208,10 @@ label input[type="checkbox"] {
 
 .media-grid {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: clamp(150px, 10vw, 190px);
-  grid-template-rows: repeat(2, auto);
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
   gap: 18px 16px;
   align-items: start;
   margin-bottom: 22px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 10px;
-  scrollbar-width: thin;
 }
 
 .card {
@@ -294,6 +288,27 @@ label input[type="checkbox"] {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.more-card {
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  min-height: 260px;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--brand-dark);
+  background: #edf5f3;
+}
+
+.more-card span {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.more-card small {
+  color: var(--muted);
 }
 
 .card-body {
@@ -690,10 +705,19 @@ label input[type="checkbox"] {
     display: block;
     overflow-x: auto;
   }
+  .media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .detail-hero {
     grid-template-columns: 1fr;
   }
   .detail-hero img {
     width: min(180px, 60vw);
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1320px) {
+  .media-grid {
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
   }
 }
