@@ -1,0 +1,438 @@
+const state = {
+  user: null,
+  view: "tmdb",
+  settings: {},
+  subscriptions: [],
+  resources: [],
+  mediaPayloads: new Map(),
+  logsMode: "simple",
+};
+
+const navItems = [
+  ["tmdb", "TMDB 榜单", "热门剧集和电影，点一下就能订阅"],
+  ["emby", "Emby 看板", "媒体数量、媒体库、用户与观看历史"],
+  ["subscriptions", "我的订阅", "管理剧集和电影追新规则"],
+  ["logs", "日志", "查看运行状态和调试信息"],
+  ["settings", "设置", "账号、115、Telegram、TMDB、代理和媒体库"],
+];
+
+const $ = (selector) => document.querySelector(selector);
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try { message = (await res.json()).detail || message; } catch {}
+    throw new Error(message);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function toast(message) {
+  const old = $(".toast");
+  if (old) old.remove();
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = message;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2800);
+}
+
+function posterUrl(item) {
+  return item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80";
+}
+
+async function boot() {
+  try {
+    state.user = await api("/api/auth/me");
+    await refreshBase();
+    renderApp();
+  } catch {
+    renderLogin();
+  }
+}
+
+async function refreshBase() {
+  state.settings = await api("/api/settings");
+  state.subscriptions = await api("/api/subscriptions");
+  state.resources = await api("/api/resources");
+}
+
+function renderLogin() {
+  $("#app").innerHTML = `
+    <main class="login">
+      <section class="login-card">
+        <h1>ToGo115</h1>
+        <p>115 网盘资源订阅与追新控制台</p>
+        <form id="loginForm">
+          <label>账号 <input name="username" autocomplete="username" value="admin" /></label>
+          <label>密码 <input name="password" type="password" autocomplete="current-password" value="admin123" /></label>
+          <button type="submit">登录</button>
+        </form>
+      </section>
+    </main>
+  `;
+  $("#loginForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });
+      state.user = await api("/api/auth/me");
+      await refreshBase();
+      renderApp();
+    } catch (error) {
+      toast(error.message);
+    }
+  });
+}
+
+function renderApp() {
+  const current = navItems.find(([key]) => key === state.view);
+  $("#app").innerHTML = `
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">115</div><div><strong>ToGo115</strong><span>资源订阅系统</span></div></div>
+        <nav class="nav">
+          ${navItems.map(([key, label]) => `<button class="${state.view === key ? "active" : ""}" data-view="${key}">${label}</button>`).join("")}
+        </nav>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div><h2>${current[1]}</h2><p>${current[2]}</p></div>
+          <button class="secondary" id="logoutBtn">退出</button>
+        </header>
+        <div id="view"></div>
+      </main>
+    </div>
+  `;
+  document.querySelectorAll("[data-view]").forEach((btn) => btn.addEventListener("click", () => {
+    state.view = btn.dataset.view;
+    renderApp();
+  }));
+  $("#logoutBtn").addEventListener("click", async () => {
+    await api("/api/auth/logout", { method: "POST" });
+    renderLogin();
+  });
+  renderView();
+}
+
+function renderView() {
+  if (state.view === "tmdb") renderTmdb();
+  if (state.view === "emby") renderEmby();
+  if (state.view === "subscriptions") renderSubscriptions();
+  if (state.view === "logs") renderLogs();
+  if (state.view === "settings") renderSettings();
+}
+
+async function renderTmdb() {
+  const root = $("#view");
+  root.innerHTML = `
+    <section class="toolbar">
+      <label>输入名称搜索订阅 <input id="quickTitle" placeholder="例如：庆余年 第二季 / Dune" /></label>
+      <label>类型 <select id="quickType"><option value="tv">电视剧</option><option value="movie">电影</option></select></label>
+      <button id="quickSub">订阅</button>
+    </section>
+    <section class="section"><div class="empty">正在读取 TMDB 榜单...</div></section>
+  `;
+  $("#quickSub").addEventListener("click", () => quickSubscribe());
+  try {
+    const data = await api("/api/tmdb/trending");
+    const tv = data.tv || [];
+    const movie = data.movie || [];
+    root.querySelector(".section").innerHTML = `
+      <h3>热门剧集</h3>
+      ${mediaGrid(tv, "tv")}
+      <h3>热门电影</h3>
+      ${mediaGrid(movie, "movie")}
+    `;
+    root.querySelectorAll("[data-subscribe]").forEach((btn) => btn.addEventListener("click", async () => {
+      const item = state.mediaPayloads.get(btn.dataset.subscribe);
+      await api("/api/subscriptions", { method: "POST", body: JSON.stringify(item) });
+      await refreshBase();
+      toast("已创建订阅并开始搜索历史消息");
+    }));
+  } catch (error) {
+    root.querySelector(".section").innerHTML = `<div class="empty">TMDB 未配置或暂时不可用。你仍然可以手动输入名称订阅。</div>`;
+  }
+}
+
+function mediaGrid(items, type) {
+  if (!items.length) return `<div class="empty">暂无数据，配置 TMDB API Key 后会显示榜单。</div>`;
+  return `<div class="grid">${items.slice(0, 12).map((item) => {
+    const title = item.name || item.title;
+    const payloadId = `${type}-${item.id}`;
+    const payload = {
+      title,
+      media_type: type,
+      tmdb_id: item.id,
+      poster_url: posterUrl(item),
+      overview: item.overview || "",
+      keywords: [title],
+    };
+    state.mediaPayloads.set(payloadId, payload);
+    return `<article class="card">
+      <img class="poster" src="${posterUrl(item)}" alt="${title}" />
+      <div class="card-body">
+        <h3>${title}</h3>
+        <p class="muted">${(item.overview || "暂无简介").slice(0, 72)}</p>
+        <button data-subscribe="${payloadId}">订阅</button>
+      </div>
+    </article>`;
+  }).join("")}</div>`;
+}
+
+async function quickSubscribe() {
+  const title = $("#quickTitle").value.trim();
+  if (!title) return toast("请输入名称");
+  await api("/api/subscriptions", {
+    method: "POST",
+    body: JSON.stringify({ title, media_type: $("#quickType").value, keywords: [title] }),
+  });
+  await refreshBase();
+  toast("订阅已创建");
+}
+
+async function renderEmby() {
+  const root = $("#view");
+  root.innerHTML = `<div class="empty">正在读取 Emby 看板...</div>`;
+  const data = await api("/api/emby/dashboard");
+  root.innerHTML = `
+    <section class="stats">
+      <div class="stat"><span>媒体总数</span><b>${data.media_count || 0}</b></div>
+      <div class="stat"><span>媒体库</span><b>${(data.libraries || []).length}</b></div>
+      <div class="stat"><span>用户</span><b>${(data.users || []).length}</b></div>
+      <div class="stat"><span>观看记录</span><b>${(data.history || []).length}</b></div>
+    </section>
+    <section class="section"><h3>媒体库封面</h3>${simpleList(data.libraries, "暂无媒体库数据")}</section>
+    <section class="section"><h3>用户</h3>${simpleList(data.users, "暂无用户数据")}</section>
+    <section class="section"><h3>观看历史</h3>${simpleList(data.history, "暂无观看历史")}</section>
+  `;
+}
+
+function simpleList(items, empty) {
+  if (!items || !items.length) return `<div class="empty">${empty}</div>`;
+  return `<div class="grid">${items.map((item) => `<div class="card"><div class="card-body"><h3>${item.name || item.title || "项目"}</h3><p class="muted">${item.description || ""}</p></div></div>`).join("")}</div>`;
+}
+
+function renderSubscriptions() {
+  $("#view").innerHTML = `
+    <section class="toolbar">
+      <label>名称 <input id="newTitle" placeholder="订阅剧集或电影" /></label>
+      <label>关键词 <input id="newKeywords" placeholder="多个关键词用逗号分隔" /></label>
+      <label>类型 <select id="newType"><option value="tv">电视剧</option><option value="movie">电影</option></select></label>
+      <label>推送 <select id="newDelivery"><option value="115">转存到 115</option><option value="telegram_bot">发送到 TG Bot</option></select></label>
+      <button id="addSub">添加</button>
+    </section>
+    ${subscriptionTable()}
+    <section class="section">
+      <h3>最近发现的资源</h3>
+      ${resourceTable()}
+    </section>
+  `;
+  $("#addSub").addEventListener("click", async () => {
+    const title = $("#newTitle").value.trim();
+    if (!title) return toast("请输入名称");
+    const keywords = $("#newKeywords").value.split(",").map((x) => x.trim()).filter(Boolean);
+    await api("/api/subscriptions", { method: "POST", body: JSON.stringify({ title, media_type: $("#newType").value, keywords, delivery_mode: $("#newDelivery").value }) });
+    await refreshBase();
+    renderSubscriptions();
+    toast("订阅已添加");
+  });
+  document.querySelectorAll("[data-delete]").forEach((btn) => btn.addEventListener("click", async () => {
+    await api(`/api/subscriptions/${btn.dataset.delete}`, { method: "DELETE" });
+    await refreshBase();
+    renderSubscriptions();
+  }));
+  document.querySelectorAll("[data-search]").forEach((btn) => btn.addEventListener("click", async () => {
+    const res = await api(`/api/subscriptions/${btn.dataset.search}/search`, { method: "POST" });
+    toast(`搜索完成，新增 ${res.count} 条资源`);
+  }));
+  document.querySelectorAll("[data-edit]").forEach((btn) => btn.addEventListener("click", async () => {
+    const id = btn.dataset.edit;
+    const keywords = prompt("输入新的关键词，多个用逗号分隔");
+    if (keywords === null) return;
+    await api(`/api/subscriptions/${id}`, { method: "PUT", body: JSON.stringify({ keywords: keywords.split(",").map((x) => x.trim()).filter(Boolean) }) });
+    await refreshBase();
+    renderSubscriptions();
+  }));
+  document.querySelectorAll("[data-deliver]").forEach((btn) => btn.addEventListener("click", async () => {
+    const res = await api(`/api/resources/${btn.dataset.deliver}/deliver`, { method: "POST" });
+    state.resources = await api("/api/resources");
+    renderSubscriptions();
+    toast(res.ok ? "已重新投递" : "投递失败，请看日志");
+  }));
+}
+
+function subscriptionTable() {
+  if (!state.subscriptions.length) return `<div class="empty">还没有订阅。可以从 TMDB 榜单或上方表单添加。</div>`;
+  return `<table class="table">
+    <thead><tr><th>名称</th><th>类型</th><th>入库状态</th><th>关键词</th><th>推送</th><th>操作</th></tr></thead>
+    <tbody>${state.subscriptions.map((item) => {
+      const library = item.media_type === "movie"
+        ? (item.in_library ? "已入库" : "未入库")
+        : `${item.emby_count || 0}/${item.tmdb_total_count || 0}`;
+      return `<tr>
+        <td><strong>${item.title}</strong><br><span class="muted">${item.status}</span></td>
+        <td><span class="pill">${item.media_type === "tv" ? "电视剧" : "电影"}</span></td>
+        <td>${library}</td>
+        <td>${(item.keywords || []).join(", ")}</td>
+        <td>${item.delivery_mode === "115" ? "转存 115" : "TG Bot"}</td>
+        <td><div class="row-actions"><button class="secondary" data-search="${item.id}">搜索</button><button class="secondary" data-edit="${item.id}">关键词</button><button class="danger" data-delete="${item.id}">取消</button></div></td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>`;
+}
+
+function resourceTable() {
+  if (!state.resources.length) return `<div class="empty">还没有发现资源链接。</div>`;
+  return `<table class="table">
+    <thead><tr><th>订阅</th><th>链接</th><th>来源</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>${state.resources.map((item) => `<tr>
+      <td>${item.subscription_title}</td>
+      <td><a href="${item.url}" target="_blank" rel="noreferrer">${item.url}</a></td>
+      <td>${item.source}<br><span class="muted">${item.message_id || ""}</span></td>
+      <td><span class="pill">${item.status}</span></td>
+      <td><button class="secondary" data-deliver="${item.id}">重试</button></td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+}
+
+async function renderLogs() {
+  const root = $("#view");
+  root.innerHTML = `
+    <section class="toolbar">
+      <button class="${state.logsMode === "simple" ? "" : "secondary"}" data-mode="simple">简易日志</button>
+      <button class="${state.logsMode === "debug" ? "" : "secondary"}" data-mode="debug">Debug</button>
+    </section>
+    <div class="log-list"><div class="empty">正在读取日志...</div></div>
+  `;
+  root.querySelectorAll("[data-mode]").forEach((btn) => btn.addEventListener("click", () => {
+    state.logsMode = btn.dataset.mode;
+    renderLogs();
+  }));
+  const logs = await api(`/api/logs?mode=${state.logsMode}`);
+  root.querySelector(".log-list").innerHTML = logs.length ? logs.map((log) => `
+    <div class="log-item ${log.level}">
+      <strong>${log.level.toUpperCase()} · ${log.scope}</strong>
+      <div>${log.message}</div>
+      <small class="muted">${new Date(log.created_at).toLocaleString()}</small>
+    </div>
+  `).join("") : `<div class="empty">暂无日志</div>`;
+}
+
+function renderSettings() {
+  $("#view").innerHTML = `<div class="settings">
+    ${settingsCard("账号安全", "credentials", [
+      ["username", "账号", state.user.username],
+      ["password", "新密码", "", "password"],
+    ])}
+    ${settingsCard("115 网盘", "115", [["cookie", "Cookie"], ["target_path", "默认转存目录"], ["qr_login", "扫码登录状态"]])}
+    ${settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道，多个用逗号分隔"], ["history_limit", "历史搜索条数"]])}
+    ${settingsCard("TMDB", "tmdb", [["api_key", "API Key"]])}
+    ${settingsCard("代理设置", "proxy", [["tmdb", "TMDB 代理"], ["telegram", "Telegram 代理"], ["pan115", "115 代理"], ["emby", "Emby 代理"]])}
+    ${settingsCard("TG Bot", "tg_bot", [["bot_token", "Bot Token"], ["bot_username", "机器人用户名"], ["allowed_chat_id", "允许的 Chat ID"]])}
+    ${settingsCard("媒体库", "emby", [["server_url", "Emby 地址"], ["api_key", "API Key"], ["user_id", "用户 ID"]])}
+  </div>`;
+  document.querySelectorAll("[data-save-settings]").forEach((form) => form.addEventListener("submit", saveSettings));
+  enhanceIntegrationCards();
+}
+
+function settingsCard(title, key, fields) {
+  const value = state.settings[key]?.value || {};
+  return `<form class="card form-grid" data-save-settings="${key}">
+    <h3>${title}</h3>
+    ${fields.map(([name, label, fallback = "", type = "text"]) => `<label>${label}<input type="${type}" name="${name}" value="${value[name] || fallback || ""}" /></label>`).join("")}
+    <button type="submit">保存</button>
+  </form>`;
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const key = event.currentTarget.dataset.saveSettings;
+  const value = Object.fromEntries(new FormData(event.currentTarget));
+  if (key === "credentials") {
+    await api("/api/auth/credentials", { method: "PUT", body: JSON.stringify(value) });
+    state.user = await api("/api/auth/me");
+  } else {
+    await api(`/api/settings/${key}`, { method: "PUT", body: JSON.stringify({ value }) });
+    state.settings = await api("/api/settings");
+  }
+  toast("已保存");
+}
+
+function enhanceIntegrationCards() {
+  const pan = document.querySelector('[data-save-settings="115"]');
+  if (pan) {
+    pan.insertAdjacentHTML("beforeend", `
+      <div class="inline-actions">
+        <button type="button" class="secondary" id="panQrBtn">115 扫码</button>
+        <button type="button" class="secondary" id="panStatusBtn">检查状态</button>
+      </div>
+      <label>手动转存测试 <input id="panSaveLink" placeholder="https://115.com/s/..." /></label>
+      <button type="button" class="secondary" id="panSaveBtn">测试转存</button>
+      <div class="qr-box" id="panQrBox">尚未生成二维码</div>
+    `);
+    $("#panQrBtn").addEventListener("click", startPanQr);
+    $("#panStatusBtn").addEventListener("click", checkPanStatus);
+    $("#panSaveBtn").addEventListener("click", savePanLink);
+  }
+  const tg = document.querySelector('[data-save-settings="telegram"]');
+  if (tg) {
+    tg.insertAdjacentHTML("beforeend", `
+      <div class="inline-actions">
+        <button type="button" class="secondary" id="tgQrBtn">TG 扫码</button>
+        <button type="button" class="secondary" id="tgStatusBtn">检查状态</button>
+      </div>
+      <label>两步验证密码 <input id="tgPassword" type="password" /></label>
+      <button type="button" class="secondary" id="tgPasswordBtn">提交密码</button>
+      <div class="qr-box" id="tgQrBox">尚未生成二维码</div>
+    `);
+    $("#tgQrBtn").addEventListener("click", startTgQr);
+    $("#tgStatusBtn").addEventListener("click", checkTgStatus);
+    $("#tgPasswordBtn").addEventListener("click", submitTgPassword);
+  }
+}
+
+async function startPanQr() {
+  const data = await api("/api/115/qr-login", { method: "POST" });
+  $("#panQrBox").innerHTML = `<img alt="115 QR" src="${data.qr_url}" /><span>打开 115 App 扫码确认后点击检查状态</span>`;
+}
+
+async function checkPanStatus() {
+  const data = await api("/api/115/status");
+  toast(`115 状态：${data.status}`);
+  if (data.status === "authorized") {
+    state.settings = await api("/api/settings");
+    renderSettings();
+  }
+}
+
+async function savePanLink() {
+  const link = $("#panSaveLink").value.trim();
+  if (!link) return toast("请输入 115 分享链接");
+  const data = await api("/api/115/save", { method: "POST", body: JSON.stringify({ link }) });
+  toast(data.ok ? "转存请求成功" : "转存失败，请看日志");
+}
+
+async function startTgQr() {
+  const data = await api("/api/telegram/qr-login", { method: "POST" });
+  const qr = encodeURIComponent(data.url);
+  $("#tgQrBox").innerHTML = `<img alt="Telegram QR" src="/api/qr?data=${qr}" /><span>用 Telegram 扫码登录，必要时提交两步验证密码</span>`;
+}
+
+async function checkTgStatus() {
+  const data = await api("/api/telegram/status");
+  toast(data.authorized ? "Telegram 已登录" : `Telegram 未登录：${data.status || "waiting"}`);
+}
+
+async function submitTgPassword() {
+  const password = $("#tgPassword").value;
+  if (!password) return toast("请输入两步验证密码");
+  await api("/api/telegram/password", { method: "POST", body: JSON.stringify({ password }) });
+  toast("密码已提交");
+}
+
+boot();
