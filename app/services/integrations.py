@@ -635,10 +635,15 @@ class TelegramBotAdapter:
                 )
                 if chat_id:
                     await self._send_bot_message(client, token, chat_id, f"已添加订阅：{subscription.get('title')}，ID {subscription.get('id')}")
+                await self._clear_message_buttons(client, token, message)
             except Exception as exc:
                 add_log("warning", "tg_bot", "TG Bot 回调订阅失败", {"data": data, "error": str(exc)})
                 if chat_id:
                     await self._send_bot_message(client, token, chat_id, f"订阅失败：{str(exc)[:120]}")
+            return
+        if data == "cancel_preview":
+            await self._answer_callback(client, token, callback_id, "已取消")
+            await self._clear_message_buttons(client, token, message)
             return
         await self._answer_callback(client, token, callback_id, "未知操作")
 
@@ -732,7 +737,12 @@ class TelegramBotAdapter:
         overview = detail.get("overview") or "暂无简介"
         facts = f"{year}" + (f" · {total} 集" if total else "")
         caption = f"{title}\n{facts}\n\n{overview[:520]}"
-        reply_markup = {"inline_keyboard": [[{"text": "确认订阅", "callback_data": f"subscribe:{media_type}:{tmdb_id}"}]]}
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "确认订阅", "callback_data": f"subscribe:{media_type}:{tmdb_id}"},
+                {"text": "取消", "callback_data": "cancel_preview"},
+            ]]
+        }
         poster_path = detail.get("poster_path")
         if poster_path:
             res = await client.post(
@@ -756,6 +766,18 @@ class TelegramBotAdapter:
         if not callback_id:
             return
         await client.post(self._api_url(token, "answerCallbackQuery"), data={"callback_query_id": callback_id, "text": text[:180]})
+
+    async def _clear_message_buttons(self, client: httpx.AsyncClient, token: str, message: dict[str, Any]) -> None:
+        chat_id = (message.get("chat") or {}).get("id")
+        message_id = message.get("message_id")
+        if not chat_id or not message_id:
+            return
+        res = await client.post(
+            self._api_url(token, "editMessageReplyMarkup"),
+            data={"chat_id": chat_id, "message_id": message_id, "reply_markup": json_dumps({"inline_keyboard": []})},
+        )
+        if res.status_code >= 400:
+            add_log("debug", "tg_bot", "TG Bot 清除详情按钮失败", {"status": res.status_code, "body": res.text[:240]})
 
     async def forward_to_bot(self, link: str) -> bool:
         config = get_setting("tg_bot")
