@@ -275,8 +275,20 @@ function mediaGrid(items, type, options = {}) {
 function bindMediaActions(root = document) {
   root.querySelectorAll("[data-subscribe]").forEach((btn) => btn.addEventListener("click", async (event) => {
     event.stopPropagation();
+    if (btn.dataset.loading === "true") return;
     const item = state.mediaPayloads.get(btn.dataset.subscribe);
-    await subscribeMedia(item);
+    const oldText = btn.textContent;
+    btn.dataset.loading = "true";
+    btn.textContent = "添加中";
+    try {
+      await subscribeMedia(item);
+      btn.textContent = "已订阅";
+    } catch (error) {
+      btn.textContent = oldText;
+      toast(`订阅失败：${error.message}`);
+    } finally {
+      delete btn.dataset.loading;
+    }
   }));
   root.querySelectorAll("[data-detail]").forEach((btn) => btn.addEventListener("click", () => showMediaDetail(btn.dataset.detail)));
   root.querySelectorAll("[data-more]").forEach((btn) => btn.addEventListener("click", async () => {
@@ -290,17 +302,17 @@ function bindMediaActions(root = document) {
 async function subscribeMedia(item) {
   if (!item) return;
   const payload = { ...item };
-  if (payload.media_type === "tv" && payload.tmdb_id && !payload.tmdb_total_count) {
-    try {
-      const detail = await api(`/api/tmdb/${payload.media_type}/${payload.tmdb_id}`);
-      payload.tmdb_total_count = detail.number_of_episodes || 0;
-      payload.overview = payload.overview || detail.overview || "";
-      payload.poster_url = payload.poster_url || posterUrl(detail);
-    } catch {}
-  }
-  await api("/api/subscriptions", { method: "POST", body: JSON.stringify(payload) });
-  await refreshBase();
-  toast("已创建订阅并开始搜索历史消息");
+  const subscription = await api("/api/subscriptions", { method: "POST", body: JSON.stringify(payload) });
+  upsertSubscription(subscription);
+  toast("已加入订阅，后台将自动补全详情并搜索历史消息");
+  return subscription;
+}
+
+function upsertSubscription(subscription) {
+  if (!subscription?.id) return;
+  const index = state.subscriptions.findIndex((item) => Number(item.id) === Number(subscription.id));
+  if (index >= 0) state.subscriptions[index] = subscription;
+  else state.subscriptions = [subscription, ...state.subscriptions];
 }
 
 async function searchTmdb() {
@@ -353,9 +365,23 @@ async function showMediaDetail(payloadId) {
   $("#mediaModal").addEventListener("click", (event) => {
     if (event.target.id === "mediaModal") $("#mediaModal").remove();
   });
-  $("#detailSubscribe").addEventListener("click", async () => {
-    await subscribeMedia(payload);
-    $("#mediaModal").remove();
+  $("#detailSubscribe").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (button.dataset.loading === "true") return;
+    button.dataset.loading = "true";
+    button.disabled = true;
+    button.textContent = "添加中";
+    try {
+      await subscribeMedia(payload);
+      button.textContent = "已订阅";
+      $("#mediaModal").remove();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "订阅";
+      toast(`订阅失败：${error.message}`);
+    } finally {
+      delete button.dataset.loading;
+    }
   });
 }
 

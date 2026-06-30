@@ -520,13 +520,6 @@ async def create_subscription(payload: SubscriptionCreate) -> dict:
     keywords = payload.keywords or [payload.title]
     tmdb_total_count = int(payload.tmdb_total_count or 0)
     tmdb_seasons: list[dict[str, int]] = []
-    if payload.media_type == "tv" and payload.tmdb_id:
-        try:
-            detail = await TmdbAdapter().detail("tv", int(payload.tmdb_id))
-            tmdb_total_count = tmdb_total_count or int(detail.get("number_of_episodes") or 0)
-            tmdb_seasons = _tmdb_seasons_from_detail(detail)
-        except Exception as exc:
-            add_log("debug", "tmdb", "创建订阅时补全 TMDB 集数失败", {"title": payload.title, "error": str(exc)})
     with db() as conn:
         try:
             cursor = conn.execute(
@@ -675,6 +668,9 @@ async def search_all_active_subscriptions() -> dict:
         await sync_subscriptions_with_emby_snapshot(subscriptions, snapshot)
         subscriptions = _active_subscriptions()
     for subscription in subscriptions:
+        subscription = get_subscription(subscription["id"]) or subscription
+        if subscription.get("status") != "active":
+            continue
         results = await search_and_attach_resources(subscription["id"], snapshot)
         total += len(results)
         searched += 1
@@ -695,6 +691,9 @@ async def attach_results_to_matching_subscriptions(
     attached = 0
     resource_ids: list[int] = []
     for subscription in subscriptions:
+        subscription = get_subscription(subscription["id"]) or subscription
+        if subscription.get("status") != "active":
+            continue
         subscription = await enrich_subscription_with_library(subscription, snapshot)
         with db() as conn:
             for result in results:
