@@ -1,4 +1,3 @@
-import asyncio
 import re
 
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
@@ -7,18 +6,6 @@ from app.services.integrations import EmbyAdapter, Pan115Adapter, SearchResult, 
 
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
-
-# Bug 1 fix: 白名单映射，防止动态 SQL 拼接注入
-_SUBSCRIPTION_ALLOWED_FIELDS = {
-    "title": "title",
-    "keywords": "keywords",
-    "delivery_mode": "delivery_mode",
-    "target_path": "target_path",
-    "status": "status",
-}
-
-# 优化3: 投递并发度限制
-_DELIVER_SEMAPHORE = asyncio.Semaphore(3)
 
 
 def normalize_subscription(row) -> dict:
@@ -112,10 +99,8 @@ def _emby_item_matches(subscription: dict, item: dict) -> bool:
         item_title = _compact_match_text(name)
         if item_title == subscription_title:
             return True
-        # 优化5: 子串匹配增加最小长度比例校验，防止"黑袍"误匹配"新黑袍纠察队"
-        if len(subscription_title) >= 4 and len(item_title) > 0 and subscription_title in item_title:
-            if len(subscription_title) >= len(item_title) * 0.5:
-                return True
+        if len(subscription_title) >= 4 and subscription_title in item_title:
+            return True
     return False
 
 
@@ -160,6 +145,16 @@ async def sync_subscriptions_with_emby() -> dict:
                         emby_count = episode_count_by_series_name.get(_compact_match_text(name), 0)
                         if emby_count:
                             break
+                if not match and not emby_count:
+                    subscription_title = _compact_match_text(subscription.get("title"))
+                    for series_name, count in episode_count_by_series_name.items():
+                        if (
+                            series_name == subscription_title
+                            or (len(subscription_title) >= 4 and subscription_title in series_name)
+                            or (len(series_name) >= 4 and series_name in subscription_title)
+                        ):
+                            emby_count = count
+                            break
                 in_library = 1 if match or emby_count else 0
             if in_library:
                 matched += 1
@@ -203,9 +198,8 @@ async def create_subscription(payload: SubscriptionCreate) -> dict:
             ),
         )
         subscription_id = cursor.lastrowid
-    add_log("info", "subscription", "创建订阅，后台开始历史消息搜索", {"title": payload.title})
-    # 优化7: 创建订阅不阻塞API响应，改为后台任务执行搜索
-    asyncio.create_task(search_and_attach_resources(subscription_id))
+    add_log("info", "subscription", "创建订阅并开始历史消息搜索", {"title": payload.title})
+    await search_and_attach_resources(subscription_id)
     return get_subscription(subscription_id) or {}
 
 
@@ -214,20 +208,14 @@ def update_subscription(subscription_id: int, payload: SubscriptionUpdate) -> di
     if not current:
         raise KeyError("订阅不存在")
     data = payload.model_dump(exclude_unset=True)
+    if "keywords" in data:
+        data["keywords"] = json_dumps(data["keywords"])
     if not data:
         return current
-    # Bug 1 fix: 使用白名单映射，显式指定列名，防止 SQL 注入
-    sets: list[str] = []
-    values: list = []
-    for field, col in _SUBSCRIPTION_ALLOWED_FIELDS.items():
-        if field in data:
-            sets.append(f"{col} = ?")
-            values.append(json_dumps(data[field]) if field == "keywords" else data[field])
-    if not sets:
-        return current
-    values.extend([utc_now(), subscription_id])
+    sets = ", ".join(f"{key} = ?" for key in data)
+    values = list(data.values()) + [utc_now(), subscription_id]
     with db() as conn:
-        conn.execute(f"UPDATE subscriptions SET {', '.join(sets)}, updated_at = ? WHERE id = ?", values)
+        conn.execute(f"UPDATE subscriptions SET {sets}, updated_at = ? WHERE id = ?", values)
     add_log("info", "subscription", "订阅已更新", {"id": subscription_id})
     return get_subscription(subscription_id) or {}
 
@@ -238,10 +226,21 @@ def delete_subscription(subscription_id: int) -> None:
     add_log("info", "subscription", "订阅已取消", {"id": subscription_id})
 
 
+def delete_subscriptions(subscription_ids: list[int]) -> int:
+    ids = [int(item) for item in subscription_ids if item]
+    if not ids:
+        return 0
+    placeholders = ",".join("?" for _ in ids)
+    with db() as conn:
+        cursor = conn.execute(f"DELETE FROM subscriptions WHERE id IN ({placeholders})", ids)
+    deleted = cursor.rowcount if cursor.rowcount is not None else 0
+    add_log("info", "subscription", "批量取消订阅", {"ids": ids, "deleted": deleted})
+    return deleted
+
+
 async def search_and_attach_resources(subscription_id: int) -> list[dict]:
     subscription = get_subscription(subscription_id)
-    # Bug 5 fix: 检查订阅是否存在且状态为 active
-    if not subscription or subscription.get("status") != "active":
+    if not subscription:
         return []
     client = TelegramClientAdapter()
     results = await client.search_history(subscription["title"], subscription["keywords"])
@@ -263,18 +262,29 @@ async def search_and_attach_resources(subscription_id: int) -> list[dict]:
         add_log("debug", "subscription", "历史搜索结果未匹配订阅标题/关键词，已跳过", {"id": subscription_id, "skipped": skipped})
     if created:
         add_log("info", "subscription", "发现新的 115 资源链接", {"id": subscription_id, "count": len(created)})
-        # 优化3: 并发投递新资源，使用 Semaphore 限流
-        await _deliver_resources_batch([item["resource_id"] for item in created])
+        for item in created:
+            await deliver_resource(item["resource_id"])
     return created
+
+
+async def search_all_active_subscriptions() -> dict:
+    total = 0
+    searched = 0
+    for subscription in list_subscriptions():
+        if subscription["status"] != "active":
+            continue
+        results = await search_and_attach_resources(subscription["id"])
+        total += len(results)
+        searched += 1
+    return {"ok": True, "searched": searched, "count": total}
 
 
 async def attach_results_to_matching_subscriptions(results: list[SearchResult], message_text: str) -> int:
     subscriptions = [item for item in list_subscriptions() if item["status"] == "active"]
     attached = 0
     resource_ids: list[int] = []
-    # 优化4: 使用单一 DB 连接，避免每个订阅开独立连接
-    with db() as conn:
-        for subscription in subscriptions:
+    for subscription in subscriptions:
+        with db() as conn:
             for result in results:
                 if not result_matches_subscription(subscription, result, message_text):
                     continue
@@ -287,23 +297,11 @@ async def attach_results_to_matching_subscriptions(results: list[SearchResult], 
                 )
                 attached += 1
                 resource_ids.append(cursor.lastrowid)
-    # 优化3: 并发投递
-    await _deliver_resources_batch(resource_ids)
+    for resource_id in resource_ids:
+        await deliver_resource(resource_id)
     if attached:
         add_log("info", "subscription", "实时监控发现并处理新资源", {"count": attached})
     return attached
-
-
-async def _deliver_resources_batch(resource_ids: list[int]) -> None:
-    """优化3: 并发投递多个资源，使用 Semaphore 限制并发度。"""
-    if not resource_ids:
-        return
-
-    async def _deliver_one(rid: int) -> None:
-        async with _DELIVER_SEMAPHORE:
-            await deliver_resource(rid)
-
-    await asyncio.gather(*[_deliver_one(rid) for rid in resource_ids])
 
 
 async def deliver_resource(resource_id: int) -> bool:
@@ -316,15 +314,10 @@ async def deliver_resource(resource_id: int) -> bool:
         return False
     delivery = get_setting("delivery", {"mode": "115"})
     delivery_mode = delivery.get("mode") or "115"
-    # Bug 4 fix: 捕获投递异常，避免网络错误导致资源永远停留在 pending
-    try:
-        if delivery_mode == "telegram_bot":
-            ok = await TelegramBotAdapter().forward_to_bot(resource["url"])
-        else:
-            ok = await Pan115Adapter().transfer(resource["url"], resource["target_path"])
-    except Exception as exc:
-        add_log("error", "delivery", "资源投递异常", {"resource_id": resource_id, "error": str(exc)})
-        ok = False
+    if delivery_mode == "telegram_bot":
+        ok = await TelegramBotAdapter().forward_to_bot(resource["url"])
+    else:
+        ok = await Pan115Adapter().transfer(resource["url"], resource["target_path"])
     with db() as conn:
         conn.execute("UPDATE resources SET status = ? WHERE id = ?", ("delivered" if ok else "failed", resource_id))
     return ok

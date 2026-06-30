@@ -36,6 +36,10 @@ class SubscriptionUpdate(BaseModel):
     status: Literal["active", "paused"] | None = None
 
 
+class SubscriptionBulkDeleteRequest(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+
+
 class SearchRequest(BaseModel):
     title: str
     keywords: list[str] = Field(default_factory=list)

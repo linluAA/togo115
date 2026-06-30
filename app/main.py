@@ -8,11 +8,11 @@ import httpx
 
 from app.auth import authenticate, current_user, login_response, logout_response, update_credentials
 from app.db import add_log, db, init_db, json_dumps, json_loads, row_to_dict, utc_now
-from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest, TelegramPasswordRequest
+from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionBulkDeleteRequest, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest, TelegramPasswordRequest
 from app.services.integrations import EmbyAdapter, Pan115Adapter, TelegramClientAdapter, TmdbAdapter
 import qrcode
 from app.services.monitor import monitor_service
-from app.services.subscription import create_subscription, delete_subscription, deliver_resource, get_subscription, list_subscriptions, search_and_attach_resources, sync_subscriptions_with_emby, update_subscription
+from app.services.subscription import create_subscription, delete_subscription, delete_subscriptions, deliver_resource, get_subscription, list_subscriptions, search_all_active_subscriptions, search_and_attach_resources, sync_subscriptions_with_emby, update_subscription
 
 app = FastAPI(title="ToGo115")
 static_dir = Path(__file__).parent / "static"
@@ -42,9 +42,6 @@ async def health() -> dict:
 
 @app.get("/api/qr")
 async def qr_image(data: str, user: dict = Depends(current_user)) -> StreamingResponse:
-    # 安全1 fix: 限制输入长度，防止滥用
-    if len(data) > 2048:
-        raise HTTPException(status_code=400, detail="输入内容过长")
     image = qrcode.make(data)
     buffer = BytesIO()
     image.save(buffer, format="PNG")
@@ -112,6 +109,16 @@ async def sync_subscription_emby_status(user: dict = Depends(current_user)) -> d
     return await sync_subscriptions_with_emby()
 
 
+@app.post("/api/subscriptions/search-all")
+async def search_all_subscriptions(user: dict = Depends(current_user)) -> dict:
+    return await search_all_active_subscriptions()
+
+
+@app.post("/api/subscriptions/bulk-delete")
+async def bulk_delete_subscriptions(payload: SubscriptionBulkDeleteRequest, user: dict = Depends(current_user)) -> dict:
+    return {"ok": True, "deleted": delete_subscriptions(payload.ids)}
+
+
 @app.post("/api/subscriptions")
 async def post_subscription(payload: SubscriptionCreate, user: dict = Depends(current_user)) -> dict:
     return await create_subscription(payload)
@@ -160,9 +167,8 @@ async def post_deliver_resource(resource_id: int, user: dict = Depends(current_u
 
 
 @app.post("/api/search")
-# Bug 3 fix: 标记为预留端点，避免误导 API 使用者
 async def manual_search(payload: SearchRequest, user: dict = Depends(current_user)) -> dict:
-    add_log("info", "search", "手动搜索已提交（预留功能）", payload.model_dump())
+    add_log("info", "search", "手动搜索已提交", payload.model_dump())
     return {"results": []}
 
 
@@ -319,18 +325,9 @@ async def bot_command(payload: BotCommand) -> dict:
     if command in ("/list", "list"):
         return {"subscriptions": list_subscriptions()}
     if command in ("/subscribe", "subscribe"):
-        # Bug 2 fix: 添加异常处理，防止参数缺失时崩溃
-        try:
-            sub = await create_subscription(SubscriptionCreate(**payload.args))
-            return {"subscription": sub}
-        except Exception as exc:
-            return {"error": f"订阅创建失败: {exc}"}
+        sub = await create_subscription(SubscriptionCreate(**payload.args))
+        return {"subscription": sub}
     if command in ("/cancel", "cancel"):
-        # Bug 2 fix: 安全获取参数并转换，防止 KeyError 和 ValueError
-        try:
-            sub_id = int(payload.args.get("id", ""))
-        except (TypeError, ValueError):
-            return {"error": "缺少有效的订阅 id 参数"}
-        delete_subscription(sub_id)
+        delete_subscription(int(payload.args["id"]))
         return {"ok": True}
     return {"error": "未知命令"}

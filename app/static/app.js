@@ -11,6 +11,9 @@ const state = {
   settingsTab: "credentials",
   subscriptionType: "all",
   subscriptionStatus: "all",
+  subscriptionCancelMode: false,
+  selectedSubscriptionIds: new Set(),
+  subscriptionsEmbySynced: false,
   sidebarCollapsed: localStorage.getItem("sidebarCollapsed") === "true",
   panQrTimer: null,
   tgLoginTimer: null,
@@ -340,10 +343,14 @@ async function renderEmby() {
   const root = $("#view");
   root.innerHTML = `<div class="empty">正在读取 Emby 看板...</div>`;
   const data = await api("/api/emby/dashboard");
+  const movieCount = data.movie_count ?? data.counts?.MovieCount ?? 0;
+  const seriesCount = data.series_count ?? data.counts?.SeriesCount ?? 0;
   root.innerHTML = `
     ${data.error ? `<div class="empty">Emby 数据获取失败：${data.error}</div>` : ""}
     <section class="stats">
       <div class="stat"><span>媒体总数</span><b>${data.media_count || 0}</b></div>
+      <div class="stat"><span>电视剧</span><b>${seriesCount}</b></div>
+      <div class="stat"><span>电影</span><b>${movieCount}</b></div>
       <div class="stat"><span>媒体库</span><b>${(data.libraries || []).length}</b></div>
       <div class="stat"><span>用户</span><b>${(data.users || []).length}</b></div>
       <div class="stat"><span>观看记录</span><b>${(data.history || []).length}</b></div>
@@ -378,7 +385,19 @@ function embyGrid(items, empty, kind) {
   }).join("")}</div>`;
 }
 
-function renderSubscriptions() {
+async function renderSubscriptions() {
+  if (!state.subscriptionsEmbySynced) {
+    state.subscriptionsEmbySynced = true;
+    $("#view").innerHTML = `<div class="empty">正在同步订阅入库状态...</div>`;
+    try {
+      const result = await api("/api/subscriptions/sync-emby", { method: "POST" });
+      if (result?.updated) {
+        state.subscriptions = await api("/api/subscriptions");
+      }
+    } catch {
+      // The manual sync button still exposes the error to the user when needed.
+    }
+  }
   $("#view").innerHTML = `
     ${subscriptionCards()}
     <section class="section">
@@ -411,9 +430,44 @@ function renderSubscriptions() {
       toast(`媒体库同步失败：${error.message}`);
     }
   });
-  document.querySelectorAll("[data-delete]").forEach((btn) => btn.addEventListener("click", async () => {
-    await api(`/api/subscriptions/${btn.dataset.delete}`, { method: "DELETE" });
+  $("#searchAllSubscriptions")?.addEventListener("click", async () => {
+    const button = $("#searchAllSubscriptions");
+    button.disabled = true;
+    button.textContent = "搜索中";
+    try {
+      const result = await api("/api/subscriptions/search-all", { method: "POST" });
+      await refreshBase();
+      renderSubscriptions();
+      toast(`搜索完成，检查 ${result.searched || 0} 个订阅，新增 ${result.count || 0} 条资源`);
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "搜索全部";
+      toast(`搜索失败：${error.message}`);
+    }
+  });
+  $("#toggleCancelSubscriptions")?.addEventListener("click", () => {
+    state.subscriptionCancelMode = !state.subscriptionCancelMode;
+    state.selectedSubscriptionIds.clear();
+    renderSubscriptions();
+  });
+  $("#confirmCancelSubscriptions")?.addEventListener("click", async () => {
+    const ids = [...state.selectedSubscriptionIds];
+    if (!ids.length) return toast("请选择需要取消的订阅");
+    await api("/api/subscriptions/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) });
+    state.subscriptionCancelMode = false;
+    state.selectedSubscriptionIds.clear();
     await refreshBase();
+    renderSubscriptions();
+    toast(`已取消 ${ids.length} 个订阅`);
+  });
+  document.querySelectorAll("[data-select-subscription]").forEach((btn) => btn.addEventListener("change", () => {
+    const id = Number(btn.dataset.selectSubscription);
+    if (btn.checked) state.selectedSubscriptionIds.add(id);
+    else state.selectedSubscriptionIds.delete(id);
+  }));
+  document.querySelectorAll("[data-delete]").forEach((btn) => btn.addEventListener("click", async () => {
+    state.subscriptionCancelMode = true;
+    state.selectedSubscriptionIds = new Set([Number(btn.dataset.delete)]);
     renderSubscriptions();
   }));
   document.querySelectorAll("[data-search]").forEach((btn) => btn.addEventListener("click", async () => {
@@ -453,22 +507,23 @@ function subscriptionCards() {
           : "未入库");
       const poster = item.poster_url || posterUrl({});
       const keywords = (item.keywords || []).join(", ") || "未设置关键词";
-      return `<article class="subscription-card">
+      const completed = Boolean(item.in_library);
+      const statusText = completed ? "订阅完成" : (item.status === "active" ? "订阅中" : "已暂停");
+      const statusClass = completed ? "completed" : (item.status === "active" ? "active" : "paused");
+      const checked = state.selectedSubscriptionIds.has(item.id) ? "checked" : "";
+      return `<article class="subscription-card ${state.subscriptionCancelMode ? "selecting" : ""}">
         <div class="subscription-poster">
+          ${state.subscriptionCancelMode ? `<label class="subscription-select"><input type="checkbox" data-select-subscription="${item.id}" ${checked} /><span></span></label>` : ""}
           <img src="${escapeHtml(poster)}" alt="${escapeHtml(item.title)}" />
           <div class="subscription-badges">
             <span class="subscription-badge">${item.media_type === "tv" ? "电视剧" : "电影"}</span>
-            <span class="subscription-badge ${item.status === "active" ? "active" : "paused"}">${item.status === "active" ? "订阅中" : "已暂停"}</span>
+            <button type="button" class="subscription-badge keyword-badge" data-edit="${item.id}" title="${escapeHtml(keywords)}">关键词</button>
+            <span class="subscription-badge ${statusClass}">${statusText}</span>
           </div>
         </div>
         <div class="subscription-info">
           <h3>${escapeHtml(item.title)}</h3>
-          <p>${escapeHtml(library)} · ${escapeHtml(keywords)}</p>
-        </div>
-        <div class="subscription-actions">
-          <button class="secondary" data-search="${item.id}">搜索</button>
-          <button class="secondary" data-edit="${item.id}">关键词</button>
-          <button class="danger" data-delete="${item.id}">取消</button>
+          <p>${escapeHtml(library)}</p>
         </div>
       </article>`;
     }).join("");
@@ -489,7 +544,10 @@ function subscriptionCards() {
           <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
           <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
         </select>
+        <button type="button" class="secondary" id="searchAllSubscriptions">搜索全部</button>
         <button type="button" class="secondary" id="syncEmbySubscriptions">同步媒体库</button>
+        <button type="button" class="danger" id="toggleCancelSubscriptions">${state.subscriptionCancelMode ? "退出取消" : "取消订阅"}</button>
+        ${state.subscriptionCancelMode ? `<button type="button" class="danger" id="confirmCancelSubscriptions">确定移除</button>` : ""}
         <button type="button" class="secondary" id="subscriptionReset">重置</button>
       </div>
     </div>
