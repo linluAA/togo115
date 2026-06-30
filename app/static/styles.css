@@ -584,11 +584,11 @@ label input[type="checkbox"] {
 }
 
 .subscription-toolbar {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0 2px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: start;
+  gap: 14px 18px;
+  padding: 12px 0 4px;
 }
 
 .subscription-toolbar h3 {
@@ -602,17 +602,21 @@ label input[type="checkbox"] {
   font-size: 13px;
 }
 
-.subscription-filters {
-  display: grid;
-  grid-template-columns: 1fr;
+.subscription-controls {
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 10px;
-  max-width: 760px;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(54, 67, 88, .08);
+  border-radius: 8px;
+  background: rgba(255,255,255,.58);
+  box-shadow: 0 10px 24px rgba(28, 42, 44, .05);
 }
 
-.filter-group,
-.action-group {
+.control-group {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -621,18 +625,20 @@ label input[type="checkbox"] {
 }
 
 .filter-group {
-  padding: 6px;
-  border: 1px solid rgba(54, 67, 88, .08);
-  border-radius: 8px;
-  background: rgba(255,255,255,.42);
+  padding-right: 8px;
+  border-right: 1px solid rgba(54, 67, 88, .1);
 }
 
-.subscription-filters select {
-  width: 142px;
+.subscription-controls select {
+  width: 132px;
+  min-height: 38px;
+  padding-block: 8px;
 }
 
-.subscription-filters button {
-  min-width: 88px;
+.subscription-controls button {
+  min-width: 76px;
+  min-height: 38px;
+  padding: 8px 12px;
 }
 
 .subscription-grid {
@@ -666,10 +672,11 @@ label input[type="checkbox"] {
 
 .subscription-badges {
   position: absolute;
-  inset: 10px 10px auto 10px;
+  inset: 8px 8px auto 8px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 6px;
   z-index: 2;
 }
@@ -681,14 +688,18 @@ label input[type="checkbox"] {
 .subscription-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 25px;
-  padding: 4px 7px;
+  max-width: 72px;
+  min-height: 23px;
+  padding: 3px 7px;
   border-radius: 8px;
   color: #fff;
   background: rgba(11, 25, 27, .72);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   backdrop-filter: blur(10px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .subscription-badge.active {
@@ -701,18 +712,6 @@ label input[type="checkbox"] {
 
 .subscription-badge.completed {
   background: rgba(79, 108, 246, .92);
-}
-
-.keyword-badge {
-  min-height: 25px;
-  border: 0;
-  color: #fff;
-  background: rgba(11, 25, 27, .72);
-  cursor: pointer;
-}
-
-.keyword-badge:hover {
-  background: rgba(13, 85, 88, .92);
 }
 
 .subscription-select {
@@ -775,6 +774,40 @@ label input[type="checkbox"] {
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.subscription-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.subscription-meta-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyword-chip {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--brand-dark);
+  background: #dff1ef;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.keyword-chip:hover {
+  color: #fff;
+  background: var(--brand);
 }
 
 .subscription-card.selecting .subscription-poster {
@@ -1505,28 +1538,37 @@ label input[type="checkbox"] {
     display: grid;
     gap: 12px;
     padding-top: 4px;
+    grid-template-columns: 1fr;
   }
 
   .subscription-toolbar h3 {
     font-size: 20px;
   }
 
-  .subscription-filters {
+  .subscription-controls {
     display: grid;
     grid-template-columns: 1fr;
     justify-content: stretch;
     gap: 8px;
+    justify-self: stretch;
+    padding: 8px;
   }
 
-  .filter-group,
-  .action-group {
+  .control-group {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     justify-content: stretch;
   }
 
-  .subscription-filters select,
-  .subscription-filters button {
+  .filter-group {
+    padding-right: 0;
+    padding-bottom: 8px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(54, 67, 88, .1);
+  }
+
+  .subscription-controls select,
+  .subscription-controls button {
     width: 100%;
   }
 
@@ -1546,7 +1588,7 @@ label input[type="checkbox"] {
 
   .subscription-badge {
     padding: 3px 6px;
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .subscription-info {
@@ -1722,12 +1764,11 @@ label input[type="checkbox"] {
     gap-inline: 8px;
   }
 
-  .subscription-filters {
+  .subscription-controls {
     grid-template-columns: 1fr;
   }
 
-  .filter-group,
-  .action-group {
+  .control-group {
     grid-template-columns: 1fr;
   }
 

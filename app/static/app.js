@@ -531,13 +531,15 @@ function subscriptionCards() {
           <img src="${escapeHtml(poster)}" alt="${escapeHtml(item.title)}" />
           <div class="subscription-badges">
             <span class="subscription-badge">${item.media_type === "tv" ? "电视剧" : "电影"}</span>
-            <button type="button" class="subscription-badge keyword-badge" data-edit="${item.id}" title="${escapeHtml(keywords)}">关键词</button>
             <span class="subscription-badge ${statusClass}">${statusText}</span>
           </div>
         </div>
         <div class="subscription-info">
           <h3>${escapeHtml(item.title)}</h3>
-          <p>${escapeHtml(library)}</p>
+          <div class="subscription-meta-row">
+            <span>${escapeHtml(library)}</span>
+            <button type="button" class="keyword-chip" data-edit="${item.id}" title="${escapeHtml(keywords)}">关键词</button>
+          </div>
         </div>
       </article>`;
     }).join("");
@@ -547,8 +549,8 @@ function subscriptionCards() {
         <h3>我的订阅</h3>
         <p>${state.subscriptions.length} 个订阅，当前显示 ${filtered.length} 个</p>
       </div>
-      <div class="subscription-filters">
-        <div class="filter-group">
+      <div class="subscription-controls">
+        <div class="control-group filter-group">
           <select id="subscriptionTypeFilter" aria-label="订阅类型">
             <option value="all" ${state.subscriptionType === "all" ? "selected" : ""}>全部类型</option>
             <option value="tv" ${state.subscriptionType === "tv" ? "selected" : ""}>电视剧</option>
@@ -561,7 +563,7 @@ function subscriptionCards() {
           </select>
           <button type="button" class="secondary" id="subscriptionReset">重置</button>
         </div>
-        <div class="action-group">
+        <div class="control-group action-group">
           <button type="button" class="secondary" id="searchAllSubscriptions">搜索全部</button>
           <button type="button" class="secondary" id="syncEmbySubscriptions">同步媒体库</button>
           <button type="button" class="danger" id="toggleCancelSubscriptions">${state.subscriptionCancelMode ? "退出取消" : "取消订阅"}</button>
