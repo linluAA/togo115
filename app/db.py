@@ -49,8 +49,6 @@ def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(settings.database_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    # 优化6: 启用 WAL 模式，提升并发读写性能
-    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
@@ -149,8 +147,7 @@ def init_db() -> None:
             );
             """
         )
-        # 优化6: 创建日志查询索引，加速按级别过滤
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level, id DESC)")
+        _migrate_schema(conn)
         user = conn.execute("SELECT id FROM users WHERE id = 1").fetchone()
         if user is None:
             now = utc_now()
@@ -160,9 +157,115 @@ def init_db() -> None:
             )
 
 
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+    existing = _table_columns(conn, table)
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    _ensure_columns(
+        conn,
+        "subscriptions",
+        {
+            "title": "TEXT NOT NULL DEFAULT ''",
+            "media_type": "TEXT NOT NULL DEFAULT 'tv'",
+            "tmdb_id": "INTEGER",
+            "poster_url": "TEXT",
+            "overview": "TEXT",
+            "keywords": "TEXT NOT NULL DEFAULT '[]'",
+            "status": "TEXT NOT NULL DEFAULT 'active'",
+            "delivery_mode": "TEXT NOT NULL DEFAULT '115'",
+            "target_path": "TEXT",
+            "emby_count": "INTEGER NOT NULL DEFAULT 0",
+            "tmdb_total_count": "INTEGER NOT NULL DEFAULT 0",
+            "tmdb_seasons": "TEXT NOT NULL DEFAULT '[]'",
+            "emby_episode_keys": "TEXT NOT NULL DEFAULT '[]'",
+            "in_library": "INTEGER NOT NULL DEFAULT 0",
+            "completed_at": "TEXT",
+            "last_checked_at": "TEXT",
+        },
+    )
+    conn.execute(
+        """
+        UPDATE resources
+        SET subscription_id = (
+            SELECT MIN(s2.id)
+            FROM subscriptions s2
+            JOIN subscriptions s1
+              ON s1.media_type = s2.media_type
+             AND s1.tmdb_id = s2.tmdb_id
+            WHERE s1.id = resources.subscription_id
+              AND s1.tmdb_id IS NOT NULL
+        )
+        WHERE subscription_id IN (
+            SELECT s1.id
+            FROM subscriptions s1
+            JOIN subscriptions s2
+              ON s1.media_type = s2.media_type
+             AND s1.tmdb_id = s2.tmdb_id
+             AND s2.id < s1.id
+            WHERE s1.tmdb_id IS NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        DELETE FROM subscriptions
+        WHERE tmdb_id IS NOT NULL
+          AND id NOT IN (
+              SELECT MIN(id)
+              FROM subscriptions
+              WHERE tmdb_id IS NOT NULL
+              GROUP BY media_type, tmdb_id
+          )
+        """
+    )
+    conn.execute(
+        """
+        DELETE FROM resources
+        WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM resources
+            GROUP BY subscription_id, url
+        )
+        """
+    )
+    conn.executescript(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_tmdb_unique
+            ON subscriptions(media_type, tmdb_id)
+            WHERE tmdb_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_subscriptions_status
+            ON subscriptions(status);
+        CREATE INDEX IF NOT EXISTS idx_subscriptions_media_title
+            ON subscriptions(media_type, title);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_resources_subscription_url
+            ON resources(subscription_id, url);
+        CREATE INDEX IF NOT EXISTS idx_resources_status
+            ON resources(status);
+        CREATE INDEX IF NOT EXISTS idx_logs_created_at
+            ON logs(created_at);
+        """
+    )
+
+
 def add_log(level: str, scope: str, message: str, payload: dict[str, Any] | None = None) -> None:
     with db() as conn:
         conn.execute(
             "INSERT INTO logs (level, scope, message, payload, created_at) VALUES (?, ?, ?, ?, ?)",
             (level, scope, message, json_dumps(payload) if payload else None, utc_now()),
+        )
+        conn.execute(
+            """
+            DELETE FROM logs
+            WHERE id NOT IN (
+                SELECT id FROM logs ORDER BY id DESC LIMIT 5000
+            )
+            """
         )

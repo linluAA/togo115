@@ -325,8 +325,10 @@ async def bot_command(payload: BotCommand) -> dict:
     if command in ("/list", "list"):
         return {"subscriptions": list_subscriptions()}
     if command in ("/subscribe", "subscribe"):
-        sub = await create_subscription(SubscriptionCreate(**payload.args))
-        return {"subscription": sub}
+        query = str(payload.args.get("query") or payload.args.get("title") or "").strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="请传入 query，真实 TG Bot 会先返回候选列表供选择")
+        return {"message": "请通过 Telegram Bot 发送“订阅 剧名”并在候选列表中确认订阅", "query": query}
     if command in ("/cancel", "cancel"):
         delete_subscription(int(payload.args["id"]))
         return {"ok": True}

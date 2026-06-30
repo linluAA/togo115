@@ -21,10 +21,10 @@ const state = {
 };
 
 const navItems = [
-  ["tmdb", "TMDB 榜单", "热门剧集和电影，点一下就能订阅", "榜"],
+  ["tmdb", "TMDB 榜单", "热门剧集和电影，点一下就能订阅", "TM"],
   ["emby", "Emby 看板", "媒体数量、媒体库、用户与观看历史", "Em"],
   ["subscriptions", "我的订阅", "管理剧集和电影追新规则", "订"],
-  ["logs", "日志", "查看运行状态和调试信息", "志"],
+  ["logs", "日志", "查看运行状态和调试信息", "Log"],
   ["settings", "设置", "账号、115、Telegram、TMDB、代理和媒体库", "设"],
 ];
 
@@ -150,8 +150,12 @@ function renderApp() {
       </aside>
       <main class="main">
         <header class="topbar">
-          <div><h2>${current[1]}</h2><p>${current[2]}</p></div>
-          <button class="secondary" id="logoutBtn">退出</button>
+          <div class="topbar-title"><h2>${current[1]}</h2><p>${current[2]}</p></div>
+          <div class="top-actions">
+            <button class="secondary" id="quickLogBtn">实时日志</button>
+            <span class="user-chip">${escapeHtml(state.user?.username || "用户")}</span>
+            <button class="secondary" id="logoutBtn">退出</button>
+          </div>
         </header>
         <div id="view"></div>
       </main>
@@ -164,6 +168,10 @@ function renderApp() {
   $("#sidebarToggle").addEventListener("click", () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
     localStorage.setItem("sidebarCollapsed", String(state.sidebarCollapsed));
+    renderApp();
+  });
+  $("#quickLogBtn").addEventListener("click", () => {
+    state.view = "logs";
     renderApp();
   });
   $("#logoutBtn").addEventListener("click", async () => {
@@ -519,9 +527,9 @@ function subscriptionCards() {
           : "未入库");
       const poster = item.poster_url || posterUrl({});
       const keywords = (item.keywords || []).join(", ") || "未设置关键词";
-      const completed = item.media_type === "movie"
+      const completed = item.status === "completed" || (item.media_type === "movie"
         ? Boolean(item.in_library)
-        : Boolean(tmdbTotal && embyCount >= tmdbTotal);
+        : Boolean(tmdbTotal && embyCount >= tmdbTotal));
       const statusText = completed ? "订阅完成" : (item.status === "active" ? "订阅中" : "已暂停");
       const statusClass = completed ? "completed" : (item.status === "active" ? "active" : "paused");
       const checked = state.selectedSubscriptionIds.has(item.id) ? "checked" : "";
@@ -560,6 +568,7 @@ function subscriptionCards() {
             <option value="all" ${state.subscriptionStatus === "all" ? "selected" : ""}>全部状态</option>
             <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
             <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
+            <option value="completed" ${state.subscriptionStatus === "completed" ? "selected" : ""}>订阅完成</option>
           </select>
           <button type="button" class="secondary" id="subscriptionReset">重置</button>
         </div>

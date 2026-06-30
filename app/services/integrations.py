@@ -93,6 +93,8 @@ class TelegramClientAdapter:
     _client: TelegramClient | None = None
     _listener_task: asyncio.Task | None = None
     _handler_registered: bool = False
+    _handler = None
+    _handler_sources: tuple[str, ...] = ()
 
     def _session_path(self) -> Path:
         return settings.data_dir / "telegram_user"
@@ -253,7 +255,7 @@ class TelegramClientAdapter:
     async def _links_from_message(self, client: TelegramClient, message: Any, source: str) -> list[SearchResult]:
         message_text = message.raw_text or ""
         link_contexts: dict[str, str] = {link: message_text for link in extract_115_links(message_text)}
-        if not link_contexts and getattr(message, "buttons", None):
+        if getattr(message, "buttons", None):
             for link, button_text in await self._click_buttons_for_links(message):
                 context = "\n".join(part for part in (message_text, button_text) if part)
                 link_contexts.setdefault(link, context)
@@ -287,23 +289,36 @@ class TelegramClientAdapter:
         if not await self.is_authorized():
             return
         cls = type(self)
-        if cls._listener_task and not cls._listener_task.done():
-            add_log("debug", "telegram", "Telegram 监控心跳正常")
-            return
         client = await self.client()
         config = self._config()
         dialogs = [x.strip() for x in str(config.get("sources", "")).split(",") if x.strip()]
         if not dialogs:
             return
+        source_key = tuple(dialogs)
+        if cls._listener_task and not cls._listener_task.done() and cls._handler_sources == source_key:
+            add_log("debug", "telegram", "Telegram 监控心跳正常")
+            return
+
+        if cls._handler_registered and cls._handler_sources != source_key:
+            if cls._handler is not None:
+                client.remove_event_handler(cls._handler)
+            cls._handler_registered = False
+            cls._handler = None
+            cls._handler_sources = ()
+            add_log("info", "telegram", "Telegram 监控来源已变更，重新注册监听", {"sources": dialogs})
 
         if not cls._handler_registered:
-            @client.on(events.NewMessage(chats=dialogs))
             async def handler(event) -> None:
                 from app.services.subscription import attach_results_to_matching_subscriptions
+
                 results = await self._links_from_message(client, event.message, str(event.chat_id))
                 if results:
                     await attach_results_to_matching_subscriptions(results, event.message.raw_text or "")
+
+            client.add_event_handler(handler, events.NewMessage(chats=dialogs))
             cls._handler_registered = True
+            cls._handler = handler
+            cls._handler_sources = source_key
 
         cls._listener_task = asyncio.create_task(client.run_until_disconnected())
         add_log("info", "telegram", "Telegram 实时监控已启动", {"sources": dialogs})
@@ -642,11 +657,12 @@ class TelegramBotAdapter:
                 return "暂无订阅。"
             lines = ["订阅列表："]
             for item in subscriptions[:30]:
-                status = "完成" if item.get("in_library") and item.get("media_type") == "movie" else item.get("status", "")
+                status = "完成" if item.get("status") == "completed" else item.get("status", "")
                 if item.get("media_type") == "tv":
                     count = int(item.get("emby_count") or 0)
                     total = int(item.get("tmdb_total_count") or 0)
-                    status = f"{count}/{total}集" if total else f"{count}集"
+                    progress = f"{count}/{total}集" if total else f"{count}集"
+                    status = f"完成 {progress}" if item.get("status") == "completed" else progress
                 lines.append(f"{item['id']}. {item['title']} ({'剧集' if item['media_type'] == 'tv' else '电影'} {status})")
             return "\n".join(lines)
         if command in ("/search", "/subscribe", "search", "subscribe", "订阅", "搜索"):

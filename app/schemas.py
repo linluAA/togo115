@@ -34,7 +34,7 @@ class SubscriptionUpdate(BaseModel):
     keywords: list[str] | None = None
     delivery_mode: Literal["115", "telegram_bot"] | None = None
     target_path: str | None = None
-    status: Literal["active", "paused"] | None = None
+    status: Literal["active", "paused", "completed"] | None = None
 
 
 class SubscriptionBulkDeleteRequest(BaseModel):

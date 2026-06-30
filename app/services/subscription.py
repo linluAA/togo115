@@ -1,4 +1,7 @@
+import asyncio
 import re
+import sqlite3
+from typing import Any
 
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
@@ -10,16 +13,24 @@ EPISODE_TOKEN_RE = re.compile(
     r"(?i)(?:s(?P<season>\d{1,2})\s*)?e(?:p)?(?P<episode>\d{1,3})(?:\s*(?:-|~|–|—|至|到)\s*(?:e(?:p)?)?(?P<episode_end>\d{1,3}))?"
     r"|第\s*(?P<cn_episode>\d{1,3})\s*[集话話](?:\s*(?:-|~|–|—|至|到)\s*第?\s*(?P<cn_episode_end>\d{1,3})\s*[集话話]?)?"
 )
+CN_SEASON_EPISODE_RE = re.compile(
+    r"第\s*(?P<season>\d{1,2})\s*季.*?第\s*(?P<episode>\d{1,3})\s*[集话話](?:\s*(?:-|~|–|—|至|到)\s*第?\s*(?P<episode_end>\d{1,3})\s*[集话話]?)?",
+    re.I,
+)
 PLAIN_EPISODE_RANGE_RE = re.compile(
     r"(?<![a-z0-9])(?P<start>\d{1,3})\s*(?:-|~|–|—|至|到)\s*(?P<end>\d{1,3})\s*(?:集|话|話|eps?|episodes?)?(?![a-z0-9])",
     re.I,
 )
+UPDATE_TO_EPISODE_RE = re.compile(r"(?i)(?:更新至|更至|连载至|完结至)\s*(?P<episode>\d{1,3})(?:\s*(?:集|话|話|ep|eps?|episode))?")
+EMBY_SNAPSHOT_FAILED: dict[str, list[dict[str, Any]]] = {"__failed__": []}
 
 
 def normalize_subscription(row) -> dict:
     item = row_to_dict(row) or {}
     item["keywords"] = json_loads(item.get("keywords"), [])
     item["in_library"] = bool(item.get("in_library"))
+    item["tmdb_seasons"] = json_loads(item.get("tmdb_seasons"), [])
+    item["emby_episode_keys"] = json_loads(item.get("emby_episode_keys"), [])
     return item
 
 
@@ -115,8 +126,77 @@ def _expand_episode_range(season: int | None, start: int, end: int | None = None
     return {((season or 1), episode) for episode in range(start, end + 1)}
 
 
+def _json_episode_key(key: tuple[int, int]) -> str:
+    return f"{key[0]}x{key[1]}"
+
+
+def _episode_key_from_json(value: Any) -> tuple[int, int] | None:
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        try:
+            return _episode_key(int(value[0]), int(value[1]))
+        except (TypeError, ValueError):
+            return None
+    if isinstance(value, str):
+        match = re.fullmatch(r"(\d+)x(\d+)", value.strip())
+        if match:
+            return _episode_key(int(match.group(1)), int(match.group(2)))
+    return None
+
+
+def _episode_keys_from_json(value: Any) -> set[tuple[int, int]]:
+    if isinstance(value, str):
+        value = json_loads(value, [])
+    if not isinstance(value, list):
+        return set()
+    keys = {_episode_key_from_json(item) for item in value}
+    return {key for key in keys if key}
+
+
+def _tmdb_seasons_from_detail(detail: dict) -> list[dict[str, int]]:
+    seasons: list[dict[str, int]] = []
+    for season in detail.get("seasons") or []:
+        try:
+            season_number = int(season.get("season_number"))
+            episode_count = int(season.get("episode_count") or 0)
+        except (TypeError, ValueError):
+            continue
+        if season_number <= 0 or episode_count <= 0:
+            continue
+        seasons.append({"season_number": season_number, "episode_count": episode_count})
+    return seasons
+
+
+def _all_tmdb_episode_keys(subscription: dict) -> set[tuple[int, int]]:
+    seasons = subscription.get("tmdb_seasons")
+    if isinstance(seasons, str):
+        seasons = json_loads(seasons, [])
+    keys: set[tuple[int, int]] = set()
+    if isinstance(seasons, list):
+        for season in seasons:
+            if not isinstance(season, dict):
+                continue
+            try:
+                season_number = int(season.get("season_number"))
+                episode_count = int(season.get("episode_count") or 0)
+            except (TypeError, ValueError):
+                continue
+            if season_number <= 0 or episode_count <= 0:
+                continue
+            keys.update((season_number, episode) for episode in range(1, episode_count + 1))
+    if keys:
+        return keys
+    total = int(subscription.get("tmdb_total_count") or 0)
+    return {(1, episode) for episode in range(1, total + 1)} if total > 0 else set()
+
+
 def episodes_from_text(text: str) -> set[tuple[int, int]]:
     episodes: set[tuple[int, int]] = set()
+    for match in CN_SEASON_EPISODE_RE.finditer(text or ""):
+        season = int(match.group("season"))
+        start = int(match.group("episode"))
+        end_value = match.group("episode_end")
+        end = int(end_value) if end_value else start
+        episodes.update(_expand_episode_range(season, start, end))
     for match in EPISODE_TOKEN_RE.finditer(text or ""):
         if match.group("episode") or match.group("cn_episode"):
             season = int(match.group("season")) if match.group("season") else 1
@@ -130,6 +210,10 @@ def episodes_from_text(text: str) -> set[tuple[int, int]]:
             end = int(match.group("end"))
             if start <= end:
                 episodes.update(_expand_episode_range(1, start, end))
+    if not episodes:
+        for match in UPDATE_TO_EPISODE_RE.finditer(text or ""):
+            episode = int(match.group("episode"))
+            episodes.update(_expand_episode_range(1, episode))
     return episodes
 
 
@@ -181,21 +265,50 @@ def _episodes_for_subscription(subscription: dict, episodes: list[dict], matched
     return owned
 
 
-def _missing_episode_keys(subscription: dict) -> set[tuple[int, int]]:
+def _subscription_is_complete(subscription: dict, in_library: bool | None = None, emby_count: int | None = None) -> bool:
+    media_type = subscription.get("media_type")
+    library = bool(subscription.get("in_library")) if in_library is None else bool(in_library)
+    count = int(subscription.get("emby_count") or 0) if emby_count is None else int(emby_count or 0)
+    if media_type == "movie":
+        return library
+    expected = _all_tmdb_episode_keys(subscription)
+    if expected:
+        owned = subscription.get("emby_episodes")
+        if not isinstance(owned, set):
+            owned = _episode_keys_from_json(subscription.get("emby_episode_keys"))
+        return (bool(owned) and expected.issubset(owned)) or count >= len(expected)
     total = int(subscription.get("tmdb_total_count") or 0)
-    if subscription.get("media_type") != "tv" or total <= 0:
+    return bool(total and count >= total)
+
+
+def _active_subscriptions() -> list[dict]:
+    return [item for item in list_subscriptions() if item.get("status") == "active"]
+
+
+def _emby_configured() -> bool:
+    config = get_setting("emby")
+    return bool(str(config.get("server_url") or "").strip() and str(config.get("api_key") or "").strip())
+
+
+def _missing_episode_keys(subscription: dict) -> set[tuple[int, int]]:
+    if subscription.get("media_type") != "tv":
+        return set()
+    expected = _all_tmdb_episode_keys(subscription)
+    if not expected:
         return set()
     owned = subscription.get("emby_episodes")
     if not isinstance(owned, set):
-        owned = set()
-    return {(1, episode) for episode in range(1, total + 1)} - owned
+        owned = _episode_keys_from_json(subscription.get("emby_episode_keys"))
+    return expected - owned
 
 
 def result_matches_missing_episodes(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
     if subscription.get("media_type") != "tv":
-        return True
-    total = int(subscription.get("tmdb_total_count") or 0)
-    if total <= 0:
+        return not bool(subscription.get("in_library"))
+    if subscription.get("emby_snapshot_failed"):
+        return False
+    expected = _all_tmdb_episode_keys(subscription)
+    if not expected:
         return True
     missing = _missing_episode_keys(subscription)
     if not missing:
@@ -211,12 +324,18 @@ async def sync_subscriptions_with_emby() -> dict:
     subscriptions = list_subscriptions()
     if not subscriptions:
         return {"ok": True, "updated": 0, "matched": 0}
+    if not _emby_configured():
+        return {"ok": True, "updated": 0, "matched": 0, "skipped": "emby_not_configured"}
     try:
         snapshot = await EmbyAdapter().library_snapshot()
     except Exception as exc:
         add_log("error", "emby", "Emby 订阅入库状态同步失败", {"error": str(exc)})
         return {"ok": False, "updated": 0, "matched": 0, "error": str(exc)}
 
+    return await sync_subscriptions_with_emby_snapshot(subscriptions, snapshot)
+
+
+async def sync_subscriptions_with_emby_snapshot(subscriptions: list[dict], snapshot: dict[str, list[dict[str, Any]]]) -> dict:
     movies = snapshot.get("movies", [])
     series = snapshot.get("series", [])
     episodes = snapshot.get("episodes", [])
@@ -236,16 +355,19 @@ async def sync_subscriptions_with_emby() -> dict:
     with db() as conn:
         for subscription in subscriptions:
             tmdb_total_count = int(subscription.get("tmdb_total_count") or 0)
-            if subscription.get("media_type") == "tv" and subscription.get("tmdb_id") and not tmdb_total_count:
+            tmdb_seasons = subscription.get("tmdb_seasons") or []
+            if subscription.get("media_type") == "tv" and subscription.get("tmdb_id") and (not tmdb_total_count or not tmdb_seasons):
                 try:
                     detail = await TmdbAdapter().detail("tv", int(subscription["tmdb_id"]))
-                    tmdb_total_count = int(detail.get("number_of_episodes") or 0)
+                    tmdb_total_count = tmdb_total_count or int(detail.get("number_of_episodes") or 0)
+                    tmdb_seasons = _tmdb_seasons_from_detail(detail)
                 except Exception as exc:
                     add_log("debug", "tmdb", "同步媒体库时补全总集数失败", {"id": subscription.get("id"), "error": str(exc)})
             if subscription["media_type"] == "movie":
                 match = next((item for item in movies if _emby_item_matches(subscription, item)), None)
                 in_library = 1 if match else 0
                 emby_count = 1 if match else 0
+                owned_episodes: set[tuple[int, int]] = set()
             else:
                 match = next((item for item in series if _emby_item_matches(subscription, item)), None)
                 series_id = str(match.get("Id") or "") if match else ""
@@ -267,21 +389,51 @@ async def sync_subscriptions_with_emby() -> dict:
                             emby_count = count
                             break
                 in_library = 1 if match or emby_count else 0
+            enriched = {
+                **subscription,
+                "tmdb_total_count": tmdb_total_count,
+                "tmdb_seasons": tmdb_seasons,
+                "emby_episodes": owned_episodes,
+                "emby_count": emby_count,
+                "in_library": bool(in_library),
+            }
+            completed = _subscription_is_complete(enriched, bool(in_library), emby_count)
+            status = "completed" if completed else ("active" if subscription.get("status") == "completed" else subscription.get("status", "active"))
+            completed_at = subscription.get("completed_at")
+            if completed and not completed_at:
+                completed_at = now
+            if not completed:
+                completed_at = None
             if in_library:
                 matched += 1
             if (
                 subscription.get("in_library") == bool(in_library)
                 and int(subscription.get("emby_count") or 0) == emby_count
                 and int(subscription.get("tmdb_total_count") or 0) == tmdb_total_count
+                and subscription.get("tmdb_seasons") == tmdb_seasons
+                and subscription.get("emby_episode_keys") == [_json_episode_key(key) for key in sorted(owned_episodes)]
+                and subscription.get("status") == status
+                and subscription.get("completed_at") == completed_at
             ):
                 continue
             conn.execute(
                 """
                 UPDATE subscriptions
-                SET in_library = ?, emby_count = ?, tmdb_total_count = ?, updated_at = ?
+                SET in_library = ?, emby_count = ?, tmdb_total_count = ?, tmdb_seasons = ?,
+                    emby_episode_keys = ?, status = ?, completed_at = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (in_library, emby_count, tmdb_total_count, now, subscription["id"]),
+                (
+                    in_library,
+                    emby_count,
+                    tmdb_total_count,
+                    json_dumps(tmdb_seasons),
+                    json_dumps([_json_episode_key(key) for key in sorted(owned_episodes)]),
+                    status,
+                    completed_at,
+                    now,
+                    subscription["id"],
+                ),
             )
             updated += 1
     if updated:
@@ -289,63 +441,124 @@ async def sync_subscriptions_with_emby() -> dict:
     return {"ok": True, "updated": updated, "matched": matched}
 
 
-async def enrich_subscription_with_library(subscription: dict) -> dict:
-    if subscription.get("media_type") != "tv":
-        return subscription
-    if subscription.get("tmdb_id") and not int(subscription.get("tmdb_total_count") or 0):
+async def enrich_subscription_with_library(subscription: dict, snapshot: dict[str, list[dict[str, Any]]] | None = None) -> dict:
+    if subscription.get("tmdb_id") and (
+        not int(subscription.get("tmdb_total_count") or 0)
+        or (subscription.get("media_type") == "tv" and not subscription.get("tmdb_seasons"))
+    ):
         try:
-            detail = await TmdbAdapter().detail("tv", int(subscription["tmdb_id"]))
+            detail = await TmdbAdapter().detail(subscription.get("media_type") or "tv", int(subscription["tmdb_id"]))
             total = int(detail.get("number_of_episodes") or 0)
-            if total:
+            tmdb_seasons = _tmdb_seasons_from_detail(detail) if subscription.get("media_type") == "tv" else []
+            if total or tmdb_seasons:
                 with db() as conn:
-                    conn.execute("UPDATE subscriptions SET tmdb_total_count = ?, updated_at = ? WHERE id = ?", (total, utc_now(), subscription["id"]))
-                subscription = {**subscription, "tmdb_total_count": total}
+                    conn.execute(
+                        "UPDATE subscriptions SET tmdb_total_count = ?, tmdb_seasons = ?, updated_at = ? WHERE id = ?",
+                        (total, json_dumps(tmdb_seasons), utc_now(), subscription["id"]),
+                    )
+                subscription = {**subscription, "tmdb_total_count": total, "tmdb_seasons": tmdb_seasons}
         except Exception as exc:
             add_log("debug", "tmdb", "订阅总集数补全失败", {"id": subscription.get("id"), "error": str(exc)})
-    try:
-        snapshot = await EmbyAdapter().library_snapshot()
-    except Exception as exc:
-        add_log("warning", "emby", "缺集过滤获取 Emby 快照失败，暂不按集数过滤", {"id": subscription.get("id"), "error": str(exc)})
+    if subscription.get("media_type") != "tv":
         return subscription
+    if not _emby_configured():
+        return subscription
+    if snapshot is EMBY_SNAPSHOT_FAILED or (snapshot is not None and "__failed__" in snapshot):
+        return {**subscription, "emby_snapshot_failed": True}
+    try:
+        snapshot = snapshot if snapshot is not None else await EmbyAdapter().library_snapshot()
+    except Exception as exc:
+        add_log("warning", "emby", "缺集过滤获取 Emby 快照失败，已跳过本轮推送", {"id": subscription.get("id"), "error": str(exc)})
+        return {**subscription, "emby_snapshot_failed": True}
     series = snapshot.get("series", [])
     episodes = snapshot.get("episodes", [])
     match = next((item for item in series if _emby_item_matches(subscription, item)), None)
     series_id = str(match.get("Id") or "") if match else ""
     owned_episodes = _episodes_for_subscription(subscription, episodes, series_id)
-    enriched = {**subscription, "emby_episodes": owned_episodes}
+    enriched = {**subscription, "emby_episodes": owned_episodes, "emby_episode_keys": [_json_episode_key(key) for key in sorted(owned_episodes)]}
     if owned_episodes and len(owned_episodes) != int(subscription.get("emby_count") or 0):
         enriched["emby_count"] = len(owned_episodes)
     return enriched
 
 
+def _duplicate_subscription(payload: SubscriptionCreate) -> dict | None:
+    rows = []
+    with db() as conn:
+        if payload.tmdb_id is not None:
+            row = conn.execute(
+                "SELECT * FROM subscriptions WHERE media_type = ? AND tmdb_id = ?",
+                (payload.media_type, payload.tmdb_id),
+            ).fetchone()
+            if row:
+                return normalize_subscription(row)
+        title = _compact_match_text(payload.title)
+        if title:
+            rows = conn.execute(
+                "SELECT * FROM subscriptions WHERE media_type = ? AND tmdb_id IS NULL",
+                (payload.media_type,),
+            ).fetchall()
+    for row in rows:
+        item = normalize_subscription(row)
+        if _compact_match_text(item.get("title")) == title:
+            return item
+    return None
+
+
+async def _search_subscription_background(subscription_id: int) -> None:
+    try:
+        await search_and_attach_resources(subscription_id)
+    except Exception as exc:
+        add_log("error", "subscription", "订阅后台历史搜索失败", {"id": subscription_id, "error": str(exc)})
+
+
 async def create_subscription(payload: SubscriptionCreate) -> dict:
+    existing = _duplicate_subscription(payload)
+    if existing:
+        add_log("info", "subscription", "订阅已存在，跳过重复创建", {"id": existing.get("id"), "title": existing.get("title")})
+        return existing
     now = utc_now()
     keywords = payload.keywords or [payload.title]
     tmdb_total_count = int(payload.tmdb_total_count or 0)
+    tmdb_seasons: list[dict[str, int]] = []
+    if payload.media_type == "tv" and payload.tmdb_id:
+        try:
+            detail = await TmdbAdapter().detail("tv", int(payload.tmdb_id))
+            tmdb_total_count = tmdb_total_count or int(detail.get("number_of_episodes") or 0)
+            tmdb_seasons = _tmdb_seasons_from_detail(detail)
+        except Exception as exc:
+            add_log("debug", "tmdb", "创建订阅时补全 TMDB 集数失败", {"title": payload.title, "error": str(exc)})
     with db() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO subscriptions
-            (title, media_type, tmdb_id, poster_url, overview, keywords, delivery_mode, target_path, tmdb_total_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                payload.title,
-                payload.media_type,
-                payload.tmdb_id,
-                payload.poster_url,
-                payload.overview,
-                json_dumps(keywords),
-                payload.delivery_mode,
-                payload.target_path,
-                tmdb_total_count,
-                now,
-                now,
-            ),
-        )
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO subscriptions
+                (title, media_type, tmdb_id, poster_url, overview, keywords, delivery_mode, target_path,
+                 tmdb_total_count, tmdb_seasons, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.title,
+                    payload.media_type,
+                    payload.tmdb_id,
+                    payload.poster_url,
+                    payload.overview,
+                    json_dumps(keywords),
+                    payload.delivery_mode,
+                    payload.target_path,
+                    tmdb_total_count,
+                    json_dumps(tmdb_seasons),
+                    now,
+                    now,
+                ),
+            )
+        except sqlite3.IntegrityError:
+            existing = _duplicate_subscription(payload)
+            if existing:
+                return existing
+            raise
         subscription_id = cursor.lastrowid
-    add_log("info", "subscription", "创建订阅并开始历史消息搜索", {"title": payload.title})
-    await search_and_attach_resources(subscription_id)
+    add_log("info", "subscription", "创建订阅，历史消息搜索已进入后台", {"title": payload.title})
+    asyncio.create_task(_search_subscription_background(subscription_id))
     return get_subscription(subscription_id) or {}
 
 
@@ -356,6 +569,8 @@ def update_subscription(subscription_id: int, payload: SubscriptionUpdate) -> di
     data = payload.model_dump(exclude_unset=True)
     if "keywords" in data:
         data["keywords"] = json_dumps(data["keywords"])
+    if data.get("status") in ("active", "paused"):
+        data["completed_at"] = None
     if not data:
         return current
     sets = ", ".join(f"{key} = ?" for key in data)
@@ -396,11 +611,36 @@ def delete_subscription_by_title(title: str) -> int:
     return delete_subscriptions(matched_ids)
 
 
-async def search_and_attach_resources(subscription_id: int) -> list[dict]:
+def _insert_resource(conn, subscription_id: int, result: SearchResult) -> dict | None:
+    cursor = conn.execute(
+        """
+        INSERT OR IGNORE INTO resources (subscription_id, source, title, url, message_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (subscription_id, result.source, result.title, result.url, result.message_id, utc_now()),
+    )
+    if cursor.rowcount == 0:
+        return None
+    return {**result.__dict__, "resource_id": cursor.lastrowid}
+
+
+async def _library_snapshot_or_none() -> dict[str, list[dict[str, Any]]] | None:
+    if not _emby_configured():
+        return None
+    try:
+        return await EmbyAdapter().library_snapshot()
+    except Exception as exc:
+        add_log("warning", "emby", "Emby 快照获取失败，本轮会跳过需要缺集判断的订阅", {"error": str(exc)})
+        return EMBY_SNAPSHOT_FAILED
+
+
+async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, list[dict[str, Any]]] | None = None) -> list[dict]:
     subscription = get_subscription(subscription_id)
     if not subscription:
         return []
-    subscription = await enrich_subscription_with_library(subscription)
+    if subscription.get("status") != "active":
+        return []
+    subscription = await enrich_subscription_with_library(subscription, snapshot)
     client = TelegramClientAdapter()
     results = await client.search_history(subscription["title"], subscription["keywords"])
     matched_results = [
@@ -412,14 +652,9 @@ async def search_and_attach_resources(subscription_id: int) -> list[dict]:
     created = []
     with db() as conn:
         for result in matched_results:
-            exists = conn.execute("SELECT id FROM resources WHERE url = ? AND subscription_id = ?", (result.url, subscription_id)).fetchone()
-            if exists:
-                continue
-            cursor = conn.execute(
-                "INSERT INTO resources (subscription_id, source, title, url, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (subscription_id, result.source, result.title, result.url, result.message_id, utc_now()),
-            )
-            created.append({**result.__dict__, "resource_id": cursor.lastrowid})
+            item = _insert_resource(conn, subscription_id, result)
+            if item:
+                created.append(item)
         conn.execute("UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?", (utc_now(), utc_now(), subscription_id))
     skipped = len(results) - len(matched_results)
     if skipped:
@@ -434,21 +669,33 @@ async def search_and_attach_resources(subscription_id: int) -> list[dict]:
 async def search_all_active_subscriptions() -> dict:
     total = 0
     searched = 0
-    for subscription in list_subscriptions():
-        if subscription["status"] != "active":
-            continue
-        results = await search_and_attach_resources(subscription["id"])
+    subscriptions = _active_subscriptions()
+    snapshot = await _library_snapshot_or_none()
+    if snapshot is not None and "__failed__" not in snapshot:
+        await sync_subscriptions_with_emby_snapshot(subscriptions, snapshot)
+        subscriptions = _active_subscriptions()
+    for subscription in subscriptions:
+        results = await search_and_attach_resources(subscription["id"], snapshot)
         total += len(results)
         searched += 1
     return {"ok": True, "searched": searched, "count": total}
 
 
-async def attach_results_to_matching_subscriptions(results: list[SearchResult], message_text: str) -> int:
-    subscriptions = [item for item in list_subscriptions() if item["status"] == "active"]
+async def attach_results_to_matching_subscriptions(
+    results: list[SearchResult],
+    message_text: str,
+    snapshot: dict[str, list[dict[str, Any]]] | None = None,
+) -> int:
+    subscriptions = _active_subscriptions()
+    if snapshot is None:
+        snapshot = await _library_snapshot_or_none()
+    if snapshot is not None and "__failed__" not in snapshot:
+        await sync_subscriptions_with_emby_snapshot(subscriptions, snapshot)
+        subscriptions = _active_subscriptions()
     attached = 0
     resource_ids: list[int] = []
     for subscription in subscriptions:
-        subscription = await enrich_subscription_with_library(subscription)
+        subscription = await enrich_subscription_with_library(subscription, snapshot)
         with db() as conn:
             for result in results:
                 if not result_matches_subscription(subscription, result, message_text):
@@ -456,15 +703,11 @@ async def attach_results_to_matching_subscriptions(results: list[SearchResult], 
                 if not result_matches_missing_episodes(subscription, result, message_text):
                     add_log("debug", "subscription", "实时资源不在缺集范围，已跳过", {"id": subscription["id"], "title": result.title})
                     continue
-                exists = conn.execute("SELECT id FROM resources WHERE url = ? AND subscription_id = ?", (result.url, subscription["id"])).fetchone()
-                if exists:
+                item = _insert_resource(conn, subscription["id"], result)
+                if not item:
                     continue
-                cursor = conn.execute(
-                    "INSERT INTO resources (subscription_id, source, title, url, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (subscription["id"], result.source, result.title, result.url, result.message_id, utc_now()),
-                )
                 attached += 1
-                resource_ids.append(cursor.lastrowid)
+                resource_ids.append(item["resource_id"])
     for resource_id in resource_ids:
         await deliver_resource(resource_id)
     if attached:
