@@ -9,6 +9,8 @@ const state = {
   tmdbMore: null,
   logsMode: "simple",
   settingsTab: "credentials",
+  mobileNavOpen: false,
+  userMenuOpen: false,
   subscriptionType: "all",
   subscriptionStatus: "all",
   subscriptionCancelMode: false,
@@ -133,8 +135,10 @@ function renderLogin() {
 
 function renderApp() {
   const current = navItems.find(([key]) => key === state.view);
+  const username = escapeHtml(state.user?.username || "用户");
   $("#app").innerHTML = `
-    <div class="shell ${state.sidebarCollapsed ? "sidebar-collapsed" : ""}">
+    <div class="shell ${state.sidebarCollapsed ? "sidebar-collapsed" : ""} ${state.mobileNavOpen ? "mobile-nav-open" : ""}">
+      <button type="button" class="mobile-scrim" id="mobileNavScrim" aria-label="关闭侧边栏"></button>
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-mark">115</div>
@@ -150,11 +154,18 @@ function renderApp() {
       </aside>
       <main class="main">
         <header class="topbar">
+          <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="打开侧边栏">☰</button>
           <div class="topbar-title"><h2>${current[1]}</h2><p>${current[2]}</p></div>
           <div class="top-actions">
-            <button class="secondary" id="quickLogBtn">实时日志</button>
-            <span class="user-chip">${escapeHtml(state.user?.username || "用户")}</span>
-            <button class="secondary" id="logoutBtn">退出</button>
+            <button class="icon-action" id="quickLogBtn" title="实时日志" aria-label="实时日志">日志</button>
+            <div class="user-menu ${state.userMenuOpen ? "open" : ""}">
+              <button type="button" class="avatar-btn" id="userMenuBtn" aria-label="账号菜单">${username.slice(0, 1).toUpperCase()}</button>
+              <div class="user-menu-panel">
+                <div class="user-menu-name">${username}</div>
+                <button type="button" id="accountSettingsBtn">修改账号密码</button>
+                <button type="button" id="logoutBtn">退出登录</button>
+              </div>
+            </div>
           </div>
         </header>
         <div id="view"></div>
@@ -163,6 +174,8 @@ function renderApp() {
   `;
   document.querySelectorAll("[data-view]").forEach((btn) => btn.addEventListener("click", () => {
     state.view = btn.dataset.view;
+    state.mobileNavOpen = false;
+    state.userMenuOpen = false;
     renderApp();
   }));
   $("#sidebarToggle").addEventListener("click", () => {
@@ -170,12 +183,33 @@ function renderApp() {
     localStorage.setItem("sidebarCollapsed", String(state.sidebarCollapsed));
     renderApp();
   });
-  $("#quickLogBtn").addEventListener("click", () => {
-    state.view = "logs";
+  $("#mobileMenuBtn")?.addEventListener("click", () => {
+    state.mobileNavOpen = true;
+    state.userMenuOpen = false;
     renderApp();
   });
-  $("#logoutBtn").addEventListener("click", async () => {
+  $("#mobileNavScrim")?.addEventListener("click", () => {
+    state.mobileNavOpen = false;
+    renderApp();
+  });
+  $("#quickLogBtn").addEventListener("click", () => {
+    state.view = "logs";
+    state.userMenuOpen = false;
+    renderApp();
+  });
+  $("#userMenuBtn").addEventListener("click", () => {
+    state.userMenuOpen = !state.userMenuOpen;
+    renderApp();
+  });
+  $("#accountSettingsBtn")?.addEventListener("click", () => {
+    state.view = "settings";
+    state.settingsTab = "credentials";
+    state.userMenuOpen = false;
+    renderApp();
+  });
+  $("#logoutBtn")?.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
+    state.userMenuOpen = false;
     renderLogin();
   });
   renderView();
@@ -258,7 +292,6 @@ function mediaGrid(items, type, options = {}) {
       <button class="poster-button" data-detail="${payloadId}" aria-label="查看 ${title} 详情">
         <img class="poster" src="${posterUrl(item)}" alt="${title}" />
         <span class="poster-overlay">
-          <span data-subscribe="${payloadId}">订阅</span>
           <span>详情</span>
         </span>
       </button>
@@ -273,23 +306,6 @@ function mediaGrid(items, type, options = {}) {
 }
 
 function bindMediaActions(root = document) {
-  root.querySelectorAll("[data-subscribe]").forEach((btn) => btn.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    if (btn.dataset.loading === "true") return;
-    const item = state.mediaPayloads.get(btn.dataset.subscribe);
-    const oldText = btn.textContent;
-    btn.dataset.loading = "true";
-    btn.textContent = "添加中";
-    try {
-      await subscribeMedia(item);
-      btn.textContent = "已订阅";
-    } catch (error) {
-      btn.textContent = oldText;
-      toast(`订阅失败：${error.message}`);
-    } finally {
-      delete btn.dataset.loading;
-    }
-  }));
   root.querySelectorAll("[data-detail]").forEach((btn) => btn.addEventListener("click", () => showMediaDetail(btn.dataset.detail)));
   root.querySelectorAll("[data-more]").forEach((btn) => btn.addEventListener("click", async () => {
     const type = btn.dataset.more;

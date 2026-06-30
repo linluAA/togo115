@@ -429,6 +429,84 @@ a:hover {
   flex: 0 0 auto;
 }
 
+.mobile-menu-btn,
+.mobile-scrim {
+  display: none;
+}
+
+.icon-action {
+  display: inline-grid;
+  place-items: center;
+  min-width: 38px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: #334155;
+  background: #fff;
+  font-weight: 800;
+}
+
+.user-menu {
+  position: relative;
+}
+
+.avatar-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #1677ff, #14b8a6);
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(22, 119, 255, .2);
+}
+
+.user-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  display: none;
+  min-width: 160px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, .14);
+}
+
+.user-menu.open .user-menu-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.user-menu-name {
+  padding: 8px 9px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.user-menu-panel button {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 0;
+  color: #334155;
+  background: transparent;
+  text-align: left;
+}
+
+.user-menu-panel button:hover {
+  background: #f3f7ff;
+}
+
 .user-chip {
   display: inline-flex;
   align-items: center;
@@ -575,6 +653,12 @@ a:hover {
   color: #e5edff;
   border: 1px solid rgba(255, 255, 255, .35);
   background: rgba(255, 255, 255, .12);
+}
+
+.poster-overlay span:only-child {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .35);
+  background: rgba(255, 255, 255, .16);
 }
 
 .media-meta {
@@ -2078,15 +2162,50 @@ a:hover {
 }
 
 @media (max-width: 860px) {
+  .shell,
+  .shell.sidebar-collapsed {
+    display: block;
+  }
+
   .sidebar {
-    border-bottom: 1px solid #e7edf5;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, .05);
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(78vw, 300px);
+    height: 100vh;
+    display: flex;
+    border-right: 1px solid #e7edf5;
+    border-bottom: 0;
+    box-shadow: 18px 0 44px rgba(15, 23, 42, .18);
+    transform: translateX(-104%);
+    transition: transform .2s ease;
+  }
+
+  .shell.mobile-nav-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .mobile-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: none;
+    width: 100%;
+    min-height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(15, 23, 42, .38);
+  }
+
+  .shell.mobile-nav-open .mobile-scrim {
+    display: block;
   }
 
   .brand {
-    min-height: 50px;
-    padding: 8px 14px 5px;
-    border-bottom: 0;
+    min-height: 64px;
+    padding: 14px;
+    border-bottom: 1px solid #eef2f7;
     gap: 10px;
   }
 
@@ -2102,73 +2221,117 @@ a:hover {
   }
 
   .nav {
-    gap: 8px;
-    padding: 6px 12px 10px;
-    scroll-padding-inline: 12px;
-    -webkit-overflow-scrolling: touch;
+    display: grid;
+    gap: 6px;
+    overflow: visible;
+    padding: 12px;
   }
 
   .nav button {
-    min-height: 36px;
-    padding: 7px 12px;
-    border-color: #dfe7f2;
-    border-radius: 999px;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    width: 100%;
+    min-height: 44px;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 10px;
+    box-shadow: none;
   }
 
   .nav button.active {
-    color: #fff;
-    border-color: var(--brand);
-    background: var(--brand);
-    box-shadow: 0 8px 18px rgba(22, 119, 255, .18);
+    color: var(--brand);
+    border-color: transparent;
+    background: var(--brand-soft);
+    box-shadow: none;
   }
 
   .nav-icon {
-    display: none;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: #f8fafc;
   }
 
   .nav-copy strong {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .topbar {
-    position: static;
-    display: block;
-    min-height: 0;
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
     padding: 8px 12px;
     border-bottom: 1px solid #e8eef6;
     background: #fff;
-    backdrop-filter: none;
+    backdrop-filter: blur(10px);
   }
 
-  .topbar::before,
-  .topbar-title {
+  .topbar::before {
     display: none;
   }
 
-  .top-actions {
-    width: 100%;
+  .topbar-title {
+    display: block;
+    flex: 1;
+  }
+
+  .topbar-title h2 {
+    display: block;
+    font-size: 17px;
+    line-height: 1.1;
+  }
+
+  .topbar-title p {
+    display: none;
+  }
+
+  .mobile-menu-btn {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    place-items: center;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    color: #334155;
+    background: #fff;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .top-actions {
+    width: auto;
+    display: flex;
     gap: 8px;
-    align-items: center;
+    margin-left: auto;
   }
 
   .top-actions button,
-  .user-chip {
+  .avatar-btn,
+  .icon-action {
     min-height: 34px;
     border-radius: 10px;
     font-size: 13px;
   }
 
-  .top-actions #quickLogBtn {
-    justify-self: start;
+  .icon-action {
+    min-width: 38px;
+    padding: 0 9px;
   }
 
-  .user-chip {
-    padding: 4px 9px;
-    border: 1px solid #e5eaf2;
-    background: #f8fbff;
+  .avatar-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .user-menu-panel {
+    right: 0;
+    min-width: 170px;
   }
 
   #view {
@@ -2224,12 +2387,7 @@ a:hover {
   }
 
   .poster-overlay {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    opacity: 1;
-    padding: 10px;
-    background: linear-gradient(180deg, transparent 50%, rgba(15, 23, 42, .72));
+    display: none;
   }
 
   .poster-overlay span {
@@ -2273,11 +2431,11 @@ a:hover {
   }
 
   .nav {
-    padding-inline: 10px;
+    padding-inline: 12px;
   }
 
   .nav button {
-    padding-inline: 11px;
+    padding-inline: 12px;
   }
 
   #view {
@@ -2285,12 +2443,7 @@ a:hover {
   }
 
   .top-actions {
-    grid-template-columns: auto 1fr auto;
-  }
-
-  .user-chip {
-    justify-content: center;
-    min-width: 0;
+    gap: 7px;
   }
 
   .toolbar {
