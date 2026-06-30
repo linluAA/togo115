@@ -7,6 +7,7 @@ const state = {
   mediaPayloads: new Map(),
   tmdbSearch: [],
   tmdbMore: null,
+  tmdbTrending: null,
   logsMode: "simple",
   settingsTab: "credentials",
   mobileNavOpen: false,
@@ -133,6 +134,21 @@ function renderLogin() {
   });
 }
 
+function updateShellUiState() {
+  const shell = $(".shell");
+  if (shell) {
+    shell.classList.toggle("mobile-nav-open", state.mobileNavOpen);
+    shell.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
+  }
+  const userMenu = $(".user-menu");
+  if (userMenu) userMenu.classList.toggle("open", state.userMenuOpen);
+  const sidebarToggle = $("#sidebarToggle");
+  if (sidebarToggle) {
+    sidebarToggle.innerHTML = state.sidebarCollapsed ? "&rsaquo;" : "&lsaquo;";
+    sidebarToggle.setAttribute("aria-label", state.sidebarCollapsed ? "展开侧边栏" : "收起侧边栏");
+  }
+}
+
 function renderApp() {
   const current = navItems.find(([key]) => key === state.view);
   const username = escapeHtml(state.user?.username || "用户");
@@ -181,16 +197,16 @@ function renderApp() {
   $("#sidebarToggle").addEventListener("click", () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
     localStorage.setItem("sidebarCollapsed", String(state.sidebarCollapsed));
-    renderApp();
+    updateShellUiState();
   });
   $("#mobileMenuBtn")?.addEventListener("click", () => {
     state.mobileNavOpen = true;
     state.userMenuOpen = false;
-    renderApp();
+    updateShellUiState();
   });
   $("#mobileNavScrim")?.addEventListener("click", () => {
     state.mobileNavOpen = false;
-    renderApp();
+    updateShellUiState();
   });
   $("#quickLogBtn").addEventListener("click", () => {
     state.view = "logs";
@@ -199,7 +215,7 @@ function renderApp() {
   });
   $("#userMenuBtn").addEventListener("click", () => {
     state.userMenuOpen = !state.userMenuOpen;
-    renderApp();
+    updateShellUiState();
   });
   $("#accountSettingsBtn")?.addEventListener("click", () => {
     state.view = "settings";
@@ -256,7 +272,8 @@ async function renderTmdb() {
     if (event.key === "Enter") searchTmdb();
   });
   try {
-    const data = await api("/api/tmdb/trending");
+    const data = state.tmdbTrending || await api("/api/tmdb/trending");
+    state.tmdbTrending = data;
     const tv = data.tv || [];
     const movie = data.movie || [];
     $("#trendingSection").innerHTML = `
@@ -309,7 +326,8 @@ function bindMediaActions(root = document) {
   root.querySelectorAll("[data-detail]").forEach((btn) => btn.addEventListener("click", () => showMediaDetail(btn.dataset.detail)));
   root.querySelectorAll("[data-more]").forEach((btn) => btn.addEventListener("click", async () => {
     const type = btn.dataset.more;
-    const data = await api("/api/tmdb/trending");
+    const data = state.tmdbTrending || await api("/api/tmdb/trending");
+    state.tmdbTrending = data;
     state.tmdbMore = { type, items: data[type] || [] };
     renderTmdb();
   }));
