@@ -2,7 +2,7 @@ from pathlib import Path
 from io import BytesIO
 
 from fastapi import Depends, FastAPI, HTTPException, Response
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
@@ -31,8 +31,15 @@ async def shutdown() -> None:
 
 
 @app.get("/")
-async def index() -> FileResponse:
-    return FileResponse(static_dir / "index.html")
+async def index() -> HTMLResponse:
+    html = (static_dir / "index.html").read_text(encoding="utf-8")
+    app_version = max(
+        int((static_dir / "app.js").stat().st_mtime),
+        int((static_dir / "styles.css").stat().st_mtime),
+    )
+    html = html.replace("/static/styles.css", f"/static/styles.css?v={app_version}")
+    html = html.replace("/static/app.js", f"/static/app.js?v={app_version}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/health")

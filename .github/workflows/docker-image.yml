@@ -20,6 +20,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: linluaa/togo115-app
+  LEGACY_IMAGE_NAME: linluaa/togo115
 
 jobs:
   docker:
@@ -34,7 +35,9 @@ jobs:
         shell: bash
         run: |
           image="${REGISTRY}/${IMAGE_NAME}"
+          legacy_image="${REGISTRY}/${LEGACY_IMAGE_NAME}"
           echo "name=${image,,}" >> "$GITHUB_OUTPUT"
+          echo "legacy_name=${legacy_image,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -51,7 +54,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.image.outputs.name }}
+          images: |
+            ${{ steps.image.outputs.name }}
+            ${{ steps.image.outputs.legacy_name }}
           tags: |
             type=ref,event=branch
             type=ref,event=tag
