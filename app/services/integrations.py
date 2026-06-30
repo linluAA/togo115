@@ -587,6 +587,16 @@ class TelegramBotAdapter:
         if not self._chat_allowed(config, chat_id):
             await self._answer_callback(client, token, callback_id, "当前 Chat ID 未授权")
             return
+        if data.startswith("preview:"):
+            try:
+                await self._answer_callback(client, token, callback_id, "正在读取详情...")
+                _, media_type, tmdb_id = data.split(":", 2)
+                await self._send_subscription_preview(client, token, chat_id, media_type, int(tmdb_id))
+            except Exception as exc:
+                add_log("warning", "tg_bot", "TG Bot 发送订阅详情失败", {"data": data, "error": str(exc)})
+                if chat_id:
+                    await self._send_bot_message(client, token, chat_id, f"详情获取失败：{str(exc)[:120]}")
+            return
         if data.startswith("subscribe:"):
             try:
                 await self._answer_callback(client, token, callback_id, "正在添加订阅...")
@@ -681,35 +691,50 @@ class TelegramBotAdapter:
             if not results:
                 await self._send_bot_message(client, token, chat_id, f"没有搜索到：{query}")
                 return
-            await self._send_bot_message(client, token, chat_id, f"搜索到 {min(len(results), 5)} 个结果，请选择要订阅的剧集：")
-            for item in results[:5]:
+            buttons = []
+            lines = [f"搜索到 {min(len(results), 8)} 个结果，请选择剧集查看详情："]
+            for index, item in enumerate(results[:8], start=1):
                 title = item.get("name") or item.get("title") or "未命名"
                 year = str(item.get("first_air_date") or "")[:4] or "未知年份"
-                overview = item.get("overview") or "暂无简介"
-                caption = f"{title} ({year})\n\n{overview[:420]}"
-                reply_markup = {
-                    "inline_keyboard": [[
-                        {"text": "选择订阅", "callback_data": f"subscribe:tv:{item.get('id')}"}
-                    ]]
-                }
-                poster_path = item.get("poster_path")
-                if poster_path:
-                    res = await client.post(
-                        self._api_url(token, "sendPhoto"),
-                        data={
-                            "chat_id": chat_id,
-                            "photo": f"https://image.tmdb.org/t/p/w500{poster_path}",
-                            "caption": caption[:1024],
-                            "reply_markup": json_dumps(reply_markup),
-                        },
-                    )
-                else:
-                    res = await client.post(
-                        self._api_url(token, "sendMessage"),
-                        data={"chat_id": chat_id, "text": caption[:3900], "reply_markup": json_dumps(reply_markup)},
-                    )
-                if res.status_code >= 400:
-                    add_log("warning", "tg_bot", "TG Bot 发送订阅候选失败", {"status": res.status_code, "body": res.text[:240]})
+                lines.append(f"{index}. {title} ({year})")
+                buttons.append([{"text": f"{index}. {title[:28]}", "callback_data": f"preview:tv:{item.get('id')}"}])
+            reply_markup = {"inline_keyboard": buttons}
+            res = await client.post(
+                self._api_url(token, "sendMessage"),
+                data={"chat_id": chat_id, "text": "\n".join(lines)[:3900], "reply_markup": json_dumps(reply_markup)},
+            )
+            if res.status_code >= 400:
+                add_log("warning", "tg_bot", "TG Bot 发送订阅候选失败", {"status": res.status_code, "body": res.text[:240]})
+
+    async def _send_subscription_preview(self, client: httpx.AsyncClient, token: str, chat_id: int | str | None, media_type: str, tmdb_id: int) -> None:
+        if not chat_id:
+            return
+        detail = await TmdbAdapter().detail(media_type, tmdb_id)
+        title = detail.get("name") or detail.get("title") or "未命名"
+        year = str(detail.get("first_air_date") or detail.get("release_date") or "")[:4] or "未知年份"
+        total = detail.get("number_of_episodes")
+        overview = detail.get("overview") or "暂无简介"
+        facts = f"{year}" + (f" · {total} 集" if total else "")
+        caption = f"{title}\n{facts}\n\n{overview[:520]}"
+        reply_markup = {"inline_keyboard": [[{"text": "确认订阅", "callback_data": f"subscribe:{media_type}:{tmdb_id}"}]]}
+        poster_path = detail.get("poster_path")
+        if poster_path:
+            res = await client.post(
+                self._api_url(token, "sendPhoto"),
+                data={
+                    "chat_id": chat_id,
+                    "photo": f"https://image.tmdb.org/t/p/w500{poster_path}",
+                    "caption": caption[:1024],
+                    "reply_markup": json_dumps(reply_markup),
+                },
+            )
+        else:
+            res = await client.post(
+                self._api_url(token, "sendMessage"),
+                data={"chat_id": chat_id, "text": caption[:3900], "reply_markup": json_dumps(reply_markup)},
+            )
+        if res.status_code >= 400:
+            add_log("warning", "tg_bot", "TG Bot 发送订阅详情失败", {"status": res.status_code, "body": res.text[:240]})
 
     async def _answer_callback(self, client: httpx.AsyncClient, token: str, callback_id: str | None, text: str) -> None:
         if not callback_id:
