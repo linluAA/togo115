@@ -139,7 +139,6 @@ function renderApp() {
         <div class="brand">
           <div class="brand-mark">115</div>
           <div class="brand-copy"><strong>ToGo115</strong><span>资源订阅系统</span></div>
-          <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="${state.sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}">${state.sidebarCollapsed ? "›" : "‹"}</button>
         </div>
         <nav class="nav">
           ${navItems.map(([key, label, description, icon]) => `<button class="${state.view === key ? "active" : ""}" data-view="${key}" title="${label}">
@@ -147,6 +146,7 @@ function renderApp() {
             <span class="nav-copy"><strong>${label}</strong><small>${description}</small></span>
           </button>`).join("")}
         </nav>
+        <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="${state.sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}">${state.sidebarCollapsed ? "›" : "‹"}</button>
       </aside>
       <main class="main">
         <header class="topbar">
@@ -526,8 +526,8 @@ function subscriptionCards() {
       const statusClass = completed ? "completed" : (item.status === "active" ? "active" : "paused");
       const checked = state.selectedSubscriptionIds.has(item.id) ? "checked" : "";
       return `<article class="subscription-card ${state.subscriptionCancelMode ? "selecting" : ""}">
+        ${state.subscriptionCancelMode ? `<label class="subscription-select"><input type="checkbox" data-select-subscription="${item.id}" ${checked} /><span></span></label>` : ""}
         <div class="subscription-poster">
-          ${state.subscriptionCancelMode ? `<label class="subscription-select"><input type="checkbox" data-select-subscription="${item.id}" ${checked} /><span></span></label>` : ""}
           <img src="${escapeHtml(poster)}" alt="${escapeHtml(item.title)}" />
           <div class="subscription-badges">
             <span class="subscription-badge">${item.media_type === "tv" ? "电视剧" : "电影"}</span>
@@ -548,21 +548,25 @@ function subscriptionCards() {
         <p>${state.subscriptions.length} 个订阅，当前显示 ${filtered.length} 个</p>
       </div>
       <div class="subscription-filters">
-        <select id="subscriptionTypeFilter" aria-label="订阅类型">
-          <option value="all" ${state.subscriptionType === "all" ? "selected" : ""}>全部类型</option>
-          <option value="tv" ${state.subscriptionType === "tv" ? "selected" : ""}>电视剧</option>
-          <option value="movie" ${state.subscriptionType === "movie" ? "selected" : ""}>电影</option>
-        </select>
-        <select id="subscriptionStatusFilter" aria-label="订阅状态">
-          <option value="all" ${state.subscriptionStatus === "all" ? "selected" : ""}>全部状态</option>
-          <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
-          <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
-        </select>
-        <button type="button" class="secondary" id="searchAllSubscriptions">搜索全部</button>
-        <button type="button" class="secondary" id="syncEmbySubscriptions">同步媒体库</button>
-        <button type="button" class="danger" id="toggleCancelSubscriptions">${state.subscriptionCancelMode ? "退出取消" : "取消订阅"}</button>
-        ${state.subscriptionCancelMode ? `<button type="button" class="danger" id="confirmCancelSubscriptions">确定移除</button>` : ""}
-        <button type="button" class="secondary" id="subscriptionReset">重置</button>
+        <div class="filter-group">
+          <select id="subscriptionTypeFilter" aria-label="订阅类型">
+            <option value="all" ${state.subscriptionType === "all" ? "selected" : ""}>全部类型</option>
+            <option value="tv" ${state.subscriptionType === "tv" ? "selected" : ""}>电视剧</option>
+            <option value="movie" ${state.subscriptionType === "movie" ? "selected" : ""}>电影</option>
+          </select>
+          <select id="subscriptionStatusFilter" aria-label="订阅状态">
+            <option value="all" ${state.subscriptionStatus === "all" ? "selected" : ""}>全部状态</option>
+            <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
+            <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
+          </select>
+          <button type="button" class="secondary" id="subscriptionReset">重置</button>
+        </div>
+        <div class="action-group">
+          <button type="button" class="secondary" id="searchAllSubscriptions">搜索全部</button>
+          <button type="button" class="secondary" id="syncEmbySubscriptions">同步媒体库</button>
+          <button type="button" class="danger" id="toggleCancelSubscriptions">${state.subscriptionCancelMode ? "退出取消" : "取消订阅"}</button>
+          ${state.subscriptionCancelMode ? `<button type="button" class="danger" id="confirmCancelSubscriptions">确定移除</button>` : ""}
+        </div>
       </div>
     </div>
     ${filtered.length ? `<div class="subscription-grid">${cards}</div>` : `<div class="empty">当前筛选没有订阅。</div>`}
@@ -643,7 +647,7 @@ function renderSettings() {
     telegram: settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道"], ["history_limit", "历史搜索条数"]]),
     tmdb: settingsCard("TMDB", "tmdb", [["api_key", "API Key"]]),
     proxy: settingsCard("代理设置", "proxy", [["url", "代理地址"], ["modules", "启用代理的模块"]]),
-    tg_bot: settingsCard("TG Bot", "tg_bot", [["bot_token", "Bot Token"], ["bot_username", "机器人用户名"], ["allowed_chat_id", "允许的 Chat ID"]]),
+    tg_bot: settingsCard("TG Bot", "tg_bot", [["bot_token", "监听 Bot Token"], ["bot_username", "转发目标机器人用户名"], ["allowed_chat_id", "允许的 Chat ID"]]),
     emby: settingsCard("媒体库", "emby", [["server_url", "Emby 地址"], ["api_key", "API Key"]]),
   };
   $("#view").innerHTML = `

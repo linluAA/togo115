@@ -496,6 +496,124 @@ class Pan115Adapter:
 
 
 class TelegramBotAdapter:
+    _polling_task: asyncio.Task | None = None
+    _polling_token: str | None = None
+
+    def _config(self) -> dict[str, Any]:
+        return get_setting("tg_bot")
+
+    def _api_url(self, token: str, method: str) -> str:
+        return f"https://api.telegram.org/bot{token}/{method}"
+
+    def _chat_allowed(self, config: dict[str, Any], chat_id: int | str | None) -> bool:
+        allowed = str(config.get("allowed_chat_id") or "").strip()
+        return not allowed or str(chat_id) == allowed
+
+    async def ensure_polling(self) -> None:
+        config = self._config()
+        token = str(config.get("bot_token") or "").strip()
+        if not token:
+            return
+        cls = type(self)
+        if cls._polling_task and not cls._polling_task.done() and cls._polling_token != token:
+            await self.stop_polling()
+        if cls._polling_task and not cls._polling_task.done():
+            add_log("debug", "tg_bot", "TG Bot 监听心跳正常")
+            return
+        cls._polling_token = token
+        cls._polling_task = asyncio.create_task(self._poll_updates(token), name="togo115-tg-bot")
+        add_log("info", "tg_bot", "TG Bot 监听已启动")
+
+    async def stop_polling(self) -> None:
+        cls = type(self)
+        if cls._polling_task and not cls._polling_task.done():
+            cls._polling_task.cancel()
+            try:
+                await cls._polling_task
+            except asyncio.CancelledError:
+                pass
+        cls._polling_task = None
+        cls._polling_token = None
+
+    async def _poll_updates(self, token: str) -> None:
+        offset = int(get_flow("tg_bot").get("offset") or 0)
+        proxy = module_proxy("telegram")
+        async with httpx.AsyncClient(proxy=proxy or None, timeout=35, follow_redirects=True) as client:
+            while True:
+                try:
+                    res = await client.get(self._api_url(token, "getUpdates"), params={"timeout": 25, "offset": offset})
+                    res.raise_for_status()
+                    payload = res.json()
+                    if not payload.get("ok"):
+                        add_log("warning", "tg_bot", "TG Bot 获取消息失败", {"response": payload})
+                        await asyncio.sleep(5)
+                        continue
+                    for update in payload.get("result", []):
+                        offset = int(update.get("update_id") or offset) + 1
+                        save_flow("tg_bot", {"offset": offset})
+                        await self._handle_update(client, token, update)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    add_log("warning", "tg_bot", "TG Bot 监听异常，稍后重试", {"error": str(exc)})
+                    await asyncio.sleep(5)
+
+    async def _handle_update(self, client: httpx.AsyncClient, token: str, update: dict[str, Any]) -> None:
+        message = update.get("message") or update.get("edited_message") or {}
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        text = str(message.get("text") or "").strip()
+        if not chat_id or not text:
+            return
+        config = self._config()
+        if not self._chat_allowed(config, chat_id):
+            await self._send_bot_message(client, token, chat_id, "当前 Chat ID 未授权。")
+            add_log("warning", "tg_bot", "TG Bot 收到未授权消息", {"chat_id": chat_id})
+            return
+        reply = await self._command_reply(text, chat_id)
+        await self._send_bot_message(client, token, chat_id, reply)
+
+    async def _command_reply(self, text: str, chat_id: int | str) -> str:
+        from app.services.subscription import create_subscription, delete_subscription, list_subscriptions
+        from app.schemas import SubscriptionCreate
+
+        command, *rest = text.split(maxsplit=1)
+        args = rest[0].strip() if rest else ""
+        command = command.split("@", 1)[0].lower()
+        if command in ("/start", "/help", "help"):
+            return "可用命令：\n/list 查看订阅\n/search 剧名 订阅剧集\n/cancel ID 取消订阅\n/id 查看当前 Chat ID"
+        if command in ("/id", "id"):
+            return f"当前 Chat ID：{chat_id}"
+        if command in ("/list", "list"):
+            subscriptions = list_subscriptions()
+            if not subscriptions:
+                return "暂无订阅。"
+            lines = ["订阅列表："]
+            for item in subscriptions[:30]:
+                status = "完成" if item.get("in_library") and item.get("media_type") == "movie" else item.get("status", "")
+                if item.get("media_type") == "tv":
+                    count = int(item.get("emby_count") or 0)
+                    total = int(item.get("tmdb_total_count") or 0)
+                    status = f"{count}/{total}集" if total else f"{count}集"
+                lines.append(f"{item['id']}. {item['title']} ({'剧集' if item['media_type'] == 'tv' else '电影'} {status})")
+            return "\n".join(lines)
+        if command in ("/search", "/subscribe", "search", "subscribe"):
+            if not args:
+                return "请输入要订阅的剧名，例如：/search 南部档案"
+            sub = await create_subscription(SubscriptionCreate(title=args, media_type="tv", keywords=[args]))
+            return f"已创建订阅：{sub.get('title')}，ID {sub.get('id')}"
+        if command in ("/cancel", "cancel"):
+            if not args or not args.split()[0].isdigit():
+                return "请输入订阅 ID，例如：/cancel 3"
+            delete_subscription(int(args.split()[0]))
+            return "已取消订阅。"
+        return "未知命令。发送 /help 查看可用命令。"
+
+    async def _send_bot_message(self, client: httpx.AsyncClient, token: str, chat_id: int | str, text: str) -> None:
+        res = await client.post(self._api_url(token, "sendMessage"), data={"chat_id": chat_id, "text": text[:3900]})
+        if res.status_code >= 400:
+            add_log("warning", "tg_bot", "TG Bot 回复消息失败", {"status": res.status_code, "body": res.text[:240]})
+
     async def forward_to_bot(self, link: str) -> bool:
         config = get_setting("tg_bot")
         bot_username = config.get("bot_username")

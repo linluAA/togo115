@@ -120,6 +120,8 @@ label input[type="checkbox"] {
   position: sticky;
   top: 0;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
   padding: 18px 12px;
   border-right: 1px solid rgba(255,255,255,.08);
   background: #172033;
@@ -128,7 +130,6 @@ label input[type="checkbox"] {
 }
 
 .brand {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -157,14 +158,14 @@ label input[type="checkbox"] {
 .brand span { color: #aeb8c8; font-size: 12px; }
 
 .sidebar-toggle {
-  position: absolute;
-  right: 2px;
-  top: 6px;
+  flex: 0 0 auto;
+  align-self: center;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 42px;
+  height: 42px;
   min-height: 0;
+  margin-top: auto;
   padding: 0;
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 8px;
@@ -253,7 +254,8 @@ label input[type="checkbox"] {
 }
 
 .shell.sidebar-collapsed .sidebar-toggle {
-  right: -2px;
+  width: 40px;
+  height: 40px;
 }
 
 .shell.sidebar-collapsed .nav button {
@@ -601,12 +603,28 @@ label input[type="checkbox"] {
 }
 
 .subscription-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.filter-group,
+.action-group {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  max-width: 760px;
+}
+
+.filter-group {
+  padding: 6px;
+  border: 1px solid rgba(54, 67, 88, .08);
+  border-radius: 8px;
+  background: rgba(255,255,255,.42);
 }
 
 .subscription-filters select {
@@ -627,6 +645,8 @@ label input[type="checkbox"] {
 .subscription-card {
   min-width: 0;
   position: relative;
+  padding-top: 6px;
+  padding-right: 6px;
 }
 
 .subscription-poster {
@@ -655,7 +675,7 @@ label input[type="checkbox"] {
 }
 
 .subscription-card.selecting .subscription-badges {
-  right: 48px;
+  right: 10px;
 }
 
 .subscription-badge {
@@ -697,9 +717,9 @@ label input[type="checkbox"] {
 
 .subscription-select {
   position: absolute;
-  top: 9px;
-  right: 9px;
-  z-index: 3;
+  top: -3px;
+  right: -3px;
+  z-index: 5;
   display: block;
   cursor: pointer;
 }
@@ -713,11 +733,11 @@ label input[type="checkbox"] {
 .subscription-select span {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: 2px solid rgba(255,255,255,.86);
   border-radius: 999px;
-  background: rgba(15, 23, 42, .42);
+  background: rgba(15, 23, 42, .58);
   box-shadow: 0 8px 18px rgba(0,0,0,.18);
 }
 
@@ -1186,6 +1206,7 @@ label input[type="checkbox"] {
     top: 0;
     z-index: 10;
     height: auto;
+    display: block;
     padding: 10px 12px 8px;
     border-right: 0;
     border-bottom: 1px solid rgba(255,255,255,.12);
@@ -1492,9 +1513,16 @@ label input[type="checkbox"] {
 
   .subscription-filters {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     justify-content: stretch;
     gap: 8px;
+  }
+
+  .filter-group,
+  .action-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
   }
 
   .subscription-filters select,
@@ -1695,6 +1723,11 @@ label input[type="checkbox"] {
   }
 
   .subscription-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-group,
+  .action-group {
     grid-template-columns: 1fr;
   }
 
