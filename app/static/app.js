@@ -281,7 +281,16 @@ function bindMediaActions(root = document) {
 
 async function subscribeMedia(item) {
   if (!item) return;
-  await api("/api/subscriptions", { method: "POST", body: JSON.stringify(item) });
+  const payload = { ...item };
+  if (payload.media_type === "tv" && payload.tmdb_id && !payload.tmdb_total_count) {
+    try {
+      const detail = await api(`/api/tmdb/${payload.media_type}/${payload.tmdb_id}`);
+      payload.tmdb_total_count = detail.number_of_episodes || 0;
+      payload.overview = payload.overview || detail.overview || "";
+      payload.poster_url = payload.poster_url || posterUrl(detail);
+    } catch {}
+  }
+  await api("/api/subscriptions", { method: "POST", body: JSON.stringify(payload) });
   await refreshBase();
   toast("已创建订阅并开始搜索历史消息");
 }
@@ -307,6 +316,9 @@ async function showMediaDetail(payloadId) {
     detail = payload;
   }
   const title = detail.name || detail.title || payload.title;
+  if (payload.media_type === "tv") {
+    payload.tmdb_total_count = detail.number_of_episodes || payload.tmdb_total_count || 0;
+  }
   const seasons = payload.media_type === "tv" && detail.number_of_episodes ? `<span>${detail.number_of_episodes} 集</span>` : "";
   const runtime = payload.media_type === "movie" && detail.runtime ? `<span>${detail.runtime} 分钟</span>` : "";
   document.body.insertAdjacentHTML("beforeend", `
@@ -507,7 +519,9 @@ function subscriptionCards() {
           : "未入库");
       const poster = item.poster_url || posterUrl({});
       const keywords = (item.keywords || []).join(", ") || "未设置关键词";
-      const completed = Boolean(item.in_library);
+      const completed = item.media_type === "movie"
+        ? Boolean(item.in_library)
+        : Boolean(tmdbTotal && embyCount >= tmdbTotal);
       const statusText = completed ? "订阅完成" : (item.status === "active" ? "订阅中" : "已暂停");
       const statusClass = completed ? "completed" : (item.status === "active" ? "active" : "paused");
       const checked = state.selectedSubscriptionIds.has(item.id) ? "checked" : "";

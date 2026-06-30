@@ -577,7 +577,7 @@ class EmbyAdapter:
             common_params = {
                 "Recursive": "true",
                 "Limit": "10000",
-                "Fields": "ProviderIds,OriginalTitle,SortName,SeriesId,SeriesName,ParentId",
+                "Fields": "ProviderIds,OriginalTitle,SortName,SeriesId,SeriesName,ParentId,IndexNumber,ParentIndexNumber",
             }
             movies_series = await self._get(
                 client,

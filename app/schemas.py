@@ -23,6 +23,7 @@ class SubscriptionCreate(BaseModel):
     tmdb_id: int | None = None
     poster_url: str | None = None
     overview: str | None = None
+    tmdb_total_count: int | None = None
     keywords: list[str] = Field(default_factory=list)
     delivery_mode: Literal["115", "telegram_bot"] = "115"
     target_path: str | None = None
