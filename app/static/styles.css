@@ -2077,6 +2077,236 @@ a:hover {
   }
 }
 
+@media (max-width: 860px) {
+  .sidebar {
+    border-bottom: 1px solid #e7edf5;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .05);
+  }
+
+  .brand {
+    min-height: 50px;
+    padding: 8px 14px 5px;
+    border-bottom: 0;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    box-shadow: 0 8px 18px rgba(22, 119, 255, .16);
+  }
+
+  .brand strong {
+    font-size: 18px;
+    line-height: 1.1;
+  }
+
+  .nav {
+    gap: 8px;
+    padding: 6px 12px 10px;
+    scroll-padding-inline: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nav button {
+    min-height: 36px;
+    padding: 7px 12px;
+    border-color: #dfe7f2;
+    border-radius: 999px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  }
+
+  .nav button.active {
+    color: #fff;
+    border-color: var(--brand);
+    background: var(--brand);
+    box-shadow: 0 8px 18px rgba(22, 119, 255, .18);
+  }
+
+  .nav-icon {
+    display: none;
+  }
+
+  .nav-copy strong {
+    font-size: 13px;
+  }
+
+  .topbar {
+    position: static;
+    display: block;
+    min-height: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e8eef6;
+    background: #fff;
+    backdrop-filter: none;
+  }
+
+  .topbar::before,
+  .topbar-title {
+    display: none;
+  }
+
+  .top-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .top-actions button,
+  .user-chip {
+    min-height: 34px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .top-actions #quickLogBtn {
+    justify-self: start;
+  }
+
+  .user-chip {
+    padding: 4px 9px;
+    border: 1px solid #e5eaf2;
+    background: #f8fbff;
+  }
+
+  #view {
+    padding: 12px 12px 28px;
+  }
+
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin: 2px 0 18px;
+    padding: 10px;
+    border-color: #e5eaf2;
+    border-radius: 12px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, .06);
+  }
+
+  .toolbar > label {
+    min-width: 0;
+    font-size: 0;
+  }
+
+  .toolbar input {
+    min-height: 42px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  .toolbar button {
+    min-height: 42px;
+    border-radius: 10px;
+    padding-inline: 16px;
+  }
+
+  .section {
+    margin-bottom: 20px;
+  }
+
+  .section > h3 {
+    margin: 18px 0 12px;
+    font-size: 20px;
+    letter-spacing: 0;
+  }
+
+  .media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 12px;
+  }
+
+  .poster-button {
+    border: 0;
+    border-radius: 10px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .12);
+  }
+
+  .poster-overlay {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 1;
+    padding: 10px;
+    background: linear-gradient(180deg, transparent 50%, rgba(15, 23, 42, .72));
+  }
+
+  .poster-overlay span {
+    min-width: 66px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--brand);
+    box-shadow: 0 8px 18px rgba(22, 119, 255, .28);
+    font-size: 13px;
+  }
+
+  .poster-overlay span:last-child {
+    display: none;
+  }
+
+  .media-meta {
+    padding: 9px 1px 0;
+  }
+
+  .media-meta h3 {
+    min-height: 40px;
+    margin-bottom: 6px;
+    color: #111827;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .media-meta p {
+    font-size: 12px;
+  }
+
+  .more-card {
+    border-radius: 10px;
+  }
+}
+
+@media (max-width: 430px) {
+  .brand {
+    padding-inline: 12px;
+  }
+
+  .nav {
+    padding-inline: 10px;
+  }
+
+  .nav button {
+    padding-inline: 11px;
+  }
+
+  #view {
+    padding-inline: 10px;
+  }
+
+  .top-actions {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .user-chip {
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .toolbar {
+    padding: 9px;
+  }
+
+  .toolbar button {
+    padding-inline: 14px;
+  }
+
+  .media-grid,
+  .subscription-grid {
+    gap-inline: 10px;
+  }
+}
+
 @media (min-width: 861px) and (max-width: 1320px) {
   .media-grid {
     grid-template-columns: repeat(5, minmax(120px, 1fr));
