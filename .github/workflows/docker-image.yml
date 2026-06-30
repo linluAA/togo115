@@ -19,6 +19,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAME: linluaa/togo115-app
 
 jobs:
   docker:
@@ -32,7 +33,7 @@ jobs:
         id: image
         shell: bash
         run: |
-          image="${REGISTRY}/${GITHUB_REPOSITORY}"
+          image="${REGISTRY}/${IMAGE_NAME}"
           echo "name=${image,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
