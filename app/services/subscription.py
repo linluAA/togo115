@@ -384,6 +384,18 @@ def delete_subscriptions(subscription_ids: list[int]) -> int:
     return deleted
 
 
+def delete_subscription_by_title(title: str) -> int:
+    needle = _compact_match_text(title)
+    if not needle:
+        return 0
+    matched_ids: list[int] = []
+    for item in list_subscriptions():
+        item_title = _compact_match_text(item.get("title"))
+        if item_title == needle or needle in item_title or item_title in needle:
+            matched_ids.append(int(item["id"]))
+    return delete_subscriptions(matched_ids)
+
+
 async def search_and_attach_resources(subscription_id: int) -> list[dict]:
     subscription = get_subscription(subscription_id)
     if not subscription:

@@ -559,6 +559,10 @@ class TelegramBotAdapter:
                     await asyncio.sleep(5)
 
     async def _handle_update(self, client: httpx.AsyncClient, token: str, update: dict[str, Any]) -> None:
+        callback = update.get("callback_query") or {}
+        if callback:
+            await self._handle_callback(client, token, callback)
+            return
         message = update.get("message") or update.get("edited_message") or {}
         chat = message.get("chat") or {}
         chat_id = chat.get("id")
@@ -571,20 +575,58 @@ class TelegramBotAdapter:
             add_log("warning", "tg_bot", "TG Bot 收到未授权消息", {"chat_id": chat_id})
             return
         reply = await self._command_reply(text, chat_id)
-        await self._send_bot_message(client, token, chat_id, reply)
+        if reply:
+            await self._send_bot_message(client, token, chat_id, reply)
+
+    async def _handle_callback(self, client: httpx.AsyncClient, token: str, callback: dict[str, Any]) -> None:
+        message = callback.get("message") or {}
+        chat_id = (message.get("chat") or {}).get("id")
+        callback_id = callback.get("id")
+        data = str(callback.get("data") or "")
+        config = self._config()
+        if not self._chat_allowed(config, chat_id):
+            await self._answer_callback(client, token, callback_id, "当前 Chat ID 未授权")
+            return
+        if data.startswith("subscribe:"):
+            try:
+                await self._answer_callback(client, token, callback_id, "正在添加订阅...")
+                _, media_type, tmdb_id = data.split(":", 2)
+                detail = await TmdbAdapter().detail(media_type, int(tmdb_id))
+                title = detail.get("name") or detail.get("title") or "未命名"
+                poster = f"https://image.tmdb.org/t/p/w500{detail.get('poster_path')}" if detail.get("poster_path") else None
+                from app.services.subscription import create_subscription
+                from app.schemas import SubscriptionCreate
+
+                subscription = await create_subscription(
+                    SubscriptionCreate(
+                        title=title,
+                        media_type=media_type,
+                        tmdb_id=int(tmdb_id),
+                        poster_url=poster,
+                        overview=detail.get("overview") or "",
+                        tmdb_total_count=detail.get("number_of_episodes") or 0,
+                        keywords=[title],
+                    )
+                )
+                if chat_id:
+                    await self._send_bot_message(client, token, chat_id, f"已添加订阅：{subscription.get('title')}，ID {subscription.get('id')}")
+            except Exception as exc:
+                add_log("warning", "tg_bot", "TG Bot 回调订阅失败", {"data": data, "error": str(exc)})
+                if chat_id:
+                    await self._send_bot_message(client, token, chat_id, f"订阅失败：{str(exc)[:120]}")
+            return
+        await self._answer_callback(client, token, callback_id, "未知操作")
 
     async def _command_reply(self, text: str, chat_id: int | str) -> str:
-        from app.services.subscription import create_subscription, delete_subscription, list_subscriptions
-        from app.schemas import SubscriptionCreate
+        from app.services.subscription import delete_subscription, list_subscriptions
 
-        command, *rest = text.split(maxsplit=1)
-        args = rest[0].strip() if rest else ""
+        command, args = self._parse_bot_command(text)
         command = command.split("@", 1)[0].lower()
-        if command in ("/start", "/help", "help"):
-            return "可用命令：\n/list 查看订阅\n/search 剧名 订阅剧集\n/cancel ID 取消订阅\n/id 查看当前 Chat ID"
+        if command in ("/start", "/help", "help", "帮助"):
+            return "可用命令：\n/list 或 订阅列表\n订阅 剧名：搜索剧集并选择海报订阅\n取消订阅 名称/ID\n/id 查看当前 Chat ID"
         if command in ("/id", "id"):
             return f"当前 Chat ID：{chat_id}"
-        if command in ("/list", "list"):
+        if command in ("/list", "list", "订阅列表", "列表"):
             subscriptions = list_subscriptions()
             if not subscriptions:
                 return "暂无订阅。"
@@ -597,22 +639,82 @@ class TelegramBotAdapter:
                     status = f"{count}/{total}集" if total else f"{count}集"
                 lines.append(f"{item['id']}. {item['title']} ({'剧集' if item['media_type'] == 'tv' else '电影'} {status})")
             return "\n".join(lines)
-        if command in ("/search", "/subscribe", "search", "subscribe"):
+        if command in ("/search", "/subscribe", "search", "subscribe", "订阅", "搜索"):
             if not args:
-                return "请输入要订阅的剧名，例如：/search 南部档案"
-            sub = await create_subscription(SubscriptionCreate(title=args, media_type="tv", keywords=[args]))
-            return f"已创建订阅：{sub.get('title')}，ID {sub.get('id')}"
-        if command in ("/cancel", "cancel"):
-            if not args or not args.split()[0].isdigit():
-                return "请输入订阅 ID，例如：/cancel 3"
-            delete_subscription(int(args.split()[0]))
-            return "已取消订阅。"
+                return "请输入要订阅的剧名，例如：订阅 斗罗大陆"
+            await self._send_subscription_choices(chat_id, args)
+            return ""
+        if command in ("/cancel", "cancel", "取消订阅", "取消"):
+            if not args:
+                return "请输入订阅名称或 ID，例如：取消订阅 斗罗大陆"
+            if args.split()[0].isdigit():
+                delete_subscription(int(args.split()[0]))
+                return "已取消订阅。"
+            from app.services.subscription import delete_subscription_by_title
+            deleted = delete_subscription_by_title(args)
+            return f"已取消 {deleted} 个订阅。" if deleted else "没有找到匹配的订阅。"
         return "未知命令。发送 /help 查看可用命令。"
+
+    def _parse_bot_command(self, text: str) -> tuple[str, str]:
+        text = text.strip()
+        for prefix in ("取消订阅", "订阅", "搜索", "取消"):
+            if text == prefix:
+                return prefix, ""
+            if text.startswith(prefix):
+                return prefix, text[len(prefix):].strip()
+        command, *rest = text.split(maxsplit=1)
+        return command, rest[0].strip() if rest else ""
 
     async def _send_bot_message(self, client: httpx.AsyncClient, token: str, chat_id: int | str, text: str) -> None:
         res = await client.post(self._api_url(token, "sendMessage"), data={"chat_id": chat_id, "text": text[:3900]})
         if res.status_code >= 400:
             add_log("warning", "tg_bot", "TG Bot 回复消息失败", {"status": res.status_code, "body": res.text[:240]})
+
+    async def _send_subscription_choices(self, chat_id: int | str, query: str) -> None:
+        config = self._config()
+        token = str(config.get("bot_token") or "").strip()
+        if not token:
+            return
+        results = await TmdbAdapter().search(query, "tv")
+        proxy = module_proxy("telegram")
+        async with httpx.AsyncClient(proxy=proxy or None, timeout=25, follow_redirects=True) as client:
+            if not results:
+                await self._send_bot_message(client, token, chat_id, f"没有搜索到：{query}")
+                return
+            await self._send_bot_message(client, token, chat_id, f"搜索到 {min(len(results), 5)} 个结果，请选择要订阅的剧集：")
+            for item in results[:5]:
+                title = item.get("name") or item.get("title") or "未命名"
+                year = str(item.get("first_air_date") or "")[:4] or "未知年份"
+                overview = item.get("overview") or "暂无简介"
+                caption = f"{title} ({year})\n\n{overview[:420]}"
+                reply_markup = {
+                    "inline_keyboard": [[
+                        {"text": "选择订阅", "callback_data": f"subscribe:tv:{item.get('id')}"}
+                    ]]
+                }
+                poster_path = item.get("poster_path")
+                if poster_path:
+                    res = await client.post(
+                        self._api_url(token, "sendPhoto"),
+                        data={
+                            "chat_id": chat_id,
+                            "photo": f"https://image.tmdb.org/t/p/w500{poster_path}",
+                            "caption": caption[:1024],
+                            "reply_markup": json_dumps(reply_markup),
+                        },
+                    )
+                else:
+                    res = await client.post(
+                        self._api_url(token, "sendMessage"),
+                        data={"chat_id": chat_id, "text": caption[:3900], "reply_markup": json_dumps(reply_markup)},
+                    )
+                if res.status_code >= 400:
+                    add_log("warning", "tg_bot", "TG Bot 发送订阅候选失败", {"status": res.status_code, "body": res.text[:240]})
+
+    async def _answer_callback(self, client: httpx.AsyncClient, token: str, callback_id: str | None, text: str) -> None:
+        if not callback_id:
+            return
+        await client.post(self._api_url(token, "answerCallbackQuery"), data={"callback_query_id": callback_id, "text": text[:180]})
 
     async def forward_to_bot(self, link: str) -> bool:
         config = get_setting("tg_bot")
