@@ -11,17 +11,18 @@ const state = {
   settingsTab: "credentials",
   subscriptionType: "all",
   subscriptionStatus: "all",
+  sidebarCollapsed: localStorage.getItem("sidebarCollapsed") === "true",
   panQrTimer: null,
   tgLoginTimer: null,
   panFolder: { cid: "0", path: "/" },
 };
 
 const navItems = [
-  ["tmdb", "TMDB 榜单", "热门剧集和电影，点一下就能订阅"],
-  ["emby", "Emby 看板", "媒体数量、媒体库、用户与观看历史"],
-  ["subscriptions", "我的订阅", "管理剧集和电影追新规则"],
-  ["logs", "日志", "查看运行状态和调试信息"],
-  ["settings", "设置", "账号、115、Telegram、TMDB、代理和媒体库"],
+  ["tmdb", "TMDB 榜单", "热门剧集和电影，点一下就能订阅", "榜"],
+  ["emby", "Emby 看板", "媒体数量、媒体库、用户与观看历史", "Em"],
+  ["subscriptions", "我的订阅", "管理剧集和电影追新规则", "订"],
+  ["logs", "日志", "查看运行状态和调试信息", "志"],
+  ["settings", "设置", "账号、115、Telegram、TMDB、代理和媒体库", "设"],
 ];
 
 const $ = (selector) => document.querySelector(selector);
@@ -130,11 +131,18 @@ function renderLogin() {
 function renderApp() {
   const current = navItems.find(([key]) => key === state.view);
   $("#app").innerHTML = `
-    <div class="shell">
+    <div class="shell ${state.sidebarCollapsed ? "sidebar-collapsed" : ""}">
       <aside class="sidebar">
-        <div class="brand"><div class="brand-mark">115</div><div><strong>ToGo115</strong><span>资源订阅系统</span></div></div>
+        <div class="brand">
+          <div class="brand-mark">115</div>
+          <div class="brand-copy"><strong>ToGo115</strong><span>资源订阅系统</span></div>
+          <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="${state.sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}">${state.sidebarCollapsed ? "›" : "‹"}</button>
+        </div>
         <nav class="nav">
-          ${navItems.map(([key, label]) => `<button class="${state.view === key ? "active" : ""}" data-view="${key}">${label}</button>`).join("")}
+          ${navItems.map(([key, label, description, icon]) => `<button class="${state.view === key ? "active" : ""}" data-view="${key}" title="${label}">
+            <span class="nav-icon">${icon}</span>
+            <span class="nav-copy"><strong>${label}</strong><small>${description}</small></span>
+          </button>`).join("")}
         </nav>
       </aside>
       <main class="main">
@@ -150,6 +158,11 @@ function renderApp() {
     state.view = btn.dataset.view;
     renderApp();
   }));
+  $("#sidebarToggle").addEventListener("click", () => {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    localStorage.setItem("sidebarCollapsed", String(state.sidebarCollapsed));
+    renderApp();
+  });
   $("#logoutBtn").addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
     renderLogin();
@@ -488,16 +501,13 @@ function resourceTable() {
   if (!state.resources.length) return `<div class="empty">还没有发现资源链接。</div>`;
   return `<table class="table">
     <thead><tr><th>订阅</th><th>链接</th><th>来源</th><th>状态</th><th>操作</th></tr></thead>
-    <tbody>${state.resources.map((item) => {
-      const pillClass = item.status === "delivered" ? "pill-delivered" : item.status === "failed" ? "pill-failed" : "pill-pending";
-      return `<tr>
+    <tbody>${state.resources.map((item) => `<tr>
       <td data-label="订阅">${item.subscription_title}</td>
       <td data-label="链接"><a href="${item.url}" target="_blank" rel="noreferrer">${item.url}</a></td>
       <td data-label="来源">${item.source}<br><span class="muted">${item.message_id || ""}</span></td>
-      <td data-label="状态"><span class="pill ${pillClass}">${item.status}</span></td>
+      <td data-label="状态"><span class="pill">${item.status}</span></td>
       <td data-label="操作"><button class="secondary" data-deliver="${item.id}">重试</button></td>
-    </tr>`;
-    }).join("")}</tbody>
+    </tr>`).join("")}</tbody>
   </table>`;
 }
 
