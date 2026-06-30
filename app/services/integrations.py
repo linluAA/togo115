@@ -81,6 +81,28 @@ def extract_115_links(text: str | None) -> list[str]:
     return links
 
 
+def context_for_115_link(text: str | None, link: str, total_links: int) -> str:
+    message = text or ""
+    if not message or total_links <= 1:
+        return message
+    lines = message.splitlines()
+    for index, line in enumerate(lines):
+        if link in line:
+            context_lines = []
+            if index > 0:
+                context_lines.append(lines[index - 1])
+            context_lines.append(line)
+            if index + 1 < len(lines) and re.search(r"(?i)(pwd|pass|密码|提取码|访问码|口令)", lines[index + 1]):
+                context_lines.append(lines[index + 1])
+            return "\n".join(part for part in context_lines if part.strip())
+    position = message.find(link)
+    if position < 0:
+        return message[:500]
+    start = max(0, position - 160)
+    end = min(len(message), position + len(link) + 160)
+    return message[start:end]
+
+
 def parse_115_share_link(link: str) -> tuple[str, str | None]:
     parsed = urlparse(link)
     share_code = parsed.path.rstrip("/").split("/")[-1]
@@ -190,14 +212,6 @@ class TelegramClientAdapter:
         add_log("info", "telegram", "Telegram 手机验证码登录成功")
         return {"status": "authorized"}
 
-    async def sign_in_password(self, password: str) -> bool:
-        client = await self.client()
-        await client.sign_in(password=password)
-        flow = get_flow("telegram_login")
-        save_flow("telegram_login", {**flow, "status": "authorized"})
-        add_log("info", "telegram", "Telegram 两步验证登录成功")
-        return True
-
     async def login_status(self) -> dict[str, Any]:
         flow = get_flow("telegram_login")
         authorized = await self.is_authorized()
@@ -249,12 +263,24 @@ class TelegramClientAdapter:
             for query in dict.fromkeys(queries):
                 async for message in client.iter_messages(dialog, search=query, limit=int(config.get("history_limit") or 80)):
                     results.extend(await self._links_from_message(client, message, dialog))
-        add_log("info", "telegram", "Telegram 历史搜索完成", {"title": title, "count": len(results)})
-        return results
+        deduped: list[SearchResult] = []
+        seen: set[tuple[str, str | None, str]] = set()
+        for result in results:
+            key = (result.source, result.message_id, result.url)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(result)
+        add_log("info", "telegram", "Telegram 历史搜索完成", {"title": title, "count": len(deduped), "raw_count": len(results)})
+        return deduped
 
     async def _links_from_message(self, client: TelegramClient, message: Any, source: str) -> list[SearchResult]:
         message_text = message.raw_text or ""
-        link_contexts: dict[str, str] = {link: message_text for link in extract_115_links(message_text)}
+        direct_links = extract_115_links(message_text)
+        link_contexts: dict[str, str] = {
+            link: context_for_115_link(message_text, link, len(direct_links))
+            for link in direct_links
+        }
         if getattr(message, "buttons", None):
             for link, button_text in await self._click_buttons_for_links(message):
                 context = "\n".join(part for part in (message_text, button_text) if part)
@@ -272,10 +298,11 @@ class TelegramClientAdapter:
 
     async def _click_buttons_for_links(self, message: Any) -> list[tuple[str, str]]:
         links: list[tuple[str, str]] = []
+        link_button_words = ("115", "链接", "查看", "打开", "资源", "获取", "下载", "提取", "网盘", "详情", "link")
         for row_index, row in enumerate(message.buttons or []):
             for col_index, button in enumerate(row):
                 label = getattr(button, "text", "") or ""
-                if not any(word in label.lower() for word in ("115", "链接", "查看", "打开", "资源", "link")):
+                if not any(word in label.casefold() for word in link_button_words):
                     continue
                 try:
                     response = await message.click(row_index, col_index)
@@ -295,17 +322,18 @@ class TelegramClientAdapter:
         if not dialogs:
             return
         source_key = tuple(dialogs)
-        if cls._listener_task and not cls._listener_task.done() and cls._handler_sources == source_key:
+        listener_alive = bool(cls._listener_task and not cls._listener_task.done())
+        if listener_alive and cls._handler_registered and cls._handler_sources == source_key:
             add_log("debug", "telegram", "Telegram 监控心跳正常")
             return
 
-        if cls._handler_registered and cls._handler_sources != source_key:
-            if cls._handler is not None:
-                client.remove_event_handler(cls._handler)
+        if cls._handler_registered and cls._handler is not None:
+            client.remove_event_handler(cls._handler)
+            source_changed = cls._handler_sources != source_key
             cls._handler_registered = False
             cls._handler = None
             cls._handler_sources = ()
-            add_log("info", "telegram", "Telegram 监控来源已变更，重新注册监听", {"sources": dialogs})
+            add_log("info", "telegram", "Telegram 监控来源已变更，重新注册监听" if source_changed else "Telegram 监控连接已重建，重新注册监听", {"sources": dialogs})
 
         if not cls._handler_registered:
             async def handler(event) -> None:
@@ -320,8 +348,9 @@ class TelegramClientAdapter:
             cls._handler = handler
             cls._handler_sources = source_key
 
-        cls._listener_task = asyncio.create_task(client.run_until_disconnected())
-        add_log("info", "telegram", "Telegram 实时监控已启动", {"sources": dialogs})
+        if not listener_alive:
+            cls._listener_task = asyncio.create_task(client.run_until_disconnected())
+            add_log("info", "telegram", "Telegram 实时监控已启动", {"sources": dialogs})
 
 
 class Pan115Adapter:

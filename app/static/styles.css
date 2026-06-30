@@ -1121,8 +1121,7 @@ a:hover {
   display: none !important;
 }
 
-.tg-phone-login,
-.tg-password-login {
+.tg-phone-login {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -1938,7 +1937,6 @@ a:hover {
   }
 
   .tg-phone-login,
-  .tg-password-login,
   .qr-box,
   .selected-sources,
   .dialog-list {

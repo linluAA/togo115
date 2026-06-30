@@ -724,10 +724,26 @@ async def deliver_resource(resource_id: int) -> bool:
         return False
     delivery = get_setting("delivery", {"mode": "115"})
     delivery_mode = delivery.get("mode") or "115"
-    if delivery_mode == "telegram_bot":
-        ok = await TelegramBotAdapter().forward_to_bot(resource["url"])
-    else:
-        ok = await Pan115Adapter().transfer(resource["url"], resource["target_path"])
+    try:
+        if delivery_mode == "telegram_bot":
+            ok = await TelegramBotAdapter().forward_to_bot(resource["url"])
+        else:
+            ok = await Pan115Adapter().transfer(resource["url"], resource["target_path"])
+    except Exception as exc:
+        ok = False
+        add_log(
+            "error",
+            "delivery",
+            "资源投递异常，已标记为失败",
+            {"resource_id": resource_id, "mode": delivery_mode, "url": resource["url"], "error": str(exc)},
+        )
     with db() as conn:
         conn.execute("UPDATE resources SET status = ? WHERE id = ?", ("delivered" if ok else "failed", resource_id))
+    if not ok:
+        add_log(
+            "warning",
+            "delivery",
+            "资源投递失败，可在资源列表手动重试",
+            {"resource_id": resource_id, "mode": delivery_mode, "url": resource["url"]},
+        )
     return ok

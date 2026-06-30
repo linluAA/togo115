@@ -826,17 +826,12 @@ function enhanceIntegrationCards() {
         <label>验证码 <input id="tgCode" inputmode="numeric" autocomplete="one-time-code" /></label>
         <button type="button" class="secondary" id="tgCodeLoginBtn">验证码登录</button>
       </div>
-      <div class="tg-password-login hidden" id="tgPasswordPanel">
-        <label>两步验证密码 <input id="tgPassword" type="password" /></label>
-        <button type="button" class="secondary" id="tgPasswordBtn">提交密码</button>
-      </div>
       <div class="qr-box" id="tgQrBox">尚未生成二维码</div>
     `);
     $("#tgQrBtn").addEventListener("click", startTgQr);
     $("#tgStatusBtn").addEventListener("click", checkTgStatus);
     $("#tgSendCodeBtn").addEventListener("click", sendTgCode);
     $("#tgCodeLoginBtn").addEventListener("click", loginTgCode);
-    $("#tgPasswordBtn").addEventListener("click", submitTgPassword);
   }
   const loadDialogs = $("#loadTelegramDialogs");
   if (loadDialogs) loadDialogs.addEventListener("click", loadTelegramDialogs);
@@ -913,7 +908,7 @@ async function checkTgStatus() {
   if (data.status === "password_required") {
     if (state.tgLoginTimer) clearInterval(state.tgLoginTimer);
     state.tgLoginTimer = null;
-    $("#tgPasswordPanel")?.classList.remove("hidden");
+    if (box) box.innerHTML = `<span>当前 Telegram 账号开启了两步验证，请先在 Telegram 里关闭两步验证后再登录。</span>`;
   }
   if (data.authorized) {
     if (state.tgLoginTimer) clearInterval(state.tgLoginTimer);
@@ -945,25 +940,12 @@ async function loginTgCode() {
   try {
     const data = await api("/api/telegram/code-login", { method: "POST", body: JSON.stringify({ phone, code }) });
     if (data.status === "password_required") {
-      $("#tgPasswordPanel")?.classList.remove("hidden");
-      toast("请输入两步验证密码");
+      toast("当前 Telegram 账号开启了两步验证，请先关闭后再登录");
       return;
     }
     toast("Telegram 已登录");
   } catch (error) {
     toast(`验证码登录失败：${error.message}`);
-  }
-}
-
-async function submitTgPassword() {
-  const password = $("#tgPassword").value;
-  if (!password) return toast("请输入两步验证密码");
-  try {
-    await api("/api/telegram/password", { method: "POST", body: JSON.stringify({ password }) });
-    $("#tgPasswordPanel")?.classList.add("hidden");
-    toast("Telegram 已登录");
-  } catch (error) {
-    toast(`两步验证失败：${error.message}`);
   }
 }
 

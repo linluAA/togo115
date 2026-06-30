@@ -51,10 +51,6 @@ class BotCommand(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
-class TelegramPasswordRequest(BaseModel):
-    password: str
-
-
 class TelegramCodeRequest(BaseModel):
     phone: str
 

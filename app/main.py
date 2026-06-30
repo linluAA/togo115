@@ -8,11 +8,11 @@ import httpx
 
 from app.auth import authenticate, current_user, login_response, logout_response, update_credentials
 from app.db import add_log, db, init_db, json_dumps, json_loads, row_to_dict, utc_now
-from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionBulkDeleteRequest, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest, TelegramPasswordRequest
+from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionBulkDeleteRequest, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest
 from app.services.integrations import EmbyAdapter, Pan115Adapter, TelegramClientAdapter, TmdbAdapter
 import qrcode
 from app.services.monitor import monitor_service
-from app.services.subscription import create_subscription, delete_subscription, delete_subscriptions, deliver_resource, get_subscription, list_subscriptions, search_all_active_subscriptions, search_and_attach_resources, sync_subscriptions_with_emby, update_subscription
+from app.services.subscription import create_subscription, delete_subscription, delete_subscriptions, deliver_resource, get_subscription, list_subscriptions, result_matches_subscription, search_all_active_subscriptions, search_and_attach_resources, sync_subscriptions_with_emby, update_subscription
 
 app = FastAPI(title="ToGo115")
 static_dir = Path(__file__).parent / "static"
@@ -169,7 +169,13 @@ async def post_deliver_resource(resource_id: int, user: dict = Depends(current_u
 @app.post("/api/search")
 async def manual_search(payload: SearchRequest, user: dict = Depends(current_user)) -> dict:
     add_log("info", "search", "手动搜索已提交", payload.model_dump())
-    return {"results": []}
+    subscription_like = {
+        "title": payload.title,
+        "keywords": payload.keywords,
+    }
+    results = await TelegramClientAdapter().search_history(payload.title, payload.keywords)
+    matched = [result for result in results if result_matches_subscription(subscription_like, result)]
+    return {"results": [result.__dict__ for result in matched], "count": len(matched)}
 
 
 @app.get("/api/tmdb/trending")
@@ -259,16 +265,6 @@ async def telegram_status(user: dict = Depends(current_user)) -> dict:
 @app.get("/api/telegram/dialogs")
 async def telegram_dialogs(user: dict = Depends(current_user)) -> dict:
     return {"dialogs": await TelegramClientAdapter().dialogs()}
-
-
-@app.post("/api/telegram/password")
-async def telegram_password(payload: TelegramPasswordRequest, user: dict = Depends(current_user)) -> dict:
-    try:
-        ok = await TelegramClientAdapter().sign_in_password(payload.password)
-        return {"ok": ok}
-    except Exception as exc:
-        add_log("error", "telegram", "Telegram 两步验证登录失败", {"error": str(exc)})
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/115/qr-login")
