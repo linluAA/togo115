@@ -10,6 +10,7 @@ from app.services.integrations import PAN115_URL_RE, EmbyAdapter, Pan115Adapter,
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 TMDB_ID_RE = re.compile(r"(?i)(?:\{?\s*tmdb\s*[-_:： ]\s*(?P<id>\d{2,})\s*\}?)")
+YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 CJK_RE = re.compile(r"[\u3400-\u9fff]")
 TITLE_PREFIX_LABELS = ("名称", "片名", "剧名", "标题", "资源", "资源名", "name", "title")
 TITLE_SUFFIX_BOUNDARY_CHARS = set("第更连完终至季集话話期部篇上下中")
@@ -35,6 +36,8 @@ def normalize_subscription(row) -> dict:
     item["in_library"] = bool(item.get("in_library"))
     item["tmdb_seasons"] = json_loads(item.get("tmdb_seasons"), [])
     item["emby_episode_keys"] = json_loads(item.get("emby_episode_keys"), [])
+    if item.get("release_year") is None:
+        item["release_year"] = _subscription_release_year(item)
     return item
 
 
@@ -52,6 +55,13 @@ def get_subscription(subscription_id: int) -> dict | None:
 
 def _compact_match_text(value: str | None) -> str:
     return MATCH_DROP_RE.sub("", str(value or "").casefold())
+
+
+def _title_without_year(value: str | None) -> str:
+    text = str(value or "")
+    text = re.sub(r"[\(（\[\【]\s*(?:19|20)\d{2}\s*[\)）\]\】]", " ", text)
+    text = YEAR_RE.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _match_term(term: str | None) -> tuple[str, str] | None:
@@ -73,6 +83,65 @@ def _tmdb_ids_from_text(text: str | None) -> set[str]:
         value = match.group("id").lstrip("0") or "0"
         ids.add(value)
     return ids
+
+
+def _result_is_magnet_web(result: SearchResult) -> bool:
+    return str(getattr(result, "source", "") or "").casefold().startswith("magnet_web:")
+
+
+def _years_from_text(text: str | None) -> set[int]:
+    years: set[int] = set()
+    value = text or ""
+    for match in YEAR_RE.finditer(value):
+        before = value[max(0, match.start() - 2):match.start()]
+        after = value[match.end():match.end() + 6]
+        if re.search(r"[xX×]\s*$", before) or re.match(r"\s*[xX×]\s*\d{3,4}", after):
+            continue
+        if re.match(r"\s*(?:[-/.]\s*\d{1,2}(?!\d)|年\s*\d{1,2}(?!\d))", after):
+            continue
+        try:
+            year = int(match.group(0))
+        except ValueError:
+            continue
+        if 1900 <= year <= 2100:
+            years.add(year)
+    return years
+
+
+def _subscription_release_year(subscription: dict) -> int | None:
+    value = subscription.get("release_year")
+    try:
+        year = int(value) if value is not None and str(value).strip() else 0
+    except (TypeError, ValueError):
+        year = 0
+    if 1900 <= year <= 2100:
+        return year
+    years = _years_from_text(subscription.get("title"))
+    return min(years) if years else None
+
+
+def _subscription_search_title(subscription: dict) -> str:
+    title = _title_without_year(subscription.get("title")) or str(subscription.get("title") or "").strip()
+    year = _subscription_release_year(subscription)
+    if year and str(year) not in title:
+        return f"{title} {year}"
+    return title
+
+
+def _extra_search_keywords(subscription: dict) -> list[str]:
+    title = str(subscription.get("title") or "").strip()
+    clean_title = _title_without_year(title)
+    search_title = _subscription_search_title(subscription)
+    title_terms = {_compact_match_text(title), _compact_match_text(clean_title), _compact_match_text(search_title)}
+    extras: list[str] = []
+    for keyword in subscription.get("keywords") or []:
+        value = str(keyword or "").strip()
+        clean_value = _title_without_year(value)
+        compact = _compact_match_text(clean_value or value)
+        if not value or not compact or compact in title_terms:
+            continue
+        extras.append(clean_value or value)
+    return extras
 
 
 def _is_title_prefix_boundary(compact_text: str, index: int, title_has_cjk: bool) -> bool:
@@ -116,11 +185,11 @@ def _title_term_in_text(term: tuple[str, str], text: str) -> bool:
 
 
 def _subscription_required_terms(subscription: dict) -> tuple[tuple[str, str] | None, list[tuple[str, str]]]:
-    title_term = _match_term(subscription.get("title"))
+    title_term = _match_term(_title_without_year(subscription.get("title")) or subscription.get("title"))
     seen = {title_term[1]} if title_term else set()
     keyword_terms: list[tuple[str, str]] = []
     for keyword in subscription.get("keywords") or []:
-        term = _match_term(keyword)
+        term = _match_term(_title_without_year(keyword) or keyword)
         if not term or len(term[1]) < 2 or term[1] in seen:
             continue
         seen.add(term[1])
@@ -141,6 +210,14 @@ def result_matches_subscription(subscription: dict, result: SearchResult, *extra
     raw_haystack = text.casefold()
     compact_haystack = _compact_match_text(text)
     title_term, keyword_terms = _subscription_required_terms(subscription)
+    release_year = _subscription_release_year(subscription)
+    text_years = _years_from_text(text)
+    if release_year:
+        if _result_is_magnet_web(result):
+            if not text_years or any(year != release_year for year in text_years):
+                return False
+        elif text_years and release_year not in text_years:
+            return False
     subscription_tmdb_id = str(subscription.get("tmdb_id") or "").lstrip("0")
     text_tmdb_ids = _tmdb_ids_from_text(text)
     tmdb_id_matched = False
@@ -506,18 +583,21 @@ async def enrich_subscription_with_library(subscription: dict, snapshot: dict[st
     if subscription.get("tmdb_id") and (
         not int(subscription.get("tmdb_total_count") or 0)
         or (subscription.get("media_type") == "tv" and not subscription.get("tmdb_seasons"))
+        or not _subscription_release_year(subscription)
     ):
         try:
             detail = await TmdbAdapter().detail(subscription.get("media_type") or "tv", int(subscription["tmdb_id"]))
             total = int(detail.get("number_of_episodes") or 0)
             tmdb_seasons = _tmdb_seasons_from_detail(detail) if subscription.get("media_type") == "tv" else []
-            if total or tmdb_seasons:
+            release_year_text = str(detail.get("first_air_date") or detail.get("release_date") or "")[:4]
+            release_year = int(release_year_text) if release_year_text.isdigit() else _subscription_release_year(subscription)
+            if total or tmdb_seasons or release_year:
                 with db() as conn:
                     conn.execute(
-                        "UPDATE subscriptions SET tmdb_total_count = ?, tmdb_seasons = ?, updated_at = ? WHERE id = ?",
-                        (total, json_dumps(tmdb_seasons), utc_now(), subscription["id"]),
+                        "UPDATE subscriptions SET tmdb_total_count = ?, tmdb_seasons = ?, release_year = ?, updated_at = ? WHERE id = ?",
+                        (total, json_dumps(tmdb_seasons), release_year, utc_now(), subscription["id"]),
                     )
-                subscription = {**subscription, "tmdb_total_count": total, "tmdb_seasons": tmdb_seasons}
+                subscription = {**subscription, "tmdb_total_count": total, "tmdb_seasons": tmdb_seasons, "release_year": release_year}
         except Exception as exc:
             add_log("debug", "tmdb", "订阅总集数补全失败", {"id": subscription.get("id"), "error": str(exc)})
     if subscription.get("media_type") != "tv":
@@ -581,14 +661,15 @@ async def create_subscription(payload: SubscriptionCreate) -> dict:
     keywords = payload.keywords or [payload.title]
     tmdb_total_count = int(payload.tmdb_total_count or 0)
     tmdb_seasons: list[dict[str, int]] = []
+    release_year = payload.release_year or _subscription_release_year({"title": payload.title})
     with db() as conn:
         try:
             cursor = conn.execute(
                 """
                 INSERT INTO subscriptions
-                (title, media_type, tmdb_id, poster_url, overview, keywords, delivery_mode, target_path,
+                (title, media_type, tmdb_id, poster_url, overview, release_year, keywords, delivery_mode, target_path,
                  tmdb_total_count, tmdb_seasons, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.title,
@@ -596,6 +677,7 @@ async def create_subscription(payload: SubscriptionCreate) -> dict:
                     payload.tmdb_id,
                     payload.poster_url,
                     payload.overview,
+                    release_year,
                     json_dumps(keywords),
                     payload.delivery_mode,
                     payload.target_path,
@@ -695,9 +777,10 @@ async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, 
     if subscription.get("status") != "active":
         return []
     subscription = await enrich_subscription_with_library(subscription, snapshot)
+    search_title = _subscription_search_title(subscription)
     telegram_results, rss_results = await asyncio.gather(
         TelegramClientAdapter().search_history(subscription["title"], subscription["keywords"]),
-        RssTorznabAdapter().search_history(subscription["title"], subscription["keywords"]),
+        RssTorznabAdapter().search_history(search_title, _extra_search_keywords(subscription)),
     )
     results = [*telegram_results, *rss_results]
     matched_results = [
@@ -782,11 +865,11 @@ async def refresh_rss_sources(snapshot: dict[str, list[dict[str, Any]]] | None =
     subscriptions = _active_subscriptions()
     queries: list[str] = []
     for subscription in subscriptions:
-        title = str(subscription.get("title") or "").strip()
+        title = _subscription_search_title(subscription)
         if not title:
             continue
         queries.append(title)
-        for keyword in subscription.get("keywords") or []:
+        for keyword in _extra_search_keywords(subscription):
             keyword = str(keyword or "").strip()
             if keyword and keyword != title:
                 queries.append(f"{title} {keyword}")
@@ -807,26 +890,28 @@ async def deliver_resource(resource_id: int) -> bool:
         return False
     delivery = get_setting("delivery", {"mode": "115"})
     delivery_mode = delivery.get("mode") or "115"
+    url = resource["url"] or ""
     try:
-        if delivery_mode == "telegram_bot":
-            ok = await TelegramBotAdapter().forward_to_bot(resource["url"])
-        elif not PAN115_URL_RE.match(resource["url"] or ""):
+        if not url:
             ok = False
-            add_log(
-                "warning",
-                "delivery",
-                "当前资源不是 115 分享链接，无法直接转存到 115",
-                {"resource_id": resource_id, "mode": delivery_mode, "url": resource["url"]},
-            )
+        elif delivery_mode == "telegram_bot" or not PAN115_URL_RE.match(url):
+            if delivery_mode != "telegram_bot" and not PAN115_URL_RE.match(url):
+                add_log(
+                    "info",
+                    "delivery",
+                    "非 115 资源已自动改用 TG Bot 推送",
+                    {"resource_id": resource_id, "mode": delivery_mode, "url": url},
+                )
+            ok = await TelegramBotAdapter().forward_to_bot(url)
         else:
-            ok = await Pan115Adapter().transfer(resource["url"], resource["target_path"])
+            ok = await Pan115Adapter().transfer(url, resource["target_path"])
     except Exception as exc:
         ok = False
         add_log(
             "error",
             "delivery",
             "资源投递异常，已标记为失败",
-            {"resource_id": resource_id, "mode": delivery_mode, "url": resource["url"], "error": str(exc)},
+            {"resource_id": resource_id, "mode": delivery_mode, "url": url, "error": str(exc)},
         )
     with db() as conn:
         conn.execute("UPDATE resources SET status = ? WHERE id = ?", ("delivered" if ok else "failed", resource_id))
@@ -835,6 +920,6 @@ async def deliver_resource(resource_id: int) -> bool:
             "warning",
             "delivery",
             "资源投递失败，可在资源列表手动重试",
-            {"resource_id": resource_id, "mode": delivery_mode, "url": resource["url"]},
+            {"resource_id": resource_id, "mode": delivery_mode, "url": url},
         )
     return ok

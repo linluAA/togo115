@@ -16,11 +16,13 @@ from app.config import settings
 from app.db import add_log, db, json_dumps, json_loads, utc_now
 
 PAN115_URL_RE = re.compile(r"https?://(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?[^\s\"'<>)]+)?", re.I)
-MAGNET_URL_RE = re.compile(r"magnet:\?[^\s\"'<>)]+", re.I)
+MAGNET_URL_RE = re.compile(r"magnet:\?[^\s\"'<>]+", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
 HTML_ANCHOR_RE = re.compile(r"<a\b(?P<attrs>[^>]*)>(?P<label>.*?)</a>", re.I | re.S)
 HTML_HREF_RE = re.compile(r"\bhref\s*=\s*([\"'])(?P<href>.*?)\1|\bhref\s*=\s*(?P<bare>[^\s>]+)", re.I | re.S)
 HTML_TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title>", re.I | re.S)
+YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+HTML_CONTEXT_TAGS = ("li", "tr", "article", "section", "div", "p")
 MAGNET_WEB_DETAIL_LIMIT = 8
 
 
@@ -82,13 +84,20 @@ class SearchResult:
     context: str = ""
 
 
+def _clean_download_link(link: str) -> str:
+    cleaned = link.rstrip("，。；,.;")
+    while cleaned.endswith(")") and cleaned.count(")") > cleaned.count("("):
+        cleaned = cleaned[:-1]
+    return cleaned
+
+
 def extract_115_links(text: str | None) -> list[str]:
     if not text:
         return []
     seen: set[str] = set()
     links: list[str] = []
     for match in PAN115_URL_RE.findall(text):
-        link = match.rstrip("，。；,.;")
+        link = _clean_download_link(match)
         if link not in seen:
             seen.add(link)
             links.append(link)
@@ -103,7 +112,7 @@ def extract_download_links(text: str | None) -> list[str]:
     links: list[str] = []
     for pattern in (PAN115_URL_RE, MAGNET_URL_RE, TORRENT_URL_RE):
         for match in pattern.findall(text):
-            link = match.rstrip("，。；,.;")
+            link = _clean_download_link(match)
             if link not in seen:
                 seen.add(link)
                 links.append(link)
@@ -134,14 +143,19 @@ def _link_context_from_html(html_text: str, link: str) -> str:
     position = html_text.find(link)
     if position < 0:
         return ""
+    for container in _html_container_fragments(html_text, position):
+        context = _strip_html(container)
+        if _title_from_link_context(context, ""):
+            return context
     start = max(0, position - 900)
     end = min(len(html_text), position + len(link) + 900)
     return _strip_html(html_text[start:end])
 
 
 def _title_from_link_context(context: str, fallback: str) -> str:
-    noisy = {"复制链接", "复制", "下载", "磁力链接", "迅雷下载", "立即下载"}
+    noisy = {"复制链接", "复制", "下载", "磁力链接", "迅雷下载", "立即下载", "下载地址", "下载链接", "磁力下载", "资源列表", "资源下载"}
     candidates = [line.strip(" -_·|") for line in context.splitlines() if line.strip()]
+    scored: list[tuple[int, str]] = []
     for line in candidates:
         if line in noisy:
             continue
@@ -149,7 +163,22 @@ def _title_from_link_context(context: str, fallback: str) -> str:
             continue
         if len(line) < 2:
             continue
-        return line[:120]
+        lowered = line.casefold()
+        score = 1
+        if re.search(r"(?i)(2160p|1080p|720p|web-?dl|hdtv|bluray|bdrip|x26[45]|hevc|avc|aac|flac|ddp)", line):
+            score += 8
+        if re.search(r"(?i)(s\d{1,2}e\d{1,3}|ep?\d{1,3}|第\s*\d{1,3}\s*[集话話])", line):
+            score += 5
+        if _years_from_text(line):
+            score += 3
+        if len(line) >= 8:
+            score += 2
+        if any(word in lowered for word in ("详情", "简介", "地区", "导演", "主演", "类型")):
+            score -= 4
+        scored.append((score, line[:120]))
+    if scored:
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return scored[0][1]
     return fallback[:120]
 
 
@@ -161,6 +190,50 @@ def _html_hrefs(html_text: str) -> list[str]:
         if href_match:
             hrefs.append(unescape((href_match.group("href") or href_match.group("bare") or "").strip()))
     return hrefs
+
+
+def _html_container_fragments(html_text: str, position: int, max_len: int = 3200) -> list[str]:
+    if not html_text or position < 0:
+        return []
+    fragments: list[str] = []
+    seen: set[str] = set()
+    for tag in HTML_CONTEXT_TAGS:
+        start_re = re.compile(rf"<{tag}\b[^>]*>", re.I | re.S)
+        close_re = re.compile(rf"</{tag}\s*>", re.I)
+        starts = [match for match in start_re.finditer(html_text, 0, position + 1)]
+        for start_match in reversed(starts[-8:]):
+            for close_match in close_re.finditer(html_text, position, min(len(html_text), position + max_len)):
+                fragment = html_text[start_match.start():close_match.end()]
+                if 0 < len(fragment) <= max_len and fragment not in seen:
+                    seen.add(fragment)
+                    fragments.append(fragment)
+                    break
+    fragments.sort(key=len)
+    return fragments
+
+
+def _html_container_fragment(html_text: str, position: int, max_len: int = 3200) -> str:
+    fragments = _html_container_fragments(html_text, position, max_len)
+    return fragments[0] if fragments else ""
+
+
+def _years_from_text(text: str | None) -> set[int]:
+    years: set[int] = set()
+    value = text or ""
+    for match in YEAR_RE.finditer(value):
+        before = value[max(0, match.start() - 2):match.start()]
+        after = value[match.end():match.end() + 6]
+        if re.search(r"[xX×]\s*$", before) or re.match(r"\s*[xX×]\s*\d{3,4}", after):
+            continue
+        if re.match(r"\s*(?:[-/.]\s*\d{1,2}(?!\d)|年\s*\d{1,2}(?!\d))", after):
+            continue
+        try:
+            year = int(match.group(0))
+        except ValueError:
+            continue
+        if 1900 <= year <= 2100:
+            years.add(year)
+    return years
 
 
 def _truthy(value: Any, default: bool = False) -> bool:
@@ -255,7 +328,7 @@ def _item_links(element: ET.Element, allow_direct_http: bool = False) -> list[st
     seen: set[str] = set()
     deduped: list[str] = []
     for link in links:
-        cleaned = link.rstrip("，。；,.;")
+        cleaned = _clean_download_link(link)
         if cleaned and cleaned not in seen:
             seen.add(cleaned)
             deduped.append(cleaned)
@@ -335,6 +408,10 @@ class RssTorznabAdapter:
             if parsed.path in ("", "/"):
                 return urljoin(url if url.endswith("/") else f"{url}/", f"s/{quote(query)}.html")
         return url
+
+    def _query_release_year(self, query: str | None) -> int | None:
+        years = _years_from_text(query)
+        return min(years) if years else None
 
     def _source_matches_filters(self, source: dict[str, Any], text: str) -> bool:
         raw = text.casefold()
@@ -418,7 +495,7 @@ class RssTorznabAdapter:
                 res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
                 res.raise_for_status()
                 if source_type == "magnet_web":
-                    return await self._parse_magnet_web_source(source, url, res.text, client)
+                    return await self._parse_magnet_web_source(source, url, res.text, client, self._query_release_year(query))
                 return self._parse_feed(source, res.text)
         except Exception as exc:
             add_log("warning", "rss", "订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
@@ -453,12 +530,15 @@ class RssTorznabAdapter:
                 )
         return results
 
-    def _magnet_web_detail_urls(self, source_url: str, html_text: str) -> list[str]:
+    def _magnet_web_detail_urls(self, source_url: str, html_text: str, release_year: int | None = None) -> list[str]:
+        return [url for url, _ in self._magnet_web_detail_candidates(source_url, html_text, release_year)]
+
+    def _magnet_web_detail_candidates(self, source_url: str, html_text: str, release_year: int | None = None) -> list[tuple[str, str]]:
         parsed_base = urlparse(source_url)
         ignored_extensions = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".css", ".js", ".ico", ".xml", ".rss")
-        scored: list[tuple[int, str]] = []
-        seen: set[str] = set()
-        for href in _html_hrefs(html_text):
+        by_url: dict[str, dict[str, Any]] = {}
+        candidates = self._magnet_web_link_candidates(html_text)
+        for href, label, nearby, years in candidates:
             if not href or href.startswith(("#", "javascript:", "mailto:", "tel:", "magnet:")):
                 continue
             absolute = urljoin(source_url, href)
@@ -475,15 +555,55 @@ class RssTorznabAdapter:
                 score += 2
             elif path.endswith((".html", ".htm")):
                 score += 1
+            if release_year and years and release_year in years:
+                score += 4
             if score <= 0:
                 continue
             normalized = urlunparse(parsed._replace(fragment=""))
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            scored.append((score, normalized))
+            text = "\n".join(part for part in (label, nearby) if part)
+            existing = by_url.setdefault(normalized, {"score": 0, "years": set(), "texts": []})
+            existing["score"] = max(int(existing["score"]), score)
+            existing["years"].update(years)
+            if text and text not in existing["texts"]:
+                existing["texts"].append(text)
+        scored: list[tuple[int, str, set[int], str]] = [
+            (
+                int(item["score"]),
+                url,
+                set(item["years"]),
+                "\n".join(str(text) for text in item["texts"] if text)[:1200],
+            )
+            for url, item in by_url.items()
+        ]
+        if release_year:
+            year_tagged = [item for item in scored if item[2]]
+            same_year = [item for item in scored if item[2] and release_year in item[2]]
+            if same_year:
+                scored = same_year
+            elif year_tagged:
+                return []
         scored.sort(key=lambda item: item[0], reverse=True)
-        return [url for _, url in scored[:MAGNET_WEB_DETAIL_LIMIT]]
+        return [(url, hint) for _, url, _, hint in scored[:MAGNET_WEB_DETAIL_LIMIT]]
+
+    def _magnet_web_link_candidates(self, html_text: str) -> list[tuple[str, str, str, set[int]]]:
+        candidates: list[tuple[str, str, str, set[int]]] = []
+        anchors = list(HTML_ANCHOR_RE.finditer(html_text or ""))
+        for anchor in anchors:
+            attrs = anchor.group("attrs") or ""
+            href_match = HTML_HREF_RE.search(attrs)
+            if not href_match:
+                continue
+            href = unescape((href_match.group("href") or href_match.group("bare") or "").strip())
+            label = _strip_html(anchor.group("label") or "")
+            container = _html_container_fragment(html_text or "", anchor.start())
+            if container:
+                nearby = _strip_html(container)
+            else:
+                start = max(0, anchor.start() - 320)
+                end = min(len(html_text or ""), anchor.end() + 320)
+                nearby = _strip_html((html_text or "")[start:end])
+            candidates.append((href, label, nearby, _years_from_text("\n".join([label, nearby]))))
+        return candidates
 
     async def _parse_magnet_web_source(
         self,
@@ -491,12 +611,14 @@ class RssTorznabAdapter:
         source_url: str,
         html_text: str,
         client: httpx.AsyncClient,
+        release_year: int | None = None,
     ) -> list[SearchResult]:
         results = self._parse_magnet_web_page(source, source_url, html_text)
-        detail_urls = self._magnet_web_detail_urls(source_url, html_text)
-        if detail_urls:
+        detail_candidates = self._magnet_web_detail_candidates(source_url, html_text, release_year)
+        if detail_candidates:
+            detail_contexts = {url: context for url, context in detail_candidates}
             pages = await asyncio.gather(
-                *(self._fetch_magnet_web_detail(client, url) for url in detail_urls),
+                *(self._fetch_magnet_web_detail(client, url) for url, _ in detail_candidates),
                 return_exceptions=True,
             )
             for item in pages:
@@ -504,7 +626,7 @@ class RssTorznabAdapter:
                     add_log("warning", "rss", "磁力网页详情读取失败", {"source": source.get("name") or "订阅源", "error": str(item)})
                     continue
                 detail_url, detail_html = item
-                results.extend(self._parse_magnet_web_page(source, detail_url, detail_html))
+                results.extend(self._parse_magnet_web_page(source, detail_url, detail_html, detail_contexts.get(detail_url, "")))
         return self._dedupe_results(results)
 
     async def _fetch_magnet_web_detail(self, client: httpx.AsyncClient, url: str) -> tuple[str, str]:
@@ -512,7 +634,7 @@ class RssTorznabAdapter:
         res.raise_for_status()
         return url, res.text
 
-    def _parse_magnet_web_page(self, source: dict[str, Any], page_url: str, html_text: str) -> list[SearchResult]:
+    def _parse_magnet_web_page(self, source: dict[str, Any], page_url: str, html_text: str, source_context: str = "") -> list[SearchResult]:
         name = str(source.get("name") or "订阅源").strip()
         normalized_html = unescape(html_text or "")
         page_title = _html_page_title(normalized_html, name)
@@ -522,7 +644,7 @@ class RssTorznabAdapter:
         for link in links:
             context = _link_context_from_html(normalized_html, link) or page_text[:1200]
             title = _title_from_link_context(context, page_title)
-            text = "\n".join(part for part in (title, page_title, context) if part)
+            text = "\n".join(part for part in (title, page_title, source_context, context) if part)
             if not self._source_matches_filters(source, text):
                 continue
             results.append(
@@ -561,7 +683,7 @@ class RssTorznabAdapter:
                 res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
                 res.raise_for_status()
                 if self._source_type(normalized) == "magnet_web":
-                    results = await self._parse_magnet_web_source(normalized, url, res.text, client)
+                    results = await self._parse_magnet_web_source(normalized, url, res.text, client, self._query_release_year(query))
                 else:
                     results = self._parse_feed(normalized, res.text)
             return {
@@ -1131,6 +1253,8 @@ class TelegramBotAdapter:
                 _, media_type, tmdb_id = data.split(":", 2)
                 detail = await TmdbAdapter().detail(media_type, int(tmdb_id))
                 title = detail.get("name") or detail.get("title") or "未命名"
+                release_year_text = str(detail.get("first_air_date") or detail.get("release_date") or "")[:4]
+                release_year = int(release_year_text) if release_year_text.isdigit() else None
                 poster = f"https://image.tmdb.org/t/p/w500{detail.get('poster_path')}" if detail.get("poster_path") else None
                 from app.services.subscription import create_subscription
                 from app.schemas import SubscriptionCreate
@@ -1142,6 +1266,7 @@ class TelegramBotAdapter:
                         tmdb_id=int(tmdb_id),
                         poster_url=poster,
                         overview=detail.get("overview") or "",
+                        release_year=release_year,
                         tmdb_total_count=detail.get("number_of_episodes") or 0,
                         keywords=[title],
                     )

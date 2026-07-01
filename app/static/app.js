@@ -330,6 +330,7 @@ function mediaGrid(items, type, options = {}) {
   const cards = visibleItems.map((item) => {
     const title = item.name || item.title;
     const mediaType = item.media_type === "movie" || item.media_type === "tv" ? item.media_type : type;
+    const releaseYear = Number.parseInt((item.first_air_date || item.release_date || "").slice(0, 4), 10) || null;
     const payloadId = `${mediaType}-${item.id}`;
     const payload = {
       title,
@@ -337,6 +338,7 @@ function mediaGrid(items, type, options = {}) {
       tmdb_id: item.id,
       poster_url: posterUrl(item),
       overview: item.overview || "",
+      release_year: releaseYear,
       keywords: [title],
     };
     state.mediaPayloads.set(payloadId, payload);
@@ -413,6 +415,8 @@ async function showMediaDetail(payloadId) {
     detail = payload;
   }
   const title = detail.name || detail.title || payload.title;
+  const releaseYear = Number.parseInt((detail.first_air_date || detail.release_date || "").slice(0, 4), 10) || payload.release_year || null;
+  payload.release_year = releaseYear;
   if (payload.media_type === "tv") {
     payload.tmdb_total_count = detail.number_of_episodes || payload.tmdb_total_count || 0;
   }

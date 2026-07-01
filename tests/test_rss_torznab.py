@@ -73,6 +73,88 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Fate strange Fake", results[0].context)
         self.assertEqual(results[0].source, "magnet_web:樱花动漫")
 
+    async def test_magnet_web_detail_urls_prefer_matching_year(self) -> None:
+        adapter = RssTorznabAdapter()
+        search_html = """
+        <html><body>
+          <div class="result"><a href="/movie/2015.html">生化危机战</a> <span>(2015)</span></div>
+          <div class="result"><a href="/movie/2022.html">生化危机 Resident Evil</a> <span>(2022)</span></div>
+          <div class="result"><a href="/movie/2002.html">Resident Evil</a> <span>(2002)</span></div>
+        </body></html>
+        """
+        detail_urls = adapter._magnet_web_detail_urls("https://example.com/s/%E7%94%9F%E5%8C%96%E5%8D%B1%E6%9C%BA%202015.html", search_html, 2015)
+        self.assertEqual(detail_urls, ["https://example.com/movie/2015.html"])
+
+    async def test_magnet_web_year_filter_does_not_bleed_between_result_cards(self) -> None:
+        adapter = RssTorznabAdapter()
+        search_html = """
+        <html><body>
+          <div class="result"><a href="/movie/2022.html">生化危机 Resident Evil</a> <span>(2022)</span></div>
+          <div class="result"><a href="/movie/2002.html">Resident Evil</a> <span>(2002)</span></div>
+        </body></html>
+        """
+        detail_urls = adapter._magnet_web_detail_urls("https://example.com/s/%E7%94%9F%E5%8C%96%E5%8D%B1%E6%9C%BA%202015.html", search_html, 2015)
+        self.assertEqual(detail_urls, [])
+
+    async def test_magnet_web_duplicate_detail_link_keeps_year_from_title_card(self) -> None:
+        adapter = RssTorznabAdapter()
+        search_html = """
+        <html><body>
+          <div class="result">
+            <div class="poster"><a href="/movie/2015.html"><img alt="生化危机战" /></a></div>
+            <div class="meta"><h2><a href="/movie/2015.html">生化危机战</a><i>(2015)</i></h2></div>
+          </div>
+          <div class="result">
+            <div class="poster"><a href="/movie/2022.html"><img alt="生化危机" /></a></div>
+            <div class="meta"><h2><a href="/movie/2022.html">生化危机 Resident Evil</a><i>(2022)</i></h2></div>
+          </div>
+        </body></html>
+        """
+
+        detail_urls = adapter._magnet_web_detail_urls("https://example.com/s/%E7%94%9F%E5%8C%96%E5%8D%B1%E6%9C%BA%E6%88%98%202015.html", search_html, 2015)
+
+        self.assertEqual(detail_urls, ["https://example.com/movie/2015.html"])
+
+    async def test_magnet_web_page_parse_keeps_each_magnet_context_separate(self) -> None:
+        adapter = RssTorznabAdapter()
+        detail_html = """
+        <html><body>
+          <div class="download-row">
+            <a class="title">生化危机战 (2015) 1080p WEB-DL</a>
+            <a class="copylink" alt="magnet:?xt=urn:btih:aaa111">复制链接</a>
+          </div>
+          <div class="download-row">
+            <a class="title">生化危机 Resident Evil (2022) 1080p WEB-DL</a>
+            <a class="copylink" alt="magnet:?xt=urn:btih:bbb222">复制链接</a>
+          </div>
+        </body></html>
+        """
+        source = {"name": "磁力站", "type": "magnet_web", "url": "https://example.com/s/{query}.html", "enabled": True}
+        results = adapter._parse_magnet_web_page(source, "https://example.com/movie/2015.html", detail_html)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].title, "生化危机战 (2015) 1080p WEB-DL")
+        self.assertNotIn("2022", results[0].context)
+        self.assertEqual(results[1].title, "生化危机 Resident Evil (2022) 1080p WEB-DL")
+
+    async def test_magnet_web_detail_context_includes_search_card_hint(self) -> None:
+        adapter = RssTorznabAdapter()
+        detail_html = """
+        <html><head><title>下载页面</title></head><body>
+          <div class="download-row">
+            <a class="title">生化危机战 1080p WEB-DL</a>
+            <a class="copylink" alt="magnet:?xt=urn:btih:aaa111">复制链接</a>
+          </div>
+        </body></html>
+        """
+        source = {"name": "磁力站", "type": "magnet_web", "url": "https://example.com/s/{query}.html", "enabled": True}
+
+        results = adapter._parse_magnet_web_page(source, "https://example.com/movie/2015.html", detail_html, "生化危机战 (2015)")
+
+        subscription_2015 = {"title": "生化危机战", "media_type": "movie", "tmdb_id": 0, "release_year": 2015, "keywords": ["生化危机战"]}
+        subscription_2022 = {"title": "生化危机战", "media_type": "movie", "tmdb_id": 0, "release_year": 2022, "keywords": ["生化危机战"]}
+        self.assertTrue(result_matches_subscription(subscription_2015, results[0]))
+        self.assertFalse(result_matches_subscription(subscription_2022, results[0]))
+
     async def test_test_source_returns_status_payload(self) -> None:
         adapter = RssTorznabAdapter()
         source = {"name": "test", "type": "rss", "url": "https://example.com/feed", "enabled": True}

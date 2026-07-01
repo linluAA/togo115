@@ -21,6 +21,29 @@ class SubscriptionMatchingTest(unittest.TestCase):
         self.assertTrue(result_matches_subscription(subscription, result("爱丽丝.2020 {tmdb-12345} - S01E01")))
         self.assertFalse(result_matches_subscription(subscription, result("爱丽丝与史蒂夫.2026 {tmdb-318203} - S01E02")))
 
+    def test_release_year_rejects_other_versions_when_year_is_present(self) -> None:
+        subscription = {"title": "生化危机战", "media_type": "movie", "tmdb_id": 0, "release_year": 2015, "keywords": ["生化危机战"]}
+
+        self.assertTrue(result_matches_subscription(subscription, result("生化危机战 (2015) 1080p")))
+        self.assertFalse(result_matches_subscription(subscription, result("生化危机 Resident Evil (2022) 1080p")))
+        self.assertTrue(result_matches_subscription(subscription, result("生化危机战 1080p")))
+        self.assertTrue(result_matches_subscription(subscription, result("生化危机战 1080p\n发布时间：2026-07-01")))
+
+    def test_title_year_is_used_as_year_constraint_not_title_text(self) -> None:
+        subscription = {"title": "爱丽丝（2020）", "media_type": "tv", "tmdb_id": 0, "keywords": ["爱丽丝"]}
+
+        self.assertTrue(result_matches_subscription(subscription, result("爱丽丝 - S01E01 1080p")))
+        self.assertTrue(result_matches_subscription(subscription, result("爱丽丝.2020 - S01E01 1080p")))
+        self.assertFalse(result_matches_subscription(subscription, result("爱丽丝与史蒂夫.2026 - S01E01 1080p")))
+
+    def test_magnet_web_requires_year_evidence_when_subscription_has_year(self) -> None:
+        subscription = {"title": "爱丽丝（2020）", "media_type": "tv", "tmdb_id": 0, "keywords": ["爱丽丝"]}
+
+        self.assertFalse(result_matches_subscription(subscription, SearchResult(title="爱丽丝 - S01E01 1080p", url="magnet:?xt=urn:btih:aaa", source="magnet_web:站点", context="爱丽丝 - S01E01 1080p")))
+        self.assertTrue(result_matches_subscription(subscription, SearchResult(title="爱丽丝 - S01E01 1080p", url="magnet:?xt=urn:btih:bbb", source="magnet_web:站点", context="爱丽丝（2020）\n爱丽丝 - S01E01 1080p")))
+        self.assertTrue(result_matches_subscription(subscription, SearchResult(title="爱丽丝.2020.1080p.WEB-DL", url="magnet:?xt=urn:btih:ddd", source="magnet_web:站点", context="爱丽丝.2020.1080p.WEB-DL")))
+        self.assertFalse(result_matches_subscription(subscription, SearchResult(title="爱丽丝与史蒂夫 (2026) 1080p", url="magnet:?xt=urn:btih:ccc", source="magnet_web:站点", context="爱丽丝（2020）\n爱丽丝与史蒂夫 (2026) 1080p")))
+
     def test_missing_episode_filter_uses_link_context_only(self) -> None:
         subscription = {
             "title": "爱丽丝",

@@ -23,6 +23,7 @@ class SubscriptionCreate(BaseModel):
     tmdb_id: int | None = None
     poster_url: str | None = None
     overview: str | None = None
+    release_year: int | None = Field(default=None, ge=1900, le=2100)
     tmdb_total_count: int | None = None
     keywords: list[str] = Field(default_factory=list)
     delivery_mode: Literal["115", "telegram_bot"] = "115"
@@ -34,6 +35,7 @@ class SubscriptionUpdate(BaseModel):
     keywords: list[str] | None = None
     delivery_mode: Literal["115", "telegram_bot"] | None = None
     target_path: str | None = None
+    release_year: int | None = Field(default=None, ge=1900, le=2100)
     status: Literal["active", "paused", "completed"] | None = None
 
 
