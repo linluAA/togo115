@@ -747,6 +747,7 @@ function renderSettings() {
     ["telegram", "Telegram"],
     ["tmdb", "TMDB"],
     ["proxy", "代理设置"],
+    ["rss_sources", "RSS/Torznab 订阅源"],
     ["tg_bot", "TG Bot"],
     ["emby", "媒体库"],
   ];
@@ -760,6 +761,7 @@ function renderSettings() {
     telegram: settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道"], ["history_limit", "历史搜索条数"]]),
     tmdb: settingsCard("TMDB", "tmdb", [["api_key", "API Key"]]),
     proxy: settingsCard("代理设置", "proxy", [["url", "代理地址"], ["modules", "启用代理的模块"]]),
+    rss_sources: rssSourcesCard(),
     tg_bot: settingsCard("TG Bot", "tg_bot", [["bot_token", "监听 Bot Token"], ["bot_username", "转发目标机器人用户名"], ["allowed_chat_id", "允许的 Chat ID"]]),
     emby: settingsCard("媒体库", "emby", [["server_url", "Emby 地址"], ["api_key", "API Key"]]),
   };
@@ -774,6 +776,9 @@ function renderSettings() {
     renderSettings();
   }));
   document.querySelectorAll("[data-save-settings]").forEach((form) => form.addEventListener("submit", saveSettings));
+  document.querySelector("[data-save-rss-sources]")?.addEventListener("submit", saveRssSources);
+  $("#addRssSource")?.addEventListener("click", addRssSource);
+  document.querySelectorAll("[data-remove-rss-source]").forEach((btn) => btn.addEventListener("click", removeRssSource));
   enhanceIntegrationCards();
 }
 
@@ -836,6 +841,113 @@ function fieldHtml(key, name, label, current, type = "text") {
     </fieldset>`;
   }
   return `<label>${label}<input type="${type}" name="${name}" value="${current}" /></label>`;
+}
+
+function rssSourcesValue() {
+  const config = state.settings.rss_sources?.value || {};
+  return Array.isArray(config.sources) ? config.sources : [];
+}
+
+function ensureRssSourceIds(sources) {
+  return sources.map((source, index) => ({
+    ...source,
+    id: source.id || `rss_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`,
+    enabled: source.enabled !== false,
+    type: source.type || "rss",
+    refresh_interval: Number.parseInt(source.refresh_interval, 10) || 30,
+  }));
+}
+
+function rssSourcesCard() {
+  const sources = ensureRssSourceIds(rssSourcesValue());
+  if (!state.settings.rss_sources) state.settings.rss_sources = { value: { sources } };
+  else state.settings.rss_sources.value = { ...(state.settings.rss_sources.value || {}), sources };
+  return `<form class="card form-grid rss-source-card" data-save-rss-sources>
+    <div class="settings-heading">
+      <h3>RSS/Torznab 订阅源</h3>
+      <button type="button" class="secondary" id="addRssSource">新增订阅源</button>
+    </div>
+    <div class="rss-source-list">
+      ${sources.length ? sources.map(rssSourceItemHtml).join("") : `<div class="empty">还没有添加订阅源。</div>`}
+    </div>
+    <button type="submit">保存</button>
+  </form>`;
+}
+
+function rssSourceItemHtml(source, index) {
+  const type = String(source.type || "rss").toLowerCase();
+  const interval = Number.parseInt(source.refresh_interval, 10) || 30;
+  return `<section class="rss-source-item" data-source-id="${escapeHtml(source.id)}">
+    <div class="rss-source-title">
+      <strong>${escapeHtml(source.name || `订阅源 ${index + 1}`)}</strong>
+      <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
+    </div>
+    <div class="rss-source-grid">
+      <label>源名称 <input class="rss-source-name" value="${escapeHtml(source.name || "")}" /></label>
+      <label>类型
+        <select class="rss-source-type">
+          <option value="rss" ${type !== "torznab" ? "selected" : ""}>RSS</option>
+          <option value="torznab" ${type === "torznab" ? "selected" : ""}>Torznab</option>
+        </select>
+      </label>
+      <label class="rss-source-url">RSS URL <input class="rss-source-url-input" value="${escapeHtml(source.url || "")}" /></label>
+      <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
+      <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
+      <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
+      <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>
+    </div>
+  </section>`;
+}
+
+function addRssSource() {
+  const sources = ensureRssSourceIds(rssSourcesValue());
+  sources.push({
+    id: `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    name: "",
+    url: "",
+    type: "rss",
+    enabled: true,
+    use_proxy: false,
+    keywords: "",
+    quality: "",
+    refresh_interval: 30,
+  });
+  state.settings.rss_sources = { value: { sources } };
+  renderSettings();
+}
+
+function removeRssSource(event) {
+  const id = event.currentTarget.dataset.removeRssSource;
+  const sources = ensureRssSourceIds(rssSourcesValue()).filter((source) => source.id !== id);
+  state.settings.rss_sources = { value: { sources } };
+  renderSettings();
+}
+
+async function saveRssSources(event) {
+  event.preventDefault();
+  const originals = new Map(ensureRssSourceIds(rssSourcesValue()).map((source) => [source.id, source]));
+  const rows = Array.from(event.currentTarget.querySelectorAll(".rss-source-item"));
+  const sources = rows.map((row) => {
+    const id = row.dataset.sourceId || `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const original = originals.get(id) || {};
+    const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
+    return {
+      id,
+      name: row.querySelector(".rss-source-name")?.value.trim() || "",
+      url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
+      type: row.querySelector(".rss-source-type")?.value || "rss",
+      enabled: original.enabled !== false,
+      use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
+      keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
+      quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
+      refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
+      ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
+    };
+  }).filter((source) => source.url);
+  await api("/api/settings/rss_sources", { method: "PUT", body: JSON.stringify({ value: { sources } }) });
+  state.settings = await api("/api/settings");
+  toast("已保存");
+  renderSettings();
 }
 
 async function saveSettings(event) {

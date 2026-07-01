@@ -5,7 +5,7 @@ from contextlib import suppress
 from app.config import settings
 from app.db import add_log
 from app.services.integrations import TelegramBotAdapter, TelegramClientAdapter
-from app.services.subscription import sync_subscriptions_with_emby
+from app.services.subscription import refresh_rss_sources, sync_subscriptions_with_emby
 
 
 class MonitorService:
@@ -37,6 +37,7 @@ class MonitorService:
             try:
                 await telegram.ensure_monitoring()
                 await self._bot.ensure_polling()
+                await refresh_rss_sources()
                 if time.monotonic() - self._last_emby_sync > 600:
                     await sync_subscriptions_with_emby()
                     self._last_emby_sync = time.monotonic()

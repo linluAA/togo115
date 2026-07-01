@@ -1141,7 +1141,7 @@ a:hover {
 }
 
 .settings-single {
-  grid-template-columns: minmax(320px, 760px);
+  grid-template-columns: minmax(320px, 980px);
 }
 
 .settings .card {
@@ -1155,9 +1155,119 @@ a:hover {
   font-size: 18px;
 }
 
+.settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-heading h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .settings form > button[type="submit"] {
   justify-self: start;
   min-width: 120px;
+}
+
+.rss-source-card {
+  gap: 18px;
+}
+
+.rss-source-list {
+  display: grid;
+  gap: 14px;
+}
+
+.rss-source-item {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.rss-source-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rss-source-title strong {
+  min-width: 0;
+  color: #172033;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.danger-lite {
+  color: var(--danger) !important;
+  border-color: #fecaca !important;
+  background: #fff !important;
+}
+
+.danger-lite:hover {
+  color: #fff !important;
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+}
+
+.rss-source-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px 140px;
+  gap: 12px;
+  align-items: end;
+}
+
+.rss-source-url,
+.rss-source-filter {
+  grid-column: span 3;
+}
+
+.rss-source-grid textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.toggle-row {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.toggle-row input {
+  width: auto;
+  min-height: 0;
+}
+
+@media (max-width: 860px) {
+  .settings-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rss-source-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rss-source-url,
+  .rss-source-filter {
+    grid-column: auto;
+  }
 }
 
 .settings-tabs {

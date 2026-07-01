@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 from io import BytesIO
 
 from fastapi import Depends, FastAPI, HTTPException, Response
@@ -9,7 +10,7 @@ import httpx
 from app.auth import authenticate, current_user, login_response, logout_response, update_credentials
 from app.db import add_log, db, init_db, json_dumps, json_loads, row_to_dict, utc_now
 from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionBulkDeleteRequest, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest
-from app.services.integrations import EmbyAdapter, Pan115Adapter, TelegramClientAdapter, TmdbAdapter
+from app.services.integrations import EmbyAdapter, Pan115Adapter, RssTorznabAdapter, TelegramClientAdapter, TmdbAdapter
 import qrcode
 from app.services.monitor import monitor_service
 from app.services.subscription import create_subscription, delete_subscription, delete_subscriptions, deliver_resource, get_subscription, list_subscriptions, result_matches_subscription, search_all_active_subscriptions, search_and_attach_resources, sync_subscriptions_with_emby, update_subscription
@@ -180,7 +181,11 @@ async def manual_search(payload: SearchRequest, user: dict = Depends(current_use
         "title": payload.title,
         "keywords": payload.keywords,
     }
-    results = await TelegramClientAdapter().search_history(payload.title, payload.keywords)
+    telegram_results, rss_results = await asyncio.gather(
+        TelegramClientAdapter().search_history(payload.title, payload.keywords),
+        RssTorznabAdapter().search_history(payload.title, payload.keywords),
+    )
+    results = [*telegram_results, *rss_results]
     matched = [result for result in results if result_matches_subscription(subscription_like, result)]
     return {"results": [result.__dict__ for result in matched], "count": len(matched)}
 

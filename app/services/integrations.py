@@ -1,10 +1,11 @@
 import asyncio
 import re
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse, urlunparse
 
 import httpx
 from telethon import TelegramClient, events
@@ -14,6 +15,8 @@ from app.config import settings
 from app.db import add_log, db, json_dumps, json_loads, utc_now
 
 PAN115_URL_RE = re.compile(r"https?://(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?[^\s\"'<>)]+)?", re.I)
+MAGNET_URL_RE = re.compile(r"magnet:\?[^\s\"'<>)]+", re.I)
+TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
 
 
 def get_setting(key: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -59,6 +62,12 @@ def module_proxy(module: str) -> str | None:
     return proxy.get("url") if module in modules else None
 
 
+def _split_filter_words(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [part.strip() for part in re.split(r"[,，\n\r]+", str(value or "")) if part.strip()]
+
+
 @dataclass
 class SearchResult:
     title: str
@@ -81,6 +90,28 @@ def extract_115_links(text: str | None) -> list[str]:
     return links
 
 
+def extract_download_links(text: str | None) -> list[str]:
+    if not text:
+        return []
+    seen: set[str] = set()
+    links: list[str] = []
+    for pattern in (PAN115_URL_RE, MAGNET_URL_RE, TORRENT_URL_RE):
+        for match in pattern.findall(text):
+            link = match.rstrip("，。；,.;")
+            if link not in seen:
+                seen.add(link)
+                links.append(link)
+    return links
+
+
+def _truthy(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on", "enabled")
+
+
 def context_for_115_link(text: str | None, link: str, total_links: int) -> str:
     message = text or ""
     if not message or total_links <= 1:
@@ -101,6 +132,256 @@ def context_for_115_link(text: str | None, link: str, total_links: int) -> str:
     start = max(0, position - 160)
     end = min(len(message), position + len(link) + 160)
     return message[start:end]
+
+
+def _first_text(element: ET.Element, names: tuple[str, ...]) -> str:
+    for child in element:
+        local_name = child.tag.rsplit("}", 1)[-1].lower()
+        if local_name in names:
+            return (child.text or "").strip()
+    return ""
+
+
+def _all_text(element: ET.Element, names: tuple[str, ...]) -> list[str]:
+    values: list[str] = []
+    for child in element:
+        local_name = child.tag.rsplit("}", 1)[-1].lower()
+        if local_name in names:
+            value = (child.text or "").strip()
+            if value:
+                values.append(value)
+    return values
+
+
+def _item_links(element: ET.Element, allow_direct_http: bool = False) -> list[str]:
+    text_candidates: list[str] = []
+    direct_candidates: list[str] = []
+
+    def _looks_like_direct_download(url: str) -> bool:
+        lowered = url.strip().casefold()
+        return lowered.startswith("magnet:?") or lowered.endswith(".torrent") or any(marker in lowered for marker in ("/download", "download?", "getfile", "attachment", "fileid="))
+
+    for child in element:
+        local_name = child.tag.rsplit("}", 1)[-1].lower()
+        if local_name == "link":
+            href = child.attrib.get("href")
+            if href:
+                if allow_direct_http and _looks_like_direct_download(href):
+                    direct_candidates.append(href.strip())
+                else:
+                    text_candidates.append(href.strip())
+            if child.text:
+                if allow_direct_http and _looks_like_direct_download(child.text):
+                    direct_candidates.append(child.text.strip())
+                else:
+                    text_candidates.append(child.text.strip())
+        if local_name in ("enclosure", "torznab"):
+            url = child.attrib.get("url")
+            if url:
+                direct_candidates.append(url.strip())
+        if local_name == "attr":
+            name = child.attrib.get("name", "").casefold()
+            value = child.attrib.get("value")
+            if value:
+                if name in ("magneturl", "downloadurl", "download", "torrent", "link"):
+                    direct_candidates.append(value.strip())
+                else:
+                    text_candidates.append(value.strip())
+    links: list[str] = []
+    for candidate in text_candidates:
+        links.extend(extract_download_links(candidate))
+    for candidate in direct_candidates:
+        extracted = extract_download_links(candidate)
+        links.extend(extracted or ([candidate] if allow_direct_http and candidate.startswith(("http://", "https://", "magnet:?")) else []))
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for link in links:
+        cleaned = link.rstrip("，。；,.;")
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            deduped.append(cleaned)
+    return deduped
+
+
+def _item_context(element: ET.Element) -> str:
+    parts = [
+        _first_text(element, ("title",)),
+        _first_text(element, ("description", "summary", "content", "encoded")),
+        *_all_text(element, ("category",)),
+    ]
+    for child in element:
+        local_name = child.tag.rsplit("}", 1)[-1].lower()
+        if local_name == "attr":
+            name = child.attrib.get("name", "")
+            value = child.attrib.get("value", "")
+            if name or value:
+                parts.append(f"{name}: {value}")
+    return "\n".join(part for part in parts if part)
+
+
+class RssTorznabAdapter:
+    def _source_identity(self, source: dict[str, Any]) -> str:
+        return str(source.get("id") or f"{source.get('name') or ''}|{source.get('url') or ''}")
+
+    def _source_supports_query(self, source: dict[str, Any]) -> bool:
+        url = str(source.get("url") or "")
+        return "{query}" in url or "{title}" in url or str(source.get("type") or "").lower() == "torznab"
+
+    def _sources(self) -> list[dict[str, Any]]:
+        config = get_setting("rss_sources", {"sources": []})
+        sources = config.get("sources") or []
+        return [source for source in sources if isinstance(source, dict) and _truthy(source.get("enabled"), True)]
+
+    def _source_proxy(self, source: dict[str, Any]) -> str | None:
+        if _truthy(source.get("use_proxy")):
+            proxy = get_setting("proxy")
+            return proxy.get("url")
+        return None
+
+    def _source_url(self, source: dict[str, Any], query: str | None = None) -> str | None:
+        url = str(source.get("url") or "").strip()
+        if not url:
+            return None
+        if "{query}" in url or "{title}" in url:
+            if not query:
+                return None
+            encoded = quote(query)
+            return url.replace("{query}", encoded).replace("{title}", encoded)
+        if query and str(source.get("type") or "").lower() == "torznab":
+            parsed = urlparse(url)
+            params = parse_qsl(parsed.query, keep_blank_values=True)
+            keys = {key.lower() for key, _ in params}
+            if "t" not in keys:
+                params.append(("t", "search"))
+            if "q" not in keys:
+                params.append(("q", query))
+            return urlunparse(parsed._replace(query=urlencode(params)))
+        return url
+
+    def _source_matches_filters(self, source: dict[str, Any], text: str) -> bool:
+        raw = text.casefold()
+        required_keywords = _split_filter_words(source.get("keywords"))
+        quality_keywords = _split_filter_words(source.get("quality"))
+        if required_keywords and not all(keyword.casefold() in raw for keyword in required_keywords):
+            return False
+        if quality_keywords and not any(keyword.casefold() in raw for keyword in quality_keywords):
+            return False
+        return True
+
+    async def search_history(self, title: str, keywords: list[str]) -> list[SearchResult]:
+        sources = self._sources()
+        if not sources:
+            return []
+        results: list[SearchResult] = []
+        clean_keywords = [item.strip() for item in keywords if item and item.strip() and item.strip() != title]
+        queries = [title, *(f"{title} {keyword}" for keyword in clean_keywords)]
+        for source in sources:
+            if self._source_supports_query(source):
+                for query in dict.fromkeys(queries):
+                    results.extend(await self._fetch_source(source, query))
+            else:
+                results.extend(await self._fetch_source(source))
+        deduped = self._dedupe_results(results)
+        add_log("info", "rss", "RSS/Torznab 订阅源搜索完成", {"count": len(deduped), "sources": len(sources), "title": title})
+        return deduped
+
+    async def fetch_due_sources(self, queries: list[str] | None = None) -> list[SearchResult]:
+        now = time.time()
+        sources = []
+        for source in self._sources():
+            try:
+                last_checked = float(source.get("last_checked_at") or 0)
+            except (TypeError, ValueError):
+                last_checked = 0
+            try:
+                interval_minutes = int(source.get("refresh_interval") or 30)
+            except (TypeError, ValueError):
+                interval_minutes = 30
+            interval = max(interval_minutes, 5) * 60
+            if now - last_checked >= interval:
+                sources.append(source)
+        results: list[SearchResult] = []
+        updated = False
+        search_queries = list(dict.fromkeys(query.strip() for query in (queries or []) if query and query.strip()))
+        for source in sources:
+            if self._source_supports_query(source):
+                source_queries: list[str | None] = search_queries
+            else:
+                source_queries = [None]
+            if not source_queries:
+                continue
+            for query in source_queries:
+                source_results = await self._fetch_source(source, query)
+                results.extend(source_results)
+            source["last_checked_at"] = now
+            updated = True
+        if updated:
+            config = get_setting("rss_sources", {"sources": []})
+            configured = config.get("sources") or []
+            checked_by_id = {self._source_identity(source): source.get("last_checked_at") for source in sources}
+            for item in configured:
+                identity = self._source_identity(item)
+                if identity in checked_by_id:
+                    item["last_checked_at"] = checked_by_id[identity]
+            save_setting("rss_sources", {**config, "sources": configured})
+        results = self._dedupe_results(results)
+        if results:
+            add_log("info", "rss", "RSS/Torznab 定时刷新完成", {"count": len(results), "sources": len(sources)})
+        return results
+
+    async def _fetch_source(self, source: dict[str, Any], query: str | None = None) -> list[SearchResult]:
+        name = str(source.get("name") or "RSS/Torznab").strip()
+        url = self._source_url(source, query)
+        if not url:
+            return []
+        try:
+            async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=25, follow_redirects=True) as client:
+                res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
+            res.raise_for_status()
+            return self._parse_feed(source, res.text)
+        except Exception as exc:
+            add_log("warning", "rss", "RSS/Torznab 订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
+            return []
+
+    def _parse_feed(self, source: dict[str, Any], xml_text: str) -> list[SearchResult]:
+        name = str(source.get("name") or "RSS/Torznab").strip()
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError as exc:
+            add_log("warning", "rss", "RSS/Torznab 解析失败", {"source": name, "error": str(exc)})
+            return []
+        items = [item for item in root.iter() if item.tag.rsplit("}", 1)[-1].lower() in ("item", "entry")]
+        results: list[SearchResult] = []
+        for item in items:
+            title = _first_text(item, ("title",)) or name
+            context = _item_context(item)
+            text = context or title
+            if not self._source_matches_filters(source, text):
+                continue
+            source_type = str(source.get("type") or "rss").lower()
+            links = _item_links(item, allow_direct_http=source_type == "torznab") or extract_download_links(text)
+            for link in links:
+                results.append(
+                    SearchResult(
+                        title=title[:120],
+                        url=link,
+                        source=f"{source_type}:{name}",
+                        message_id=_first_text(item, ("guid", "id")),
+                        context=text,
+                    )
+                )
+        return results
+
+    def _dedupe_results(self, results: list[SearchResult]) -> list[SearchResult]:
+        deduped: list[SearchResult] = []
+        seen: set[tuple[str, str]] = set()
+        for result in results:
+            key = (result.source, result.url)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(result)
+        return deduped
 
 
 def parse_115_share_link(link: str) -> tuple[str, str | None]:

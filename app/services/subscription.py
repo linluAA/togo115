@@ -5,7 +5,7 @@ from typing import Any
 
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
-from app.services.integrations import EmbyAdapter, Pan115Adapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, TmdbAdapter, get_setting
+from app.services.integrations import PAN115_URL_RE, EmbyAdapter, Pan115Adapter, RssTorznabAdapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, TmdbAdapter, get_setting
 
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
@@ -695,8 +695,11 @@ async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, 
     if subscription.get("status") != "active":
         return []
     subscription = await enrich_subscription_with_library(subscription, snapshot)
-    client = TelegramClientAdapter()
-    results = await client.search_history(subscription["title"], subscription["keywords"])
+    telegram_results, rss_results = await asyncio.gather(
+        TelegramClientAdapter().search_history(subscription["title"], subscription["keywords"]),
+        RssTorznabAdapter().search_history(subscription["title"], subscription["keywords"]),
+    )
+    results = [*telegram_results, *rss_results]
     matched_results = [
         result
         for result in results
@@ -714,7 +717,7 @@ async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, 
     if skipped:
         add_log("debug", "subscription", "历史搜索结果未匹配订阅标题/关键词/缺集范围，已跳过", {"id": subscription_id, "skipped": skipped})
     if created:
-        add_log("info", "subscription", "发现新的 115 资源链接", {"id": subscription_id, "count": len(created)})
+        add_log("info", "subscription", "发现新的资源链接", {"id": subscription_id, "count": len(created)})
         for item in created:
             await deliver_resource(item["resource_id"])
     return created
@@ -775,6 +778,25 @@ async def attach_results_to_matching_subscriptions(
     return attached
 
 
+async def refresh_rss_sources(snapshot: dict[str, list[dict[str, Any]]] | None = None) -> dict:
+    subscriptions = _active_subscriptions()
+    queries: list[str] = []
+    for subscription in subscriptions:
+        title = str(subscription.get("title") or "").strip()
+        if not title:
+            continue
+        queries.append(title)
+        for keyword in subscription.get("keywords") or []:
+            keyword = str(keyword or "").strip()
+            if keyword and keyword != title:
+                queries.append(f"{title} {keyword}")
+    results = await RssTorznabAdapter().fetch_due_sources(queries)
+    if not results:
+        return {"ok": True, "results": 0, "count": 0}
+    attached = await attach_results_to_matching_subscriptions(results, "", snapshot)
+    return {"ok": True, "results": len(results), "count": attached}
+
+
 async def deliver_resource(resource_id: int) -> bool:
     with db() as conn:
         resource = conn.execute(
@@ -788,6 +810,14 @@ async def deliver_resource(resource_id: int) -> bool:
     try:
         if delivery_mode == "telegram_bot":
             ok = await TelegramBotAdapter().forward_to_bot(resource["url"])
+        elif not PAN115_URL_RE.match(resource["url"] or ""):
+            ok = False
+            add_log(
+                "warning",
+                "delivery",
+                "当前资源不是 115 分享链接，无法直接转存到 115",
+                {"resource_id": resource_id, "mode": delivery_mode, "url": resource["url"]},
+            )
         else:
             ok = await Pan115Adapter().transfer(resource["url"], resource["target_path"])
     except Exception as exc:
