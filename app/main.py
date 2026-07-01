@@ -1,5 +1,4 @@
 from pathlib import Path
-import asyncio
 from io import BytesIO
 
 from fastapi import Depends, FastAPI, HTTPException, Response
@@ -181,12 +180,11 @@ async def manual_search(payload: SearchRequest, user: dict = Depends(current_use
         "title": payload.title,
         "keywords": payload.keywords,
     }
-    telegram_results, rss_results = await asyncio.gather(
-        TelegramClientAdapter().search_history(payload.title, payload.keywords),
-        RssTorznabAdapter().search_history(payload.title, payload.keywords),
-    )
-    results = [*telegram_results, *rss_results]
-    matched = [result for result in results if result_matches_subscription(subscription_like, result)]
+    telegram_results = await TelegramClientAdapter().search_history(payload.title, payload.keywords)
+    matched = [result for result in telegram_results if result_matches_subscription(subscription_like, result)]
+    if not matched:
+        rss_results = await RssTorznabAdapter().search_history(payload.title, payload.keywords)
+        matched = [result for result in rss_results if result_matches_subscription(subscription_like, result)]
     return {"results": [result.__dict__ for result in matched], "count": len(matched)}
 
 

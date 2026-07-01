@@ -89,6 +89,11 @@ def _result_is_magnet_web(result: SearchResult) -> bool:
     return str(getattr(result, "source", "") or "").casefold().startswith("magnet_web:")
 
 
+def _result_is_fallback_source(result: SearchResult) -> bool:
+    source = str(getattr(result, "source", "") or "").casefold()
+    return source.startswith(("rss:", "torznab:", "magnet_web:"))
+
+
 def _years_from_text(text: str | None) -> set[int]:
     years: set[int] = set()
     value = text or ""
@@ -760,6 +765,41 @@ def _insert_resource(conn, subscription_id: int, result: SearchResult) -> dict |
     return {**result.__dict__, "resource_id": cursor.lastrowid}
 
 
+def _subscription_115_resources(conn: sqlite3.Connection, subscription_id: int) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT title, url FROM resources WHERE subscription_id = ? ORDER BY id DESC",
+        (subscription_id,),
+    ).fetchall()
+    return [row_to_dict(row) or {} for row in rows if PAN115_URL_RE.match(row["url"] or "")]
+
+
+def _fallback_blocked_by_primary_resource(conn: sqlite3.Connection, subscription: dict, result: SearchResult) -> bool:
+    if not _result_is_fallback_source(result):
+        return False
+    existing_115 = _subscription_115_resources(conn, int(subscription["id"]))
+    if not existing_115:
+        return False
+    if subscription.get("media_type") != "tv":
+        return True
+    result_episodes = episodes_from_text(_result_text(result))
+    if not result_episodes:
+        return True
+    for item in existing_115:
+        existing_episodes = episodes_from_text(str(item.get("title") or ""))
+        if not existing_episodes or result_episodes & existing_episodes:
+            return True
+    return False
+
+
+def _matching_results(subscription: dict, results: list[SearchResult], *extra_texts: str) -> list[SearchResult]:
+    return [
+        result
+        for result in results
+        if result_matches_subscription(subscription, result, *extra_texts)
+        and result_matches_missing_episodes(subscription, result, *extra_texts)
+    ]
+
+
 async def _library_snapshot_or_none() -> dict[str, list[dict[str, Any]]] | None:
     if not _emby_configured():
         return None
@@ -778,29 +818,42 @@ async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, 
         return []
     subscription = await enrich_subscription_with_library(subscription, snapshot)
     search_title = _subscription_search_title(subscription)
-    telegram_results, rss_results = await asyncio.gather(
-        TelegramClientAdapter().search_history(subscription["title"], subscription["keywords"]),
-        RssTorznabAdapter().search_history(search_title, _extra_search_keywords(subscription)),
-    )
-    results = [*telegram_results, *rss_results]
-    matched_results = [
-        result
-        for result in results
-        if result_matches_subscription(subscription, result)
-        and result_matches_missing_episodes(subscription, result)
-    ]
+    telegram_results = await TelegramClientAdapter().search_history(subscription["title"], subscription["keywords"])
+    telegram_matches = _matching_results(subscription, telegram_results)
     created = []
     with db() as conn:
-        for result in matched_results:
+        for result in telegram_matches:
             item = _insert_resource(conn, subscription_id, result)
             if item:
                 created.append(item)
         conn.execute("UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?", (utc_now(), utc_now(), subscription_id))
-    skipped = len(results) - len(matched_results)
+    skipped = len(telegram_results) - len(telegram_matches)
     if skipped:
-        add_log("debug", "subscription", "历史搜索结果未匹配订阅标题/关键词/缺集范围，已跳过", {"id": subscription_id, "skipped": skipped})
+        add_log("debug", "subscription", "TG 历史搜索结果未匹配订阅标题/关键词/缺集范围，已跳过", {"id": subscription_id, "skipped": skipped})
+    if telegram_matches:
+        add_log("info", "subscription", "TG 已找到匹配资源，跳过订阅源/磁力搜索", {"id": subscription_id, "count": len(telegram_matches)})
+        if created:
+            add_log("info", "subscription", "发现新的 TG 资源链接", {"id": subscription_id, "count": len(created)})
+            for item in created:
+                await deliver_resource(item["resource_id"])
+        return created
+
+    rss_results = await RssTorznabAdapter().search_history(search_title, _extra_search_keywords(subscription))
+    matched_results = _matching_results(subscription, rss_results)
+    with db() as conn:
+        for result in matched_results:
+            if _fallback_blocked_by_primary_resource(conn, subscription, result):
+                add_log("debug", "subscription", "订阅已有 115 资源，跳过订阅源/磁力候选", {"id": subscription_id, "title": result.title})
+                continue
+            item = _insert_resource(conn, subscription_id, result)
+            if item:
+                created.append(item)
+        conn.execute("UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?", (utc_now(), utc_now(), subscription_id))
+    skipped = len(rss_results) - len(matched_results)
+    if skipped:
+        add_log("debug", "subscription", "订阅源/磁力结果未匹配订阅标题/关键词/缺集范围，已跳过", {"id": subscription_id, "skipped": skipped})
     if created:
-        add_log("info", "subscription", "发现新的资源链接", {"id": subscription_id, "count": len(created)})
+        add_log("info", "subscription", "TG 未找到资源，订阅源/磁力发现新的资源链接", {"id": subscription_id, "count": len(created)})
         for item in created:
             await deliver_resource(item["resource_id"])
     return created
@@ -848,6 +901,9 @@ async def attach_results_to_matching_subscriptions(
                     continue
                 if not result_matches_missing_episodes(subscription, result):
                     add_log("debug", "subscription", "实时资源不在缺集范围，已跳过", {"id": subscription["id"], "title": result.title})
+                    continue
+                if _fallback_blocked_by_primary_resource(conn, subscription, result):
+                    add_log("debug", "subscription", "订阅已有 115 资源，跳过订阅源/磁力候选", {"id": subscription["id"], "title": result.title})
                     continue
                 item = _insert_resource(conn, subscription["id"], result)
                 if not item:
