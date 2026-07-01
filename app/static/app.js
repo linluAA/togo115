@@ -6,6 +6,7 @@ const state = {
   resources: [],
   mediaPayloads: new Map(),
   tmdbSearch: [],
+  tmdbSearchQuery: "",
   tmdbMore: null,
   tmdbTrending: null,
   logsMode: "simple",
@@ -259,24 +260,45 @@ async function renderTmdb() {
     bindMediaActions(root);
     return;
   }
+  const isSearching = Boolean(state.tmdbSearchQuery.trim());
   root.innerHTML = `
     <section class="toolbar">
-      <label>搜索 TMDB <input id="tmdbQuery" placeholder="输入剧集或电影名称" /></label>
+      <label>搜索 TMDB <input id="tmdbQuery" placeholder="输入剧集或电影名称" value="${escapeHtml(state.tmdbSearchQuery)}" /></label>
       <button id="tmdbSearchBtn">搜索</button>
     </section>
-    <section class="section" id="searchSection"></section>
-    <section class="section" id="trendingSection"><div class="empty">正在读取 TMDB 榜单...</div></section>
+    <section class="section ${isSearching ? "" : "hidden"}" id="searchSection">
+      ${isSearching ? `<h3>搜索结果</h3>${state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty">没有搜索到相关结果。</div>`}` : ""}
+    </section>
+    <section class="section ${isSearching ? "hidden" : ""}" id="trendingSection"><div class="empty">正在读取 TMDB 榜单...</div></section>
   `;
   $("#tmdbSearchBtn").addEventListener("click", () => searchTmdb());
-  $("#tmdbQuery").addEventListener("keydown", (event) => {
+  const queryInput = $("#tmdbQuery");
+  queryInput.addEventListener("input", () => {
+    state.tmdbSearchQuery = queryInput.value;
+    if (!queryInput.value.trim()) clearTmdbSearch();
+  });
+  queryInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") searchTmdb();
   });
+  if (isSearching) {
+    bindMediaActions($("#searchSection"));
+    return;
+  }
+  await renderTmdbTrending(root);
+}
+
+async function renderTmdbTrending(root = $("#view")) {
+  const section = $("#trendingSection");
+  if (!section || state.tmdbSearchQuery.trim()) return;
+  section.classList.remove("hidden");
+  if (!state.tmdbTrending) section.innerHTML = `<div class="empty">正在读取 TMDB 榜单...</div>`;
   try {
     const data = state.tmdbTrending || await api("/api/tmdb/trending");
     state.tmdbTrending = data;
+    if (!section.isConnected || state.tmdbSearchQuery.trim()) return;
     const tv = data.tv || [];
     const movie = data.movie || [];
-    $("#trendingSection").innerHTML = `
+    section.innerHTML = `
       <h3>热门剧集</h3>
       ${mediaGrid(tv, "tv", { limit: 13, more: true })}
       <h3>热门电影</h3>
@@ -284,8 +306,20 @@ async function renderTmdb() {
     `;
     bindMediaActions(root);
   } catch (error) {
-    $("#trendingSection").innerHTML = `<div class="empty">TMDB 未配置或暂时不可用。配置 API Key 后可搜索和订阅。</div>`;
+    if (!section.isConnected || state.tmdbSearchQuery.trim()) return;
+    section.innerHTML = `<div class="empty">TMDB 未配置或暂时不可用。配置 API Key 后可搜索和订阅。</div>`;
   }
+}
+
+function clearTmdbSearch() {
+  state.tmdbSearchQuery = "";
+  state.tmdbSearch = [];
+  const section = $("#searchSection");
+  if (section) {
+    section.innerHTML = "";
+    section.classList.add("hidden");
+  }
+  renderTmdbTrending();
 }
 
 function mediaGrid(items, type, options = {}) {
@@ -351,12 +385,20 @@ function upsertSubscription(subscription) {
 
 async function searchTmdb() {
   const query = $("#tmdbQuery").value.trim();
-  if (!query) return toast("请输入搜索内容");
+  if (!query) {
+    clearTmdbSearch();
+    return;
+  }
+  state.tmdbSearchQuery = query;
   const section = $("#searchSection");
+  const trending = $("#trendingSection");
+  if (trending) trending.classList.add("hidden");
+  section.classList.remove("hidden");
   section.innerHTML = `<div class="empty">正在搜索...</div>`;
   const data = await api(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
+  if (!section.isConnected || state.tmdbSearchQuery !== query) return;
   state.tmdbSearch = data.results || [];
-  section.innerHTML = `<h3>搜索结果</h3>${mediaGrid(state.tmdbSearch, "tv")}`;
+  section.innerHTML = `<h3>搜索结果</h3>${state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty">没有搜索到相关结果。</div>`}`;
   bindMediaActions(section);
 }
 
