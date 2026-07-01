@@ -779,6 +779,7 @@ function renderSettings() {
   document.querySelector("[data-save-rss-sources]")?.addEventListener("submit", saveRssSources);
   $("#addRssSource")?.addEventListener("click", addRssSource);
   document.querySelectorAll("[data-remove-rss-source]").forEach((btn) => btn.addEventListener("click", removeRssSource));
+  document.querySelectorAll("[data-test-rss-source]").forEach((btn) => btn.addEventListener("click", testRssSource));
   enhanceIntegrationCards();
 }
 
@@ -880,7 +881,10 @@ function rssSourceItemHtml(source, index) {
   return `<section class="rss-source-item" data-source-id="${escapeHtml(source.id)}">
     <div class="rss-source-title">
       <strong>${escapeHtml(source.name || `订阅源 ${index + 1}`)}</strong>
-      <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
+      <div class="inline-actions">
+        <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
+        <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
+      </div>
     </div>
     <div class="rss-source-grid">
       <label>源名称 <input class="rss-source-name" value="${escapeHtml(source.name || "")}" /></label>
@@ -896,6 +900,7 @@ function rssSourceItemHtml(source, index) {
       <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
       <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>
     </div>
+    <div class="rss-source-test-result muted" data-rss-test-result="${escapeHtml(source.id)}">还没测试过这个源。</div>
   </section>`;
 }
 
@@ -927,27 +932,64 @@ async function saveRssSources(event) {
   event.preventDefault();
   const originals = new Map(ensureRssSourceIds(rssSourcesValue()).map((source) => [source.id, source]));
   const rows = Array.from(event.currentTarget.querySelectorAll(".rss-source-item"));
-  const sources = rows.map((row) => {
-    const id = row.dataset.sourceId || `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    const original = originals.get(id) || {};
-    const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
-    return {
-      id,
-      name: row.querySelector(".rss-source-name")?.value.trim() || "",
-      url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
-      type: row.querySelector(".rss-source-type")?.value || "rss",
-      enabled: original.enabled !== false,
-      use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-      keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-      quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-      refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
-      ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
-    };
-  }).filter((source) => source.url);
+  const sources = rows
+    .map((row) => {
+      const id = row.dataset.sourceId || `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const original = originals.get(id) || {};
+      const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
+      return {
+        id,
+        name: row.querySelector(".rss-source-name")?.value.trim() || "",
+        url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
+        type: row.querySelector(".rss-source-type")?.value || "rss",
+        enabled: original.enabled !== false,
+        use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
+        keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
+        quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
+        refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
+        ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
+      };
+    })
+    .filter((source) => source.url);
   await api("/api/settings/rss_sources", { method: "PUT", body: JSON.stringify({ value: { sources } }) });
   state.settings = await api("/api/settings");
   toast("已保存");
   renderSettings();
+}
+
+async function testRssSource(event) {
+  const id = event.currentTarget.dataset.testRssSource;
+  const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
+  const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
+  if (!row || !resultBox) return;
+  const source = {
+    id,
+    name: row.querySelector(".rss-source-name")?.value.trim() || "",
+    url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
+    type: row.querySelector(".rss-source-type")?.value || "rss",
+    enabled: true,
+    use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
+    keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
+    quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
+    refresh_interval: Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10) || 30,
+  };
+  resultBox.innerHTML = `<span class="muted">正在测试...</span>`;
+  try {
+    const data = await api("/api/rss-sources/test", {
+      method: "POST",
+      body: JSON.stringify({ source, query: source.name || null }),
+    });
+    if (data.ok) {
+      const sample = Array.isArray(data.sample) && data.sample.length
+        ? `<div class="rss-source-sample">${data.sample.map((item) => `<div class="rss-source-sample-item"><strong>${escapeHtml(item.title || "资源")}</strong><span>${escapeHtml(item.url || "")}</span></div>`).join("")}</div>`
+        : "";
+      resultBox.innerHTML = `<span class="ok-text">可用</span> · ${escapeHtml(String(data.items || 0))} 条结果 · ${escapeHtml(String(data.latency_ms || 0))} ms${sample}`;
+    } else {
+      resultBox.innerHTML = `<span class="warn-text">不可用</span> · ${escapeHtml(data.error || "请求失败")}`;
+    }
+  } catch (error) {
+    resultBox.innerHTML = `<span class="warn-text">不可用</span> · ${escapeHtml(error.message)}`;
+  }
 }
 
 async function saveSettings(event) {
@@ -968,7 +1010,6 @@ async function saveSettings(event) {
   toast("已保存");
   if (key === "telegram") renderSettings();
 }
-
 function enhanceIntegrationCards() {
   const pan = document.querySelector('[data-save-settings="115"]');
   if (pan) {

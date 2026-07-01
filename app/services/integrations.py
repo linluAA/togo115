@@ -383,6 +383,38 @@ class RssTorznabAdapter:
             deduped.append(result)
         return deduped
 
+    async def test_source(self, source: dict[str, Any], query: str | None = None) -> dict[str, Any]:
+        name = str(source.get("name") or "RSS/Torznab").strip()
+        normalized = dict(source)
+        normalized.setdefault("enabled", True)
+        normalized.setdefault("type", "rss")
+        url = self._source_url(normalized, query or str(source.get("name") or "").strip())
+        if not url:
+            return {"ok": False, "source": name, "error": "订阅源 URL 不能为空"}
+        started = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(proxy=self._source_proxy(normalized), timeout=25, follow_redirects=True) as client:
+                res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
+            res.raise_for_status()
+            results = self._parse_feed(normalized, res.text)
+            return {
+                "ok": True,
+                "source": name,
+                "url": url,
+                "status_code": res.status_code,
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+                "items": len(results),
+                "sample": [result.__dict__ for result in results[:5]],
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "source": name,
+                "url": url,
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+                "error": str(exc),
+            }
+
 
 def parse_115_share_link(link: str) -> tuple[str, str | None]:
     parsed = urlparse(link)

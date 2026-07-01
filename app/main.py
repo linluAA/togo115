@@ -9,7 +9,7 @@ import httpx
 
 from app.auth import authenticate, current_user, login_response, logout_response, update_credentials
 from app.db import add_log, db, init_db, json_dumps, json_loads, row_to_dict, utc_now
-from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, SearchRequest, SettingPayload, SubscriptionBulkDeleteRequest, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest
+from app.schemas import BotCommand, ChangeCredentialsRequest, LoginRequest, Pan115QrRequest, Pan115SaveRequest, ProxyTestRequest, RssSourceTestRequest, SearchRequest, SettingPayload, SubscriptionBulkDeleteRequest, SubscriptionCreate, SubscriptionUpdate, TelegramCodeLoginRequest, TelegramCodeRequest
 from app.services.integrations import EmbyAdapter, Pan115Adapter, RssTorznabAdapter, TelegramClientAdapter, TmdbAdapter
 import qrcode
 from app.services.monitor import monitor_service
@@ -240,6 +240,15 @@ async def proxy_test(payload: ProxyTestRequest, user: dict = Depends(current_use
             except Exception as exc:
                 results[name] = {"ok": False, "error": str(exc), "latency_ms": None}
     return {"results": results}
+
+
+@app.post("/api/rss-sources/test")
+async def test_rss_source(payload: RssSourceTestRequest, user: dict = Depends(current_user)) -> dict:
+    source = payload.source or {}
+    if not isinstance(source, dict):
+        raise HTTPException(status_code=400, detail="订阅源格式错误")
+    result = await RssTorznabAdapter().test_source(source, payload.query)
+    return result
 
 
 @app.post("/api/telegram/qr-login")

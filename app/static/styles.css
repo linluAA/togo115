@@ -1200,6 +1200,10 @@ a:hover {
   gap: 12px;
 }
 
+.rss-source-title .inline-actions {
+  flex-wrap: nowrap;
+}
+
 .rss-source-title strong {
   min-width: 0;
   color: #172033;
@@ -1236,6 +1240,43 @@ a:hover {
 .rss-source-grid textarea {
   min-height: 80px;
   resize: vertical;
+}
+
+.rss-source-test-result {
+  padding-top: 2px;
+  border-top: 1px dashed var(--line);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.rss-source-sample {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.rss-source-sample-item {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.rss-source-sample-item strong {
+  font-size: 12px;
+}
+
+.ok-text {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.warn-text {
+  color: var(--danger);
+  font-weight: 700;
 }
 
 .toggle-row {

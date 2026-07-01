@@ -37,6 +37,13 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("%E5%8D%97%E9%83%A8%E6%A1%A3%E6%A1%88", url)
         self.assertNotIn("{query}", url)
 
+    async def test_test_source_returns_status_payload(self) -> None:
+        adapter = RssTorznabAdapter()
+        source = {"name": "test", "type": "rss", "url": "https://example.com/feed", "enabled": True}
+        result = await adapter.test_source(source)
+        self.assertIn("ok", result)
+        self.assertIn("source", result)
+
 
 if __name__ == "__main__":
     unittest.main()

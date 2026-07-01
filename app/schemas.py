@@ -72,3 +72,8 @@ class Pan115QrRequest(BaseModel):
 class ProxyTestRequest(BaseModel):
     url: str
     modules: list[str] = Field(default_factory=list)
+
+
+class RssSourceTestRequest(BaseModel):
+    source: dict[str, Any] = Field(default_factory=dict)
+    query: str | None = None
