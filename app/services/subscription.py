@@ -9,6 +9,10 @@ from app.services.integrations import EmbyAdapter, Pan115Adapter, SearchResult, 
 
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
+TMDB_ID_RE = re.compile(r"(?i)(?:\{?\s*tmdb\s*[-_:： ]\s*(?P<id>\d{2,})\s*\}?)")
+CJK_RE = re.compile(r"[\u3400-\u9fff]")
+TITLE_PREFIX_LABELS = ("名称", "片名", "剧名", "标题", "资源", "资源名", "name", "title")
+TITLE_SUFFIX_BOUNDARY_CHARS = set("第更连完终至季集话話期部篇上下中")
 EPISODE_TOKEN_RE = re.compile(
     r"(?i)(?:s(?P<season>\d{1,2})\s*)?e(?:p)?(?P<episode>\d{1,3})(?:\s*(?:-|~|–|—|至|到)\s*(?:e(?:p)?)?(?P<episode_end>\d{1,3}))?"
     r"|第\s*(?P<cn_episode>\d{1,3})\s*[集话話](?:\s*(?:-|~|–|—|至|到)\s*第?\s*(?P<cn_episode_end>\d{1,3})\s*[集话話]?)?"
@@ -63,6 +67,54 @@ def _term_in_text(term: tuple[str, str], raw_haystack: str, compact_haystack: st
     return raw_term in raw_haystack or compact_term in compact_haystack
 
 
+def _tmdb_ids_from_text(text: str | None) -> set[str]:
+    ids: set[str] = set()
+    for match in TMDB_ID_RE.finditer(text or ""):
+        value = match.group("id").lstrip("0") or "0"
+        ids.add(value)
+    return ids
+
+
+def _is_title_prefix_boundary(compact_text: str, index: int, title_has_cjk: bool) -> bool:
+    if index <= 0:
+        return True
+    before = compact_text[index - 1]
+    if not title_has_cjk:
+        return not before.isalpha()
+    if not CJK_RE.match(before):
+        return True
+    prefix = compact_text[max(0, index - 8):index]
+    return any(prefix.endswith(label) for label in TITLE_PREFIX_LABELS)
+
+
+def _is_title_suffix_boundary(char: str, title_has_cjk: bool) -> bool:
+    if not char:
+        return True
+    if char.isdigit():
+        return True
+    if title_has_cjk:
+        return char in TITLE_SUFFIX_BOUNDARY_CHARS or not CJK_RE.match(char)
+    return not char.isalpha()
+
+
+def _title_term_in_text(term: tuple[str, str], text: str) -> bool:
+    compact_title = term[1]
+    if not compact_title:
+        return False
+    compact_text = _compact_match_text(text)
+    title_has_cjk = bool(CJK_RE.search(compact_title))
+    start = 0
+    while True:
+        index = compact_text.find(compact_title, start)
+        if index < 0:
+            return False
+        after_index = index + len(compact_title)
+        after = compact_text[after_index] if after_index < len(compact_text) else ""
+        if _is_title_prefix_boundary(compact_text, index, title_has_cjk) and _is_title_suffix_boundary(after, title_has_cjk):
+            return True
+        start = index + 1
+
+
 def _subscription_required_terms(subscription: dict) -> tuple[tuple[str, str] | None, list[tuple[str, str]]]:
     title_term = _match_term(subscription.get("title"))
     seen = {title_term[1]} if title_term else set()
@@ -77,17 +129,26 @@ def _subscription_required_terms(subscription: dict) -> tuple[tuple[str, str] | 
 
 
 def result_matches_subscription(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
-    text = "\n".join(
+    primary_text = "\n".join(
         part
-        for part in [getattr(result, "context", ""), result.title, *extra_texts]
+        for part in [getattr(result, "context", ""), result.title]
         if part
     )
+    fallback_text = "\n".join(part for part in extra_texts if part)
+    text = primary_text or fallback_text
     if not text:
         return False
     raw_haystack = text.casefold()
     compact_haystack = _compact_match_text(text)
     title_term, keyword_terms = _subscription_required_terms(subscription)
-    if not title_term or not _term_in_text(title_term, raw_haystack, compact_haystack):
+    subscription_tmdb_id = str(subscription.get("tmdb_id") or "").lstrip("0")
+    text_tmdb_ids = _tmdb_ids_from_text(text)
+    tmdb_id_matched = False
+    if subscription_tmdb_id and text_tmdb_ids:
+        if subscription_tmdb_id not in text_tmdb_ids:
+            return False
+        tmdb_id_matched = True
+    if not tmdb_id_matched and (not title_term or not _title_term_in_text(title_term, text)):
         return False
     return all(_term_in_text(term, raw_haystack, compact_haystack) for term in keyword_terms)
 
@@ -697,9 +758,9 @@ async def attach_results_to_matching_subscriptions(
         subscription = await enrich_subscription_with_library(subscription, snapshot)
         with db() as conn:
             for result in results:
-                if not result_matches_subscription(subscription, result, message_text):
+                if not result_matches_subscription(subscription, result):
                     continue
-                if not result_matches_missing_episodes(subscription, result, message_text):
+                if not result_matches_missing_episodes(subscription, result):
                     add_log("debug", "subscription", "实时资源不在缺集范围，已跳过", {"id": subscription["id"], "title": result.title})
                     continue
                 item = _insert_resource(conn, subscription["id"], result)

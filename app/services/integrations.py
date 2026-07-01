@@ -282,8 +282,12 @@ class TelegramClientAdapter:
             for link in direct_links
         }
         if getattr(message, "buttons", None):
-            for link, button_text in await self._click_buttons_for_links(message):
-                context = "\n".join(part for part in (message_text, button_text) if part)
+            button_links = await self._click_buttons_for_links(message)
+            use_message_context = not direct_links and len(button_links) == 1
+            for link, button_text in button_links:
+                context = "\n".join(
+                    part for part in ((message_text if use_message_context else ""), button_text) if part
+                )
                 link_contexts.setdefault(link, context)
         return [
             SearchResult(
