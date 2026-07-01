@@ -19,6 +19,7 @@ const state = {
   selectedSubscriptionIds: new Set(),
   subscriptionsEmbySynced: false,
   sidebarCollapsed: localStorage.getItem("sidebarCollapsed") === "true",
+  rssSourceExpanded: new Set(),
   panQrTimer: null,
   tgLoginTimer: null,
   panFolder: { cid: "0", path: "/" },
@@ -778,6 +779,7 @@ function renderSettings() {
   document.querySelectorAll("[data-save-settings]").forEach((form) => form.addEventListener("submit", saveSettings));
   document.querySelector("[data-save-rss-sources]")?.addEventListener("submit", saveRssSources);
   $("#addRssSource")?.addEventListener("click", addRssSource);
+  document.querySelectorAll("[data-toggle-rss-source]").forEach((btn) => btn.addEventListener("click", toggleRssSource));
   document.querySelectorAll("[data-remove-rss-source]").forEach((btn) => btn.addEventListener("click", removeRssSource));
   document.querySelectorAll("[data-test-rss-source]").forEach((btn) => btn.addEventListener("click", testRssSource));
   enhanceIntegrationCards();
@@ -878,15 +880,31 @@ function rssSourcesCard() {
 function rssSourceItemHtml(source, index) {
   const type = String(source.type || "rss").toLowerCase();
   const interval = Number.parseInt(source.refresh_interval, 10) || 30;
-  return `<section class="rss-source-item" data-source-id="${escapeHtml(source.id)}">
+  const expanded = state.rssSourceExpanded.has(source.id);
+  const name = source.name || `订阅源 ${index + 1}`;
+  const url = source.url || "未填写 URL";
+  const keywordCount = splitFilterText(source.keywords).length;
+  const qualityCount = splitFilterText(source.quality).length;
+  return `<section class="rss-source-item ${expanded ? "expanded" : "collapsed"}" data-source-id="${escapeHtml(source.id)}">
     <div class="rss-source-title">
-      <strong>${escapeHtml(source.name || `订阅源 ${index + 1}`)}</strong>
+      <div class="rss-source-summary">
+        <strong>${escapeHtml(name)}</strong>
+        <span class="rss-source-url-text" title="${escapeHtml(url)}">${escapeHtml(url)}</span>
+        <div class="rss-source-chips">
+          <span>${type === "torznab" ? "Torznab" : "RSS"}</span>
+          <span>${escapeHtml(interval)} 分钟</span>
+          <span>${source.use_proxy ? "代理" : "直连"}</span>
+          ${keywordCount ? `<span>关键词 ${keywordCount}</span>` : ""}
+          ${qualityCount ? `<span>质量 ${qualityCount}</span>` : ""}
+        </div>
+      </div>
       <div class="inline-actions">
+        <button type="button" class="secondary" data-toggle-rss-source="${escapeHtml(source.id)}">${expanded ? "收起" : "编辑"}</button>
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
         <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
       </div>
     </div>
-    <div class="rss-source-grid">
+    <div class="rss-source-grid ${expanded ? "" : "hidden"}">
       <label>源名称 <input class="rss-source-name" value="${escapeHtml(source.name || "")}" /></label>
       <label>类型
         <select class="rss-source-type">
@@ -900,14 +918,19 @@ function rssSourceItemHtml(source, index) {
       <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
       <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>
     </div>
-    <div class="rss-source-test-result muted" data-rss-test-result="${escapeHtml(source.id)}">还没测试过这个源。</div>
+    <div class="rss-source-test-result muted hidden" data-rss-test-result="${escapeHtml(source.id)}"></div>
   </section>`;
 }
 
+function splitFilterText(value) {
+  return String(value || "").split(/[,，\n\r]+/).map((item) => item.trim()).filter(Boolean);
+}
+
 function addRssSource() {
+  const id = `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const sources = ensureRssSourceIds(rssSourcesValue());
   sources.push({
-    id: `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    id,
     name: "",
     url: "",
     type: "rss",
@@ -917,13 +940,22 @@ function addRssSource() {
     quality: "",
     refresh_interval: 30,
   });
+  state.rssSourceExpanded.add(id);
   state.settings.rss_sources = { value: { sources } };
+  renderSettings();
+}
+
+function toggleRssSource(event) {
+  const id = event.currentTarget.dataset.toggleRssSource;
+  if (state.rssSourceExpanded.has(id)) state.rssSourceExpanded.delete(id);
+  else state.rssSourceExpanded.add(id);
   renderSettings();
 }
 
 function removeRssSource(event) {
   const id = event.currentTarget.dataset.removeRssSource;
   const sources = ensureRssSourceIds(rssSourcesValue()).filter((source) => source.id !== id);
+  state.rssSourceExpanded.delete(id);
   state.settings.rss_sources = { value: { sources } };
   renderSettings();
 }
@@ -953,6 +985,7 @@ async function saveRssSources(event) {
     .filter((source) => source.url);
   await api("/api/settings/rss_sources", { method: "PUT", body: JSON.stringify({ value: { sources } }) });
   state.settings = await api("/api/settings");
+  state.rssSourceExpanded.clear();
   toast("已保存");
   renderSettings();
 }
@@ -973,6 +1006,7 @@ async function testRssSource(event) {
     quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
     refresh_interval: Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10) || 30,
   };
+  resultBox.classList.remove("hidden");
   resultBox.innerHTML = `<span class="muted">正在测试...</span>`;
   try {
     const data = await api("/api/rss-sources/test", {

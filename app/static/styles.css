@@ -1193,9 +1193,15 @@ a:hover {
   background: var(--panel-soft);
 }
 
+.rss-source-item.collapsed {
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
 .rss-source-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
@@ -1205,12 +1211,44 @@ a:hover {
 }
 
 .rss-source-title strong {
+  display: block;
   min-width: 0;
   color: #172033;
   font-size: 15px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rss-source-summary {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.rss-source-url-text {
+  max-width: min(720px, 68vw);
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rss-source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rss-source-chips span {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #475569;
+  background: #f8fafc;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .danger-lite {
@@ -1299,6 +1337,18 @@ a:hover {
   .settings-heading {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .rss-source-title {
+    display: grid;
+  }
+
+  .rss-source-title .inline-actions {
+    flex-wrap: wrap;
+  }
+
+  .rss-source-url-text {
+    max-width: 100%;
   }
 
   .rss-source-grid {
