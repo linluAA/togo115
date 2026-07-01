@@ -748,7 +748,7 @@ function renderSettings() {
     ["telegram", "Telegram"],
     ["tmdb", "TMDB"],
     ["proxy", "代理设置"],
-    ["rss_sources", "RSS/Torznab 订阅源"],
+    ["rss_sources", "订阅源"],
     ["tg_bot", "TG Bot"],
     ["emby", "媒体库"],
   ];
@@ -782,6 +782,7 @@ function renderSettings() {
   document.querySelectorAll("[data-toggle-rss-source]").forEach((btn) => btn.addEventListener("click", toggleRssSource));
   document.querySelectorAll("[data-remove-rss-source]").forEach((btn) => btn.addEventListener("click", removeRssSource));
   document.querySelectorAll("[data-test-rss-source]").forEach((btn) => btn.addEventListener("click", testRssSource));
+  document.querySelectorAll(".rss-source-type").forEach((select) => select.addEventListener("change", syncRssSourceTypeUi));
   enhanceIntegrationCards();
 }
 
@@ -858,7 +859,34 @@ function ensureRssSourceIds(sources) {
     enabled: source.enabled !== false,
     type: source.type || "rss",
     refresh_interval: Number.parseInt(source.refresh_interval, 10) || 30,
+    test_query: source.test_query || "",
   }));
+}
+
+function normalizeRssSourceType(type) {
+  const value = String(type || "rss").toLowerCase();
+  return value === "web_magnet" || value === "magnet" ? "magnet_web" : value;
+}
+
+function rssSourceTypeLabel(type) {
+  const value = normalizeRssSourceType(type);
+  if (value === "torznab") return "Torznab";
+  if (value === "magnet_web") return "磁力网页";
+  return "RSS";
+}
+
+function rssSourceUrlLabel(type) {
+  const value = normalizeRssSourceType(type);
+  if (value === "magnet_web") return "搜索 URL 模板";
+  if (value === "torznab") return "Torznab URL";
+  return "RSS URL";
+}
+
+function rssSourceUrlPlaceholder(type) {
+  const value = normalizeRssSourceType(type);
+  if (value === "magnet_web") return "例如：https://yhdm33.com/s/{query}.html";
+  if (value === "torznab") return "例如：https://example.com/api?t=search&q={query}";
+  return "例如：https://example.com/rss.xml";
 }
 
 function rssSourcesCard() {
@@ -867,7 +895,7 @@ function rssSourcesCard() {
   else state.settings.rss_sources.value = { ...(state.settings.rss_sources.value || {}), sources };
   return `<form class="card form-grid rss-source-card" data-save-rss-sources>
     <div class="settings-heading">
-      <h3>RSS/Torznab 订阅源</h3>
+      <h3>订阅源</h3>
       <button type="button" class="secondary" id="addRssSource">新增订阅源</button>
     </div>
     <div class="rss-source-list">
@@ -878,22 +906,24 @@ function rssSourcesCard() {
 }
 
 function rssSourceItemHtml(source, index) {
-  const type = String(source.type || "rss").toLowerCase();
+  const type = normalizeRssSourceType(source.type);
   const interval = Number.parseInt(source.refresh_interval, 10) || 30;
   const expanded = state.rssSourceExpanded.has(source.id);
   const name = source.name || `订阅源 ${index + 1}`;
   const url = source.url || "未填写 URL";
   const keywordCount = splitFilterText(source.keywords).length;
   const qualityCount = splitFilterText(source.quality).length;
+  const testQuery = source.test_query || "";
   return `<section class="rss-source-item ${expanded ? "expanded" : "collapsed"}" data-source-id="${escapeHtml(source.id)}">
     <div class="rss-source-title">
       <div class="rss-source-summary">
         <strong>${escapeHtml(name)}</strong>
         <span class="rss-source-url-text" title="${escapeHtml(url)}">${escapeHtml(url)}</span>
         <div class="rss-source-chips">
-          <span>${type === "torznab" ? "Torznab" : "RSS"}</span>
+          <span>${rssSourceTypeLabel(type)}</span>
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
+          ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
           ${keywordCount ? `<span>关键词 ${keywordCount}</span>` : ""}
           ${qualityCount ? `<span>质量 ${qualityCount}</span>` : ""}
         </div>
@@ -908,18 +938,30 @@ function rssSourceItemHtml(source, index) {
       <label>源名称 <input class="rss-source-name" value="${escapeHtml(source.name || "")}" /></label>
       <label>类型
         <select class="rss-source-type">
-          <option value="rss" ${type !== "torznab" ? "selected" : ""}>RSS</option>
+          <option value="rss" ${type === "rss" ? "selected" : ""}>RSS</option>
           <option value="torznab" ${type === "torznab" ? "selected" : ""}>Torznab</option>
+          <option value="magnet_web" ${type === "magnet_web" ? "selected" : ""}>磁力网页</option>
         </select>
       </label>
-      <label class="rss-source-url">RSS URL <input class="rss-source-url-input" value="${escapeHtml(source.url || "")}" /></label>
+      <label class="rss-source-url"><span class="rss-source-url-label">${rssSourceUrlLabel(type)}</span> <input class="rss-source-url-input" placeholder="${rssSourceUrlPlaceholder(type)}" value="${escapeHtml(source.url || "")}" /></label>
       <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
+      <label>测试关键词 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
       <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
       <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
       <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>
     </div>
     <div class="rss-source-test-result muted hidden" data-rss-test-result="${escapeHtml(source.id)}"></div>
   </section>`;
+}
+
+function syncRssSourceTypeUi(event) {
+  const row = event.currentTarget.closest(".rss-source-item");
+  if (!row) return;
+  const type = normalizeRssSourceType(event.currentTarget.value);
+  const label = row.querySelector(".rss-source-url-label");
+  const input = row.querySelector(".rss-source-url-input");
+  if (label) label.textContent = rssSourceUrlLabel(type);
+  if (input) input.placeholder = rssSourceUrlPlaceholder(type);
 }
 
 function splitFilterText(value) {
@@ -939,6 +981,7 @@ function addRssSource() {
     keywords: "",
     quality: "",
     refresh_interval: 30,
+    test_query: "",
   });
   state.rssSourceExpanded.add(id);
   state.settings.rss_sources = { value: { sources } };
@@ -978,6 +1021,7 @@ async function saveRssSources(event) {
         use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
         keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
         quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
+        test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
         refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
         ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
       };
@@ -988,6 +1032,10 @@ async function saveRssSources(event) {
   state.rssSourceExpanded.clear();
   toast("已保存");
   renderSettings();
+}
+
+function rssSourceTestQuery(source) {
+  return source.test_query || source.name || null;
 }
 
 async function testRssSource(event) {
@@ -1004,6 +1052,7 @@ async function testRssSource(event) {
     use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
     keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
     quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
+    test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
     refresh_interval: Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10) || 30,
   };
   resultBox.classList.remove("hidden");
@@ -1011,7 +1060,7 @@ async function testRssSource(event) {
   try {
     const data = await api("/api/rss-sources/test", {
       method: "POST",
-      body: JSON.stringify({ source, query: source.name || null }),
+      body: JSON.stringify({ source, query: rssSourceTestQuery(source) }),
     });
     if (data.ok) {
       const sample = Array.isArray(data.sample) && data.sample.length

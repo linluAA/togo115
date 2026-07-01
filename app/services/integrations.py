@@ -3,9 +3,10 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from html import unescape
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
 
 import httpx
 from telethon import TelegramClient, events
@@ -17,6 +18,10 @@ from app.db import add_log, db, json_dumps, json_loads, utc_now
 PAN115_URL_RE = re.compile(r"https?://(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?[^\s\"'<>)]+)?", re.I)
 MAGNET_URL_RE = re.compile(r"magnet:\?[^\s\"'<>)]+", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
+HTML_ANCHOR_RE = re.compile(r"<a\b(?P<attrs>[^>]*)>(?P<label>.*?)</a>", re.I | re.S)
+HTML_HREF_RE = re.compile(r"\bhref\s*=\s*([\"'])(?P<href>.*?)\1|\bhref\s*=\s*(?P<bare>[^\s>]+)", re.I | re.S)
+HTML_TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title>", re.I | re.S)
+MAGNET_WEB_DETAIL_LIMIT = 8
 
 
 def get_setting(key: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -93,6 +98,7 @@ def extract_115_links(text: str | None) -> list[str]:
 def extract_download_links(text: str | None) -> list[str]:
     if not text:
         return []
+    text = unescape(text)
     seen: set[str] = set()
     links: list[str] = []
     for pattern in (PAN115_URL_RE, MAGNET_URL_RE, TORRENT_URL_RE):
@@ -102,6 +108,59 @@ def extract_download_links(text: str | None) -> list[str]:
                 seen.add(link)
                 links.append(link)
     return links
+
+
+def _strip_html(html_text: str | None) -> str:
+    if not html_text:
+        return ""
+    text = unescape(html_text)
+    text = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"</?(?:br|p|div|li|tr|td|th|h[1-6]|section|article|a)\b[^>]*>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
+    return "\n".join(line for line in lines if line)
+
+
+def _html_page_title(html_text: str | None, fallback: str) -> str:
+    match = HTML_TITLE_RE.search(html_text or "")
+    if not match:
+        return fallback
+    title = _strip_html(match.group(1))
+    title = re.sub(r"\s*[-_｜|]\s*(樱花动漫|BT.*|迅雷下载|下载).*$", "", title, flags=re.I).strip()
+    return title or fallback
+
+
+def _link_context_from_html(html_text: str, link: str) -> str:
+    position = html_text.find(link)
+    if position < 0:
+        return ""
+    start = max(0, position - 900)
+    end = min(len(html_text), position + len(link) + 900)
+    return _strip_html(html_text[start:end])
+
+
+def _title_from_link_context(context: str, fallback: str) -> str:
+    noisy = {"复制链接", "复制", "下载", "磁力链接", "迅雷下载", "立即下载"}
+    candidates = [line.strip(" -_·|") for line in context.splitlines() if line.strip()]
+    for line in candidates:
+        if line in noisy:
+            continue
+        if "magnet:?" in line or line.lower().endswith(".torrent"):
+            continue
+        if len(line) < 2:
+            continue
+        return line[:120]
+    return fallback[:120]
+
+
+def _html_hrefs(html_text: str) -> list[str]:
+    hrefs: list[str] = []
+    for anchor in HTML_ANCHOR_RE.finditer(html_text or ""):
+        attrs = anchor.group("attrs") or ""
+        href_match = HTML_HREF_RE.search(attrs)
+        if href_match:
+            hrefs.append(unescape((href_match.group("href") or href_match.group("bare") or "").strip()))
+    return hrefs
 
 
 def _truthy(value: Any, default: bool = False) -> bool:
@@ -220,12 +279,21 @@ def _item_context(element: ET.Element) -> str:
 
 
 class RssTorznabAdapter:
+    MAGNET_WEB_TYPES = {"magnet_web", "web_magnet", "magnet"}
+
+    def _source_type(self, source: dict[str, Any]) -> str:
+        source_type = str(source.get("type") or "rss").strip().lower()
+        if source_type in self.MAGNET_WEB_TYPES:
+            return "magnet_web"
+        return source_type or "rss"
+
     def _source_identity(self, source: dict[str, Any]) -> str:
         return str(source.get("id") or f"{source.get('name') or ''}|{source.get('url') or ''}")
 
     def _source_supports_query(self, source: dict[str, Any]) -> bool:
         url = str(source.get("url") or "")
-        return "{query}" in url or "{title}" in url or str(source.get("type") or "").lower() == "torznab"
+        source_type = self._source_type(source)
+        return "{query}" in url or "{title}" in url or source_type in ("torznab", "magnet_web")
 
     def _sources(self) -> list[dict[str, Any]]:
         config = get_setting("rss_sources", {"sources": []})
@@ -247,7 +315,8 @@ class RssTorznabAdapter:
                 return None
             encoded = quote(query)
             return url.replace("{query}", encoded).replace("{title}", encoded)
-        if query and str(source.get("type") or "").lower() == "torznab":
+        source_type = self._source_type(source)
+        if query and source_type == "torznab":
             parsed = urlparse(url)
             params = parse_qsl(parsed.query, keep_blank_values=True)
             keys = {key.lower() for key, _ in params}
@@ -256,6 +325,15 @@ class RssTorznabAdapter:
             if "q" not in keys:
                 params.append(("q", query))
             return urlunparse(parsed._replace(query=urlencode(params)))
+        if query and source_type == "magnet_web":
+            parsed = urlparse(url)
+            if parsed.query:
+                params = parse_qsl(parsed.query, keep_blank_values=True)
+                if not any(key.lower() in ("q", "wd", "keyword", "search", "query") for key, _ in params):
+                    params.append(("q", query))
+                return urlunparse(parsed._replace(query=urlencode(params)))
+            if parsed.path in ("", "/"):
+                return urljoin(url if url.endswith("/") else f"{url}/", f"s/{quote(query)}.html")
         return url
 
     def _source_matches_filters(self, source: dict[str, Any], text: str) -> bool:
@@ -282,7 +360,7 @@ class RssTorznabAdapter:
             else:
                 results.extend(await self._fetch_source(source))
         deduped = self._dedupe_results(results)
-        add_log("info", "rss", "RSS/Torznab 订阅源搜索完成", {"count": len(deduped), "sources": len(sources), "title": title})
+        add_log("info", "rss", "订阅源搜索完成", {"count": len(deduped), "sources": len(sources), "title": title})
         return deduped
 
     async def fetch_due_sources(self, queries: list[str] | None = None) -> list[SearchResult]:
@@ -326,29 +404,32 @@ class RssTorznabAdapter:
             save_setting("rss_sources", {**config, "sources": configured})
         results = self._dedupe_results(results)
         if results:
-            add_log("info", "rss", "RSS/Torznab 定时刷新完成", {"count": len(results), "sources": len(sources)})
+            add_log("info", "rss", "订阅源定时刷新完成", {"count": len(results), "sources": len(sources)})
         return results
 
     async def _fetch_source(self, source: dict[str, Any], query: str | None = None) -> list[SearchResult]:
-        name = str(source.get("name") or "RSS/Torznab").strip()
+        name = str(source.get("name") or "订阅源").strip()
         url = self._source_url(source, query)
         if not url:
             return []
+        source_type = self._source_type(source)
         try:
             async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=25, follow_redirects=True) as client:
                 res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
-            res.raise_for_status()
-            return self._parse_feed(source, res.text)
+                res.raise_for_status()
+                if source_type == "magnet_web":
+                    return await self._parse_magnet_web_source(source, url, res.text, client)
+                return self._parse_feed(source, res.text)
         except Exception as exc:
-            add_log("warning", "rss", "RSS/Torznab 订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
+            add_log("warning", "rss", "订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
             return []
 
     def _parse_feed(self, source: dict[str, Any], xml_text: str) -> list[SearchResult]:
-        name = str(source.get("name") or "RSS/Torznab").strip()
+        name = str(source.get("name") or "订阅源").strip()
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError as exc:
-            add_log("warning", "rss", "RSS/Torznab 解析失败", {"source": name, "error": str(exc)})
+            add_log("warning", "rss", "订阅源解析失败", {"source": name, "error": str(exc)})
             return []
         items = [item for item in root.iter() if item.tag.rsplit("}", 1)[-1].lower() in ("item", "entry")]
         results: list[SearchResult] = []
@@ -358,7 +439,7 @@ class RssTorznabAdapter:
             text = context or title
             if not self._source_matches_filters(source, text):
                 continue
-            source_type = str(source.get("type") or "rss").lower()
+            source_type = self._source_type(source)
             links = _item_links(item, allow_direct_http=source_type == "torznab") or extract_download_links(text)
             for link in links:
                 results.append(
@@ -370,6 +451,89 @@ class RssTorznabAdapter:
                         context=text,
                     )
                 )
+        return results
+
+    def _magnet_web_detail_urls(self, source_url: str, html_text: str) -> list[str]:
+        parsed_base = urlparse(source_url)
+        ignored_extensions = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".css", ".js", ".ico", ".xml", ".rss")
+        scored: list[tuple[int, str]] = []
+        seen: set[str] = set()
+        for href in _html_hrefs(html_text):
+            if not href or href.startswith(("#", "javascript:", "mailto:", "tel:", "magnet:")):
+                continue
+            absolute = urljoin(source_url, href)
+            parsed = urlparse(absolute)
+            if parsed.scheme not in ("http", "https") or parsed.netloc != parsed_base.netloc:
+                continue
+            path = parsed.path.lower()
+            if path.endswith(ignored_extensions) or absolute.rstrip("/") == source_url.rstrip("/"):
+                continue
+            score = 0
+            if re.search(r"/(movie|detail|subject|vod|anime|resource|bt|show|thread|view|torrent)/", path):
+                score += 3
+            if re.search(r"/\d+\.html?$", path):
+                score += 2
+            elif path.endswith((".html", ".htm")):
+                score += 1
+            if score <= 0:
+                continue
+            normalized = urlunparse(parsed._replace(fragment=""))
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            scored.append((score, normalized))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [url for _, url in scored[:MAGNET_WEB_DETAIL_LIMIT]]
+
+    async def _parse_magnet_web_source(
+        self,
+        source: dict[str, Any],
+        source_url: str,
+        html_text: str,
+        client: httpx.AsyncClient,
+    ) -> list[SearchResult]:
+        results = self._parse_magnet_web_page(source, source_url, html_text)
+        detail_urls = self._magnet_web_detail_urls(source_url, html_text)
+        if detail_urls:
+            pages = await asyncio.gather(
+                *(self._fetch_magnet_web_detail(client, url) for url in detail_urls),
+                return_exceptions=True,
+            )
+            for item in pages:
+                if isinstance(item, Exception):
+                    add_log("warning", "rss", "磁力网页详情读取失败", {"source": source.get("name") or "订阅源", "error": str(item)})
+                    continue
+                detail_url, detail_html = item
+                results.extend(self._parse_magnet_web_page(source, detail_url, detail_html))
+        return self._dedupe_results(results)
+
+    async def _fetch_magnet_web_detail(self, client: httpx.AsyncClient, url: str) -> tuple[str, str]:
+        res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
+        res.raise_for_status()
+        return url, res.text
+
+    def _parse_magnet_web_page(self, source: dict[str, Any], page_url: str, html_text: str) -> list[SearchResult]:
+        name = str(source.get("name") or "订阅源").strip()
+        normalized_html = unescape(html_text or "")
+        page_title = _html_page_title(normalized_html, name)
+        page_text = _strip_html(normalized_html)
+        links = extract_download_links(normalized_html)
+        results: list[SearchResult] = []
+        for link in links:
+            context = _link_context_from_html(normalized_html, link) or page_text[:1200]
+            title = _title_from_link_context(context, page_title)
+            text = "\n".join(part for part in (title, page_title, context) if part)
+            if not self._source_matches_filters(source, text):
+                continue
+            results.append(
+                SearchResult(
+                    title=title,
+                    url=link,
+                    source=f"magnet_web:{name}",
+                    message_id=page_url,
+                    context=text,
+                )
+            )
         return results
 
     def _dedupe_results(self, results: list[SearchResult]) -> list[SearchResult]:
@@ -384,7 +548,7 @@ class RssTorznabAdapter:
         return deduped
 
     async def test_source(self, source: dict[str, Any], query: str | None = None) -> dict[str, Any]:
-        name = str(source.get("name") or "RSS/Torznab").strip()
+        name = str(source.get("name") or "订阅源").strip()
         normalized = dict(source)
         normalized.setdefault("enabled", True)
         normalized.setdefault("type", "rss")
@@ -395,8 +559,11 @@ class RssTorznabAdapter:
         try:
             async with httpx.AsyncClient(proxy=self._source_proxy(normalized), timeout=25, follow_redirects=True) as client:
                 res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
-            res.raise_for_status()
-            results = self._parse_feed(normalized, res.text)
+                res.raise_for_status()
+                if self._source_type(normalized) == "magnet_web":
+                    results = await self._parse_magnet_web_source(normalized, url, res.text, client)
+                else:
+                    results = self._parse_feed(normalized, res.text)
             return {
                 "ok": True,
                 "source": name,
