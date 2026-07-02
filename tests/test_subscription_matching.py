@@ -1,7 +1,7 @@
 import unittest
 
 from app.services.integrations import SearchResult
-from app.services.subscription import result_matches_missing_episodes, result_matches_subscription
+from app.services.subscription import _canonical_115_url, _resource_dedupe_key, result_matches_missing_episodes, result_matches_subscription
 
 
 def result(text: str) -> SearchResult:
@@ -9,6 +9,13 @@ def result(text: str) -> SearchResult:
 
 
 class SubscriptionMatchingTest(unittest.TestCase):
+    def test_115cdn_and_115_links_share_same_dedupe_key(self) -> None:
+        first = "https://115cdn.com/s/swssxf43nbi?password=8888"
+        second = "https://115.com/s/swssxf43nbi?password=8888"
+
+        self.assertEqual(_canonical_115_url(first), second)
+        self.assertEqual(_resource_dedupe_key(first), _resource_dedupe_key(second))
+
     def test_title_boundary_rejects_longer_chinese_title(self) -> None:
         subscription = {"title": "爱丽丝", "media_type": "tv", "tmdb_id": 0, "keywords": ["爱丽丝"]}
 

@@ -6,7 +6,7 @@ from typing import Any
 
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
-from app.services.integrations import PAN115_URL_RE, EmbyAdapter, Pan115Adapter, RssTorznabAdapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, TmdbAdapter, get_setting
+from app.services.integrations import PAN115_URL_RE, EmbyAdapter, Pan115Adapter, RssTorznabAdapter, SearchResult, TelegramBotAdapter, TelegramClientAdapter, TmdbAdapter, get_setting, parse_115_share_link
 
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
@@ -835,7 +835,61 @@ def delete_subscription_by_title(title: str) -> int:
     return delete_subscriptions(matched_ids)
 
 
+def _canonical_115_url(url: str | None) -> str | None:
+    value = str(url or "").strip()
+    if not PAN115_URL_RE.match(value):
+        return None
+    share_code, receive_code = parse_115_share_link(value)
+    if not share_code:
+        return None
+    canonical = f"https://115.com/s/{share_code}"
+    if receive_code:
+        canonical = f"{canonical}?password={receive_code}"
+    return canonical
+
+
+def _resource_dedupe_key(url: str | None) -> tuple[str, str] | None:
+    canonical = _canonical_115_url(url)
+    if canonical:
+        share_code, _ = parse_115_share_link(canonical)
+        return ("115", share_code.casefold())
+    value = str(url or "").strip()
+    return ("url", value) if value else None
+
+
+def _resource_already_exists(conn: sqlite3.Connection, subscription_id: int, result: SearchResult) -> str | None:
+    candidate_key = _resource_dedupe_key(result.url)
+    result_is_115 = _canonical_115_url(result.url) is not None
+    result_episodes = episodes_from_text(_result_text(result)) if result_is_115 else set()
+    rows = conn.execute(
+        "SELECT title, url FROM resources WHERE subscription_id = ? ORDER BY id DESC",
+        (subscription_id,),
+    ).fetchall()
+    for row in rows:
+        existing_url = row["url"] or ""
+        if candidate_key and _resource_dedupe_key(existing_url) == candidate_key:
+            return "same_115_share"
+        if not result_is_115 or not _canonical_115_url(existing_url):
+            continue
+        existing_episodes = episodes_from_text(str(row["title"] or ""))
+        if result_episodes and existing_episodes and result_episodes & existing_episodes:
+            return "overlap_episodes"
+    return None
+
+
 def _insert_resource(conn, subscription_id: int, result: SearchResult) -> dict | None:
+    canonical_url = _canonical_115_url(result.url)
+    if canonical_url:
+        result.url = canonical_url
+    duplicate_reason = _resource_already_exists(conn, subscription_id, result)
+    if duplicate_reason:
+        add_log(
+            "debug",
+            "subscription",
+            "资源链接已存在或集数重复，跳过推送",
+            {"id": subscription_id, "url": result.url, "reason": duplicate_reason},
+        )
+        return None
     cursor = conn.execute(
         """
         INSERT OR IGNORE INTO resources (subscription_id, source, title, url, message_id, created_at)
