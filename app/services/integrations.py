@@ -549,6 +549,9 @@ class RssTorznabAdapter:
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
         uid = "".join(secrets.choice(alphabet) for _ in range(10)) + "_" + time.strftime("%Y%m%d%H%M%S")
         client.cookies.set("aywcUid", uid, domain=parsed.hostname or parsed.netloc, path="/")
+        client.cookies.set("aywcUid", uid, path="/")
+        challenge_res = await client.get(challenge_url, headers=self._magnet_web_headers(origin + "/"))
+        challenge_res.raise_for_status()
         gen_res = await client.get(
             urljoin(origin, "/anti/recaptcha/v4/gen"),
             params={"aywcUid": uid, "_": str(int(time.time() * 1000))},
@@ -576,9 +579,12 @@ class RssTorznabAdapter:
         url: str,
         referer: str | None = None,
     ) -> httpx.Response:
+        request_referer = referer
         if self._is_bt1207_search_url(url):
             await self._solve_bt1207_challenge(client, url)
-        res = await client.get(url, headers=self._magnet_web_headers(referer))
+            parsed = urlparse(url)
+            request_referer = request_referer or f"{parsed.scheme}://{parsed.netloc}/"
+        res = await client.get(url, headers=self._magnet_web_headers(request_referer))
         res.raise_for_status()
         challenged = self._is_magnet_web_challenge(str(res.url), res.text)
         home_fallback = self._is_bt1207_search_home_fallback(url, str(res.url), res.text)
@@ -586,8 +592,10 @@ class RssTorznabAdapter:
             if home_fallback:
                 add_log("debug", "rss", "BT1207 搜索页被打回首页，重新验证后重试", {"url": url, "final_url": str(res.url)})
             if await self._solve_bt1207_challenge(client, url):
-                res = await client.get(url, headers=self._magnet_web_headers(referer))
+                res = await client.get(url, headers=self._magnet_web_headers(request_referer))
                 res.raise_for_status()
+                if self._is_bt1207_search_home_fallback(url, str(res.url), res.text):
+                    add_log("warning", "rss", "BT1207 搜索页重试后仍返回首页", {"url": url, "final_url": str(res.url), "title": _html_page_title(res.text, "")})
         return res
 
     def _query_release_year(self, query: str | None) -> int | None:
