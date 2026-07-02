@@ -30,6 +30,8 @@ YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 LOCAL_SEARCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 HTML_CONTEXT_TAGS = ("li", "tr", "article", "section", "div", "p")
 MAGNET_WEB_DETAIL_LIMIT = 8
+BT1207_DETAIL_DELAY_SECONDS = 0.6
+BT1207_DETAIL_RETRIES = 3
 
 
 def get_setting(key: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -716,7 +718,7 @@ class RssTorznabAdapter:
                 for result in results:
                     result.priority = priority
                 if source_type == "magnet_web":
-                    add_log("debug", "rss", "磁力网页订阅源搜索完成", {"source": name, "url": url, "count": len(results)})
+                    add_log("debug", "rss", f"磁力网页订阅源搜索完成：{len(results)} 条", {"source": name, "url": url, "count": len(results)})
                 return results
         except Exception as exc:
             add_log("warning", "rss", "订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
@@ -836,23 +838,58 @@ class RssTorznabAdapter:
     ) -> list[SearchResult]:
         results = self._parse_magnet_web_page(source, source_url, html_text)
         detail_candidates = self._magnet_web_detail_candidates(source_url, html_text, release_year)
+        detail_success = 0
         if detail_candidates:
             detail_contexts = {url: context for url, context in detail_candidates}
-            pages = await asyncio.gather(
-                *(self._fetch_magnet_web_detail(client, url, source_url) for url, _ in detail_candidates),
-                return_exceptions=True,
-            )
+            if self._is_bt1207_url(source_url):
+                pages = []
+                for url, _ in detail_candidates:
+                    pages.append(await self._fetch_bt1207_detail_with_retry(client, url, source_url))
+                    await asyncio.sleep(BT1207_DETAIL_DELAY_SECONDS)
+            else:
+                pages = await asyncio.gather(
+                    *(self._fetch_magnet_web_detail(client, url, source_url) for url, _ in detail_candidates),
+                    return_exceptions=True,
+                )
             for item in pages:
                 if isinstance(item, Exception):
                     add_log("warning", "rss", "磁力网页详情读取失败", {"source": source.get("name") or "订阅源", "error": str(item)})
                     continue
+                if not item:
+                    continue
                 detail_url, detail_html = item
+                detail_success += 1
                 results.extend(self._parse_magnet_web_page(source, detail_url, detail_html, detail_contexts.get(detail_url, "")))
-        return self._dedupe_results(results)
+        results = self._dedupe_results(results)
+        if self._is_bt1207_url(source_url):
+            add_log(
+                "debug",
+                "rss",
+                f"BT1207 磁力详情解析完成：候选 {len(detail_candidates)}，成功 {detail_success}，磁力 {len(results)}",
+                {"source": source.get("name") or "订阅源", "url": source_url, "candidates": len(detail_candidates), "details": detail_success, "count": len(results)},
+            )
+        return results
 
     async def _fetch_magnet_web_detail(self, client: httpx.AsyncClient, url: str, referer: str | None = None) -> tuple[str, str]:
         res = await self._get_magnet_web_page(client, url, referer)
         return url, res.text
+
+    async def _fetch_bt1207_detail_with_retry(self, client: httpx.AsyncClient, url: str, referer: str | None = None) -> tuple[str, str] | Exception | None:
+        last_error: Exception | None = None
+        for attempt in range(1, BT1207_DETAIL_RETRIES + 1):
+            try:
+                return await self._fetch_magnet_web_detail(client, url, referer)
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                if exc.response.status_code not in (429, 503):
+                    return exc
+                await self._solve_bt1207_challenge(client, url)
+            except Exception as exc:
+                last_error = exc
+            await asyncio.sleep(BT1207_DETAIL_DELAY_SECONDS * attempt)
+        if last_error:
+            add_log("warning", "rss", "BT1207 详情页多次读取失败", {"url": url, "error": str(last_error)})
+        return last_error
 
     def _parse_magnet_web_page(self, source: dict[str, Any], page_url: str, html_text: str, source_context: str = "") -> list[SearchResult]:
         name = str(source.get("name") or "订阅源").strip()
