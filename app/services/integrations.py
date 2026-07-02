@@ -464,6 +464,12 @@ class RssTorznabAdapter:
         host = urlparse(str(url or "")).netloc.lower()
         return "bt1207" in host
 
+    def _is_bt1207_search_url(self, url: str | None) -> bool:
+        parsed = urlparse(str(url or ""))
+        if "bt1207" not in parsed.netloc.lower():
+            return False
+        return parsed.path.rstrip("/") == "/search" and bool(parsed.query)
+
     def _magnet_web_headers(self, referer: str | None = None, ajax: bool = False) -> dict[str, str]:
         headers = {
             "User-Agent": self.MAGNET_WEB_BROWSER_UA,
@@ -491,6 +497,16 @@ class RssTorznabAdapter:
             or "/anti/recaptcha/v4/verify" in lowered_html
             or "checking your browser before accessing" in lowered_html
         )
+
+    def _is_bt1207_search_home_fallback(self, requested_url: str, response_url: str, html_text: str) -> bool:
+        if not self._is_bt1207_search_url(requested_url):
+            return False
+        final = urlparse(str(response_url or ""))
+        final_path = final.path.rstrip("/") or "/"
+        if final_path == "/search":
+            return False
+        title = _html_page_title(html_text or "", "")
+        return final_path == "/" or title == "BT1207 - 好用的磁力链接搜索引擎"
 
     def _source_url(self, source: dict[str, Any], query: str | None = None) -> str | None:
         url = str(source.get("url") or "").strip()
@@ -560,9 +576,15 @@ class RssTorznabAdapter:
         url: str,
         referer: str | None = None,
     ) -> httpx.Response:
+        if self._is_bt1207_search_url(url):
+            await self._solve_bt1207_challenge(client, url)
         res = await client.get(url, headers=self._magnet_web_headers(referer))
         res.raise_for_status()
-        if self._is_bt1207_url(url) and self._is_magnet_web_challenge(str(res.url), res.text):
+        challenged = self._is_magnet_web_challenge(str(res.url), res.text)
+        home_fallback = self._is_bt1207_search_home_fallback(url, str(res.url), res.text)
+        if self._is_bt1207_url(url) and (challenged or home_fallback):
+            if home_fallback:
+                add_log("debug", "rss", "BT1207 搜索页被打回首页，重新验证后重试", {"url": url, "final_url": str(res.url)})
             if await self._solve_bt1207_challenge(client, url):
                 res = await client.get(url, headers=self._magnet_web_headers(referer))
                 res.raise_for_status()

@@ -137,6 +137,17 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         html = "<title>Recaptcha - Bot Challenge!</title><form action='/anti/recaptcha/v4/verify'></form>"
         self.assertTrue(adapter._is_magnet_web_challenge("https://bt1207to.cc/recaptcha/v4/challenge", html))
 
+    def test_bt1207_search_home_fallback_detection(self) -> None:
+        adapter = RssTorznabAdapter()
+        html = "<html><head><title>BT1207 - 好用的磁力链接搜索引擎</title></head><body><form action='/search'></form></body></html>"
+        self.assertTrue(
+            adapter._is_bt1207_search_home_fallback(
+                "https://bt1207to.cc/search?keyword=%E7%88%B1%E4%B8%BD%E4%B8%9D",
+                "https://bt1207to.cc/",
+                html,
+            )
+        )
+
     async def test_bt1207_year_filter_does_not_drop_detail_candidates(self) -> None:
         adapter = RssTorznabAdapter()
         search_html = """
