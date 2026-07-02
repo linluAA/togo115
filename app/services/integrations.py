@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from html import unescape
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
 
 import httpx
@@ -83,6 +83,7 @@ class SearchResult:
     source: str
     message_id: str | None = None
     context: str = ""
+    priority: int = 0
 
 
 def _clean_download_link(link: str) -> str:
@@ -378,6 +379,12 @@ class RssTorznabAdapter:
     def _source_identity(self, source: dict[str, Any]) -> str:
         return str(source.get("id") or f"{source.get('name') or ''}|{source.get('url') or ''}")
 
+    def _source_priority(self, source: dict[str, Any]) -> int:
+        try:
+            return int(source.get("priority") or 0)
+        except (TypeError, ValueError):
+            return 0
+
     def _source_supports_query(self, source: dict[str, Any]) -> bool:
         url = str(source.get("url") or "")
         source_type = self._source_type(source)
@@ -386,7 +393,12 @@ class RssTorznabAdapter:
     def _sources(self) -> list[dict[str, Any]]:
         config = get_setting("rss_sources", {"sources": []})
         sources = config.get("sources") or []
-        return [source for source in sources if isinstance(source, dict) and _truthy(source.get("enabled"), True)]
+        enabled_sources: list[dict[str, Any]] = []
+        for index, source in enumerate(sources):
+            if not isinstance(source, dict) or not _truthy(source.get("enabled"), True):
+                continue
+            enabled_sources.append({**source, "_order": index})
+        return sorted(enabled_sources, key=lambda item: (-self._source_priority(item), int(item.get("_order") or 0)))
 
     def _source_proxy(self, source: dict[str, Any]) -> str | None:
         if _truthy(source.get("use_proxy")):
@@ -438,21 +450,74 @@ class RssTorznabAdapter:
             return False
         return True
 
-    async def search_history(self, title: str, keywords: list[str]) -> list[SearchResult]:
+    def _search_queries(self, title: str, keywords: list[str]) -> list[str]:
+        clean_keywords = [item.strip() for item in keywords if item and item.strip() and item.strip() != title]
+        return list(dict.fromkeys([title, *(f"{title} {keyword}" for keyword in clean_keywords)]))
+
+    async def _fetch_source_for_queries(self, source: dict[str, Any], queries: list[str]) -> list[SearchResult]:
+        results: list[SearchResult] = []
+        if self._source_supports_query(source):
+            for query in queries:
+                results.extend(await self._fetch_source(source, query))
+        else:
+            results.extend(await self._fetch_source(source))
+        return self._dedupe_results(results)
+
+    async def search_history_by_source(self, title: str, keywords: list[str]) -> list[dict[str, Any]]:
         sources = self._sources()
         if not sources:
             return []
-        results: list[SearchResult] = []
-        clean_keywords = [item.strip() for item in keywords if item and item.strip() and item.strip() != title]
-        queries = [title, *(f"{title} {keyword}" for keyword in clean_keywords)]
+        groups: list[dict[str, Any]] = []
+        queries = self._search_queries(title, keywords)
         for source in sources:
-            if self._source_supports_query(source):
-                for query in dict.fromkeys(queries):
-                    results.extend(await self._fetch_source(source, query))
-            else:
-                results.extend(await self._fetch_source(source))
+            source_results = await self._fetch_source_for_queries(source, queries)
+            if source_results:
+                groups.append({"source": source, "priority": self._source_priority(source), "results": source_results})
+        count = sum(len(group["results"]) for group in groups)
+        add_log("info", "rss", "订阅源搜索完成", {"count": count, "sources": len(sources), "title": title})
+        return groups
+
+    async def search_history_by_priority_until_match(
+        self,
+        title: str,
+        keywords: list[str],
+        matcher: Callable[[SearchResult], bool],
+    ) -> list[dict[str, Any]]:
+        sources = self._sources()
+        if not sources:
+            return []
+        groups: list[dict[str, Any]] = []
+        queries = self._search_queries(title, keywords)
+        current_priority: int | None = None
+        priority_matched = False
+        searched_sources = 0
+        for source in sources:
+            priority = self._source_priority(source)
+            if current_priority is not None and priority != current_priority and priority_matched:
+                break
+            if current_priority is None or priority != current_priority:
+                current_priority = priority
+                priority_matched = False
+            source_results = await self._fetch_source_for_queries(source, queries)
+            searched_sources += 1
+            if not source_results:
+                continue
+            groups.append({"source": source, "priority": priority, "results": source_results})
+            if any(matcher(result) for result in source_results):
+                priority_matched = True
+        count = sum(len(group["results"]) for group in groups)
+        add_log(
+            "info",
+            "rss",
+            "订阅源按优先级搜索完成",
+            {"count": count, "sources": searched_sources, "title": title, "matched_priority": current_priority if priority_matched else None},
+        )
+        return groups
+
+    async def search_history(self, title: str, keywords: list[str]) -> list[SearchResult]:
+        groups = await self.search_history_by_source(title, keywords)
+        results = [result for group in groups for result in group["results"]]
         deduped = self._dedupe_results(results)
-        add_log("info", "rss", "订阅源搜索完成", {"count": len(deduped), "sources": len(sources), "title": title})
         return deduped
 
     async def fetch_due_sources(self, queries: list[str] | None = None) -> list[SearchResult]:
@@ -505,13 +570,18 @@ class RssTorznabAdapter:
         if not url:
             return []
         source_type = self._source_type(source)
+        priority = self._source_priority(source)
         try:
             async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=25, follow_redirects=True) as client:
                 res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
                 res.raise_for_status()
                 if source_type == "magnet_web":
-                    return await self._parse_magnet_web_source(source, url, res.text, client, self._query_release_year(query))
-                return self._parse_feed(source, res.text)
+                    results = await self._parse_magnet_web_source(source, url, res.text, client, self._query_release_year(query))
+                else:
+                    results = self._parse_feed(source, res.text)
+                for result in results:
+                    result.priority = priority
+                return results
         except Exception as exc:
             add_log("warning", "rss", "订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
             return []

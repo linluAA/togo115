@@ -862,6 +862,7 @@ function ensureRssSourceIds(sources) {
     id: source.id || `rss_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`,
     enabled: source.enabled !== false,
     type: source.type || "rss",
+    priority: Number.parseInt(source.priority, 10) || 0,
     refresh_interval: Number.parseInt(source.refresh_interval, 10) || 30,
     test_query: source.test_query || "",
   }));
@@ -893,6 +894,10 @@ function rssSourceUrlPlaceholder(type) {
   return "例如：https://example.com/rss.xml";
 }
 
+function rssSourcePriority(source) {
+  return Number.parseInt(source.priority, 10) || 0;
+}
+
 function rssSourcesCard() {
   const sources = ensureRssSourceIds(rssSourcesValue());
   if (!state.settings.rss_sources) state.settings.rss_sources = { value: { sources } };
@@ -915,6 +920,7 @@ function rssSourceItemHtml(source, index) {
   const expanded = state.rssSourceExpanded.has(source.id);
   const name = source.name || `订阅源 ${index + 1}`;
   const url = source.url || "未填写 URL";
+  const priority = rssSourcePriority(source);
   const keywordCount = splitFilterText(source.keywords).length;
   const qualityCount = splitFilterText(source.quality).length;
   const testQuery = source.test_query || "";
@@ -925,6 +931,7 @@ function rssSourceItemHtml(source, index) {
         <span class="rss-source-url-text" title="${escapeHtml(url)}">${escapeHtml(url)}</span>
         <div class="rss-source-chips">
           <span>${rssSourceTypeLabel(type)}</span>
+          <span>优先级 ${escapeHtml(priority)}</span>
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
@@ -948,6 +955,7 @@ function rssSourceItemHtml(source, index) {
         </select>
       </label>
       <label class="rss-source-url"><span class="rss-source-url-label">${rssSourceUrlLabel(type)}</span> <input class="rss-source-url-input" placeholder="${rssSourceUrlPlaceholder(type)}" value="${escapeHtml(source.url || "")}" /></label>
+      <label>优先级 <input class="rss-source-priority" type="number" step="1" value="${escapeHtml(priority)}" /></label>
       <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
       <label>测试关键词 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
       <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
@@ -984,6 +992,7 @@ function addRssSource() {
     use_proxy: false,
     keywords: "",
     quality: "",
+    priority: 0,
     refresh_interval: 30,
     test_query: "",
   });
@@ -1016,6 +1025,7 @@ async function saveRssSources(event) {
       const id = row.dataset.sourceId || `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       const original = originals.get(id) || {};
       const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
+      const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10);
       return {
         id,
         name: row.querySelector(".rss-source-name")?.value.trim() || "",
@@ -1026,6 +1036,7 @@ async function saveRssSources(event) {
         keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
         quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
         test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
+        priority: Number.isFinite(priority) ? priority : 0,
         refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
         ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
       };
@@ -1057,6 +1068,7 @@ async function testRssSource(event) {
     keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
     quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
     test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
+    priority: Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10) || 0,
     refresh_interval: Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10) || 30,
   };
   resultBox.classList.remove("hidden");

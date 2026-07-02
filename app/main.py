@@ -183,8 +183,14 @@ async def manual_search(payload: SearchRequest, user: dict = Depends(current_use
     telegram_results = await TelegramClientAdapter().search_history(payload.title, payload.keywords)
     matched = [result for result in telegram_results if result_matches_subscription(subscription_like, result)]
     if not matched:
-        rss_results = await RssTorznabAdapter().search_history(payload.title, payload.keywords)
-        matched = [result for result in rss_results if result_matches_subscription(subscription_like, result)]
+        for group in await RssTorznabAdapter().search_history_by_priority_until_match(
+            payload.title,
+            payload.keywords,
+            lambda result: result_matches_subscription(subscription_like, result),
+        ):
+            matched = [result for result in group["results"] if result_matches_subscription(subscription_like, result)]
+            if matched:
+                break
     return {"results": [result.__dict__ for result in matched], "count": len(matched)}
 
 

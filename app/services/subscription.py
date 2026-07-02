@@ -94,6 +94,13 @@ def _result_is_fallback_source(result: SearchResult) -> bool:
     return source.startswith(("rss:", "torznab:", "magnet_web:"))
 
 
+def _result_priority(result: SearchResult) -> int:
+    try:
+        return int(getattr(result, "priority", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _years_from_text(text: str | None) -> set[int]:
     years: set[int] = set()
     value = text or ""
@@ -838,18 +845,36 @@ async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, 
                 await deliver_resource(item["resource_id"])
         return created
 
-    rss_results = await RssTorznabAdapter().search_history(search_title, _extra_search_keywords(subscription))
-    matched_results = _matching_results(subscription, rss_results)
-    with db() as conn:
-        for result in matched_results:
-            if _fallback_blocked_by_primary_resource(conn, subscription, result):
-                add_log("debug", "subscription", "订阅已有 115 资源，跳过订阅源/磁力候选", {"id": subscription_id, "title": result.title})
-                continue
-            item = _insert_resource(conn, subscription_id, result)
-            if item:
-                created.append(item)
-        conn.execute("UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?", (utc_now(), utc_now(), subscription_id))
-    skipped = len(rss_results) - len(matched_results)
+    rss_groups = await RssTorznabAdapter().search_history_by_priority_until_match(
+        search_title,
+        _extra_search_keywords(subscription),
+        lambda result: bool(_matching_results(subscription, [result])),
+    )
+    rss_total = sum(len(group["results"]) for group in rss_groups)
+    matched_count = 0
+    for group in rss_groups:
+        group_results = list(group["results"])
+        matched_results = _matching_results(subscription, group_results)
+        matched_count += len(matched_results)
+        if not matched_results:
+            continue
+        with db() as conn:
+            inserted_or_blocked = False
+            for result in matched_results:
+                if _fallback_blocked_by_primary_resource(conn, subscription, result):
+                    inserted_or_blocked = True
+                    add_log("debug", "subscription", "订阅已有 115 资源，跳过订阅源/磁力候选", {"id": subscription_id, "title": result.title})
+                    continue
+                item = _insert_resource(conn, subscription_id, result)
+                inserted_or_blocked = True
+                if item:
+                    created.append(item)
+            conn.execute("UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?", (utc_now(), utc_now(), subscription_id))
+        if inserted_or_blocked:
+            source = group.get("source") or {}
+            add_log("info", "subscription", "高优先级订阅源已命中，停止继续搜索低优先级源", {"id": subscription_id, "source": source.get("name"), "priority": group.get("priority"), "matches": len(matched_results)})
+            break
+    skipped = rss_total - matched_count
     if skipped:
         add_log("debug", "subscription", "订阅源/磁力结果未匹配订阅标题/关键词/缺集范围，已跳过", {"id": subscription_id, "skipped": skipped})
     if created:
@@ -890,22 +915,30 @@ async def attach_results_to_matching_subscriptions(
         subscriptions = _active_subscriptions()
     attached = 0
     resource_ids: list[int] = []
+    ordered_results = sorted(results, key=lambda result: (-_result_priority(result), str(getattr(result, "source", "")), str(getattr(result, "message_id", ""))))
     for subscription in subscriptions:
         subscription = get_subscription(subscription["id"]) or subscription
         if subscription.get("status") != "active":
             continue
         subscription = await enrich_subscription_with_library(subscription, snapshot)
+        fallback_matched_priority: int | None = None
         with db() as conn:
-            for result in results:
+            for result in ordered_results:
+                if _result_is_fallback_source(result) and fallback_matched_priority is not None and _result_priority(result) < fallback_matched_priority:
+                    continue
                 if not result_matches_subscription(subscription, result):
                     continue
                 if not result_matches_missing_episodes(subscription, result):
                     add_log("debug", "subscription", "实时资源不在缺集范围，已跳过", {"id": subscription["id"], "title": result.title})
                     continue
                 if _fallback_blocked_by_primary_resource(conn, subscription, result):
+                    if _result_is_fallback_source(result) and fallback_matched_priority is None:
+                        fallback_matched_priority = _result_priority(result)
                     add_log("debug", "subscription", "订阅已有 115 资源，跳过订阅源/磁力候选", {"id": subscription["id"], "title": result.title})
                     continue
                 item = _insert_resource(conn, subscription["id"], result)
+                if _result_is_fallback_source(result) and fallback_matched_priority is None:
+                    fallback_matched_priority = _result_priority(result)
                 if not item:
                     continue
                 attached += 1

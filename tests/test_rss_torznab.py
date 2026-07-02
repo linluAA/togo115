@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from app.services.integrations import RssTorznabAdapter, SearchResult, extract_download_links
 from app.services.subscription import result_matches_subscription
@@ -37,6 +38,49 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         url = adapter._source_url(source, "南部档案")
         self.assertIn("%E5%8D%97%E9%83%A8%E6%A1%A3%E6%A1%88", url)
         self.assertNotIn("{query}", url)
+
+    def test_sources_sorted_by_priority_desc(self) -> None:
+        adapter = RssTorznabAdapter()
+        config = {
+            "sources": [
+                {"name": "低", "url": "https://low.example/rss", "priority": 1, "enabled": True},
+                {"name": "高", "url": "https://high.example/rss", "priority": 10, "enabled": True},
+                {"name": "中", "url": "https://mid.example/rss", "priority": 5, "enabled": True},
+            ]
+        }
+
+        with patch("app.services.integrations.get_setting", return_value=config):
+            names = [source["name"] for source in adapter._sources()]
+
+        self.assertEqual(names, ["高", "中", "低"])
+
+    async def test_priority_search_stops_before_lower_sources_after_match(self) -> None:
+        adapter = RssTorznabAdapter()
+        config = {
+            "sources": [
+                {"name": "低", "url": "https://low.example/rss", "priority": 1, "enabled": True},
+                {"name": "高", "url": "https://high.example/rss", "priority": 10, "enabled": True},
+                {"name": "中", "url": "https://mid.example/rss", "priority": 5, "enabled": True},
+            ]
+        }
+        calls: list[str] = []
+
+        async def fake_fetch(source: dict, queries: list[str]) -> list[SearchResult]:
+            calls.append(source["name"])
+            if source["name"] == "高":
+                return [SearchResult(title="南部档案 S01E01 1080p", url="magnet:?xt=urn:btih:high", source="magnet_web:高", priority=10)]
+            return [SearchResult(title="南部档案 S01E01 1080p", url=f"magnet:?xt=urn:btih:{source['name']}", source=f"magnet_web:{source['name']}")]
+
+        with patch("app.services.integrations.get_setting", return_value=config):
+            with patch.object(adapter, "_fetch_source_for_queries", side_effect=fake_fetch):
+                groups = await adapter.search_history_by_priority_until_match(
+                    "南部档案",
+                    ["1080p"],
+                    lambda result: "南部档案" in result.title,
+                )
+
+        self.assertEqual(calls, ["高"])
+        self.assertEqual([group["source"]["name"] for group in groups], ["高"])
 
     async def test_magnet_web_source_url_template(self) -> None:
         adapter = RssTorznabAdapter()
