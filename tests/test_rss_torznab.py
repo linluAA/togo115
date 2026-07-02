@@ -126,6 +126,17 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         url = adapter._source_url(source, "斗罗大陆")
         self.assertEqual(url, "https://yhdm33.com/s/%E6%96%97%E7%BD%97%E5%A4%A7%E9%99%86.html")
 
+    async def test_bt1207_root_url_uses_keyword_search(self) -> None:
+        adapter = RssTorznabAdapter()
+        source = {"name": "BT1207", "type": "magnet_web", "url": "https://bt1207to.cc/", "enabled": True}
+        url = adapter._source_url(source, "Game of Thrones")
+        self.assertEqual(url, "https://bt1207to.cc/search?keyword=Game+of+Thrones")
+
+    def test_magnet_web_challenge_detection(self) -> None:
+        adapter = RssTorznabAdapter()
+        html = "<title>Recaptcha - Bot Challenge!</title><form action='/anti/recaptcha/v4/verify'></form>"
+        self.assertTrue(adapter._is_magnet_web_challenge("https://bt1207to.cc/recaptcha/v4/challenge", html))
+
     async def test_magnet_web_detail_urls_and_page_parse(self) -> None:
         adapter = RssTorznabAdapter()
         search_html = """

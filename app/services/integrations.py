@@ -1,5 +1,6 @@
 import asyncio
 import re
+import secrets
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -416,6 +417,10 @@ def _item_context(element: ET.Element) -> str:
 
 class RssTorznabAdapter:
     MAGNET_WEB_TYPES = {"magnet_web", "web_magnet", "magnet"}
+    MAGNET_WEB_BROWSER_UA = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    )
 
     def _source_type(self, source: dict[str, Any]) -> str:
         source_type = str(source.get("type") or "rss").strip().lower()
@@ -453,6 +458,38 @@ class RssTorznabAdapter:
             return proxy.get("url")
         return None
 
+    def _is_bt1207_url(self, url: str | None) -> bool:
+        host = urlparse(str(url or "")).netloc.lower()
+        return "bt1207" in host
+
+    def _magnet_web_headers(self, referer: str | None = None, ajax: bool = False) -> dict[str, str]:
+        headers = {
+            "User-Agent": self.MAGNET_WEB_BROWSER_UA,
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
+        if ajax:
+            headers.update(
+                {
+                    "Accept": "application/json, text/javascript, */*; q=0.01",
+                    "X-Requested-With": "XMLHttpRequest",
+                }
+            )
+        else:
+            headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        if referer:
+            headers["Referer"] = referer
+        return headers
+
+    def _is_magnet_web_challenge(self, url: str, html_text: str) -> bool:
+        lowered_url = str(url or "").lower()
+        lowered_html = str(html_text or "").lower()
+        return (
+            "/recaptcha/" in lowered_url
+            or "recaptcha - bot challenge" in lowered_html
+            or "/anti/recaptcha/v4/verify" in lowered_html
+            or "checking your browser before accessing" in lowered_html
+        )
+
     def _source_url(self, source: dict[str, Any], query: str | None = None) -> str | None:
         url = str(source.get("url") or "").strip()
         if not url:
@@ -474,6 +511,8 @@ class RssTorznabAdapter:
             return urlunparse(parsed._replace(query=urlencode(params)))
         if query and source_type == "magnet_web":
             parsed = urlparse(url)
+            if self._is_bt1207_url(url) and parsed.path.rstrip("/") in ("", "/search"):
+                return urlunparse(parsed._replace(path="/search", query=urlencode({"keyword": query})))
             if parsed.query:
                 params = parse_qsl(parsed.query, keep_blank_values=True)
                 if not any(key.lower() in ("q", "wd", "keyword", "search", "query") for key, _ in params):
@@ -482,6 +521,50 @@ class RssTorznabAdapter:
             if parsed.path in ("", "/"):
                 return urljoin(url if url.endswith("/") else f"{url}/", f"s/{quote(query)}.html")
         return url
+
+    async def _solve_bt1207_challenge(self, client: httpx.AsyncClient, url: str) -> bool:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        challenge_url = urljoin(origin, "/recaptcha/v4/challenge?url=" + quote(origin, safe=":/") + "&s=1")
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        uid = "".join(secrets.choice(alphabet) for _ in range(10)) + "_" + time.strftime("%Y%m%d%H%M%S")
+        client.cookies.set("aywcUid", uid, domain=f".{parsed.hostname or parsed.netloc}", path="/")
+        gen_res = await client.get(
+            urljoin(origin, "/anti/recaptcha/v4/gen"),
+            params={"aywcUid": uid, "_": str(int(time.time() * 1000))},
+            headers=self._magnet_web_headers(challenge_url, ajax=True),
+        )
+        gen_res.raise_for_status()
+        try:
+            token = str((gen_res.json() or {}).get("token") or "")
+        except ValueError:
+            token = ""
+        if not token:
+            return False
+        await asyncio.sleep(1.0)
+        verify_res = await client.get(
+            urljoin(origin, "/anti/recaptcha/v4/verify"),
+            params={"token": token, "aywcUid": uid, "costtime": "1500"},
+            headers=self._magnet_web_headers(challenge_url),
+        )
+        verify_res.raise_for_status()
+        return True
+
+    async def _get_magnet_web_page(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        referer: str | None = None,
+    ) -> httpx.Response:
+        res = await client.get(url, headers=self._magnet_web_headers(referer))
+        res.raise_for_status()
+        if self._is_bt1207_url(url) and self._is_magnet_web_challenge(str(res.url), res.text):
+            if await self._solve_bt1207_challenge(client, url):
+                res = await client.get(url, headers=self._magnet_web_headers(referer))
+                res.raise_for_status()
+        return res
 
     def _query_release_year(self, query: str | None) -> int | None:
         years = _years_from_text(query)
@@ -620,11 +703,12 @@ class RssTorznabAdapter:
         priority = self._source_priority(source)
         try:
             async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=25, follow_redirects=True) as client:
-                res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
-                res.raise_for_status()
                 if source_type == "magnet_web":
+                    res = await self._get_magnet_web_page(client, url)
                     results = await self._parse_magnet_web_source(source, url, res.text, client, self._query_release_year(query))
                 else:
+                    res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
+                    res.raise_for_status()
                     results = self._parse_feed(source, res.text)
                 for result in results:
                     result.priority = priority
@@ -750,7 +834,7 @@ class RssTorznabAdapter:
         if detail_candidates:
             detail_contexts = {url: context for url, context in detail_candidates}
             pages = await asyncio.gather(
-                *(self._fetch_magnet_web_detail(client, url) for url, _ in detail_candidates),
+                *(self._fetch_magnet_web_detail(client, url, source_url) for url, _ in detail_candidates),
                 return_exceptions=True,
             )
             for item in pages:
@@ -761,9 +845,8 @@ class RssTorznabAdapter:
                 results.extend(self._parse_magnet_web_page(source, detail_url, detail_html, detail_contexts.get(detail_url, "")))
         return self._dedupe_results(results)
 
-    async def _fetch_magnet_web_detail(self, client: httpx.AsyncClient, url: str) -> tuple[str, str]:
-        res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
-        res.raise_for_status()
+    async def _fetch_magnet_web_detail(self, client: httpx.AsyncClient, url: str, referer: str | None = None) -> tuple[str, str]:
+        res = await self._get_magnet_web_page(client, url, referer)
         return url, res.text
 
     def _parse_magnet_web_page(self, source: dict[str, Any], page_url: str, html_text: str, source_context: str = "") -> list[SearchResult]:
@@ -812,11 +895,12 @@ class RssTorznabAdapter:
         started = time.perf_counter()
         try:
             async with httpx.AsyncClient(proxy=self._source_proxy(normalized), timeout=25, follow_redirects=True) as client:
-                res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
-                res.raise_for_status()
                 if self._source_type(normalized) == "magnet_web":
+                    res = await self._get_magnet_web_page(client, url)
                     results = await self._parse_magnet_web_source(normalized, url, res.text, client, self._query_release_year(query))
                 else:
+                    res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
+                    res.raise_for_status()
                     results = self._parse_feed(normalized, res.text)
             return {
                 "ok": True,
