@@ -9,7 +9,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
 
 import httpx
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, utils
 from telethon.errors import SessionPasswordNeededError
 
 from app.config import settings
@@ -267,12 +267,9 @@ def context_for_115_link(text: str | None, link: str, total_links: int) -> str:
     lines = message.splitlines()
     for index, line in enumerate(lines):
         if link in line:
-            context_lines = []
-            if index > 0:
-                context_lines.append(lines[index - 1])
-            context_lines.append(line)
-            if index + 1 < len(lines) and re.search(r"(?i)(pwd|pass|密码|提取码|访问码|口令)", lines[index + 1]):
-                context_lines.append(lines[index + 1])
+            start = max(0, index - 8)
+            end = min(len(lines), index + 4)
+            context_lines = lines[start:end]
             return "\n".join(part for part in context_lines if part.strip())
     position = message.find(link)
     if position < 0:
@@ -814,6 +811,64 @@ class TelegramClientAdapter:
             raise RuntimeError("Telegram API ID/API HASH 尚未配置")
         return config
 
+    def _configured_sources(self, config: dict[str, Any]) -> list[str]:
+        return [x.strip() for x in str(config.get("sources", "")).split(",") if x.strip()]
+
+    def _dialog_candidates(self, source: str) -> list[Any]:
+        value = str(source or "").strip()
+        candidates: list[Any] = []
+        if not value:
+            return candidates
+        if value.startswith("@"):
+            candidates.append(value[1:])
+        candidates.append(value)
+        try:
+            numeric = int(value)
+        except ValueError:
+            numeric = None
+        if numeric is not None:
+            candidates.append(numeric)
+            if numeric > 0:
+                candidates.append(int(f"-100{numeric}"))
+        deduped: list[Any] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = f"{type(candidate).__name__}:{candidate}"
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(candidate)
+        return deduped
+
+    def _entity_source_id(self, entity: Any, fallback: str) -> str:
+        try:
+            return str(utils.get_peer_id(entity))
+        except Exception:
+            return str(getattr(entity, "id", None) or fallback)
+
+    async def _resolve_dialogs(self, client: TelegramClient, sources: list[str]) -> list[dict[str, Any]]:
+        dialogs: list[dict[str, Any]] = []
+        for source in sources:
+            entity = None
+            last_error: Exception | None = None
+            for candidate in self._dialog_candidates(source):
+                try:
+                    entity = await client.get_entity(candidate)
+                    break
+                except Exception as exc:
+                    last_error = exc
+            if entity is None:
+                add_log(
+                    "warning",
+                    "telegram",
+                    "Telegram 群组/频道解析失败，使用原始配置尝试",
+                    {"source": source, "error": str(last_error) if last_error else ""},
+                )
+                dialogs.append({"entity": source, "source": source, "canonical": source})
+                continue
+            dialogs.append({"entity": entity, "source": source, "canonical": self._entity_source_id(entity, source)})
+        return dialogs
+
     async def client(self) -> TelegramClient:
         cls = type(self)
         if cls._client and cls._client.is_connected():
@@ -917,7 +972,7 @@ class TelegramClientAdapter:
             entity = dialog.entity
             if not (getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False)):
                 continue
-            identifier = getattr(entity, "username", None) or str(entity.id)
+            identifier = self._entity_source_id(entity, str(getattr(entity, "id", "")))
             items.append(
                 {
                     "id": str(entity.id),
@@ -939,9 +994,13 @@ class TelegramClientAdapter:
             add_log("warning", "telegram", "Telegram 尚未登录，历史搜索跳过")
             return []
         config = self._config()
-        dialogs = [x.strip() for x in str(config.get("sources", "")).split(",") if x.strip()]
-        if not dialogs:
+        source_values = self._configured_sources(config)
+        if not source_values:
             add_log("warning", "telegram", "未配置 Telegram 群组/频道 sources")
+            return []
+        dialogs = await self._resolve_dialogs(client, source_values)
+        if not dialogs:
+            add_log("warning", "telegram", "Telegram 群组/频道解析为空，历史搜索跳过")
             return []
         clean_keywords = [item.strip() for item in keywords if item and item.strip() and item.strip() != title]
         queries = [title, *(f"{title} {keyword}" for keyword in clean_keywords)]
@@ -954,31 +1013,37 @@ class TelegramClientAdapter:
         results: list[SearchResult] = []
         seen_messages: set[tuple[str, int]] = set()
         for dialog in dialogs:
+            entity = dialog["entity"]
+            source = str(dialog["canonical"])
             for query in dict.fromkeys(queries):
                 query_message_count = 0
                 query_link_count = 0
-                async for message in client.iter_messages(dialog, search=query, limit=history_limit):
-                    query_message_count += 1
-                    seen_messages.add((dialog, int(message.id)))
-                    links = await self._links_from_message(client, message, dialog)
-                    query_link_count += len(links)
-                    results.extend(links)
-                if query_link_count:
-                    continue
-                async for message in client.iter_messages(dialog, limit=fallback_scan_limit):
-                    message_key = (dialog, int(message.id))
-                    if message_key in seen_messages:
-                        continue
-                    if not _local_text_matches_query(message.raw_text or "", query):
-                        continue
-                    seen_messages.add(message_key)
-                    links = await self._links_from_message(client, message, dialog)
-                    query_link_count += len(links)
-                    results.extend(links)
+                try:
+                    async for message in client.iter_messages(entity, search=query, limit=history_limit):
+                        query_message_count += 1
+                        seen_messages.add((source, int(message.id)))
+                        links = await self._links_from_message(client, message, source)
+                        query_link_count += len(links)
+                        results.extend(links)
+                except Exception as exc:
+                    add_log("warning", "telegram", "Telegram 历史搜索失败", {"dialog": dialog["source"], "query": query, "error": str(exc)})
+                try:
+                    async for message in client.iter_messages(entity, limit=fallback_scan_limit):
+                        message_key = (source, int(message.id))
+                        if message_key in seen_messages:
+                            continue
+                        if not _local_text_matches_query(message.raw_text or "", query):
+                            continue
+                        seen_messages.add(message_key)
+                        links = await self._links_from_message(client, message, source)
+                        query_link_count += len(links)
+                        results.extend(links)
+                except Exception as exc:
+                    add_log("warning", "telegram", "Telegram 最近消息兜底扫描失败", {"dialog": dialog["source"], "query": query, "error": str(exc)})
                 if query_message_count and not query_link_count:
-                    add_log("debug", "telegram", "Telegram 历史搜索命中消息但未提取到 115 链接", {"dialog": dialog, "query": query, "messages": query_message_count})
+                    add_log("debug", "telegram", "Telegram 历史搜索命中消息但未提取到 115 链接", {"dialog": source, "query": query, "messages": query_message_count})
                 elif not query_message_count and not query_link_count:
-                    add_log("debug", "telegram", "Telegram 历史搜索未命中，已完成最近消息兜底扫描", {"dialog": dialog, "query": query, "limit": fallback_scan_limit})
+                    add_log("debug", "telegram", "Telegram 历史搜索未命中，已完成最近消息兜底扫描", {"dialog": source, "query": query, "limit": fallback_scan_limit})
         deduped: list[SearchResult] = []
         seen: set[tuple[str, str | None, str]] = set()
         for result in results:
@@ -1068,10 +1133,13 @@ class TelegramClientAdapter:
         cls = type(self)
         client = await self.client()
         config = self._config()
-        dialogs = [x.strip() for x in str(config.get("sources", "")).split(",") if x.strip()]
+        source_values = self._configured_sources(config)
+        if not source_values:
+            return
+        dialogs = await self._resolve_dialogs(client, source_values)
         if not dialogs:
             return
-        source_key = tuple(dialogs)
+        source_key = tuple(str(item["canonical"]) for item in dialogs)
         listener_alive = bool(cls._listener_task and not cls._listener_task.done())
         if listener_alive and cls._handler_registered and cls._handler_sources == source_key:
             add_log("debug", "telegram", "Telegram 监控心跳正常")
@@ -1083,7 +1151,7 @@ class TelegramClientAdapter:
             cls._handler_registered = False
             cls._handler = None
             cls._handler_sources = ()
-            add_log("info", "telegram", "Telegram 监控来源已变更，重新注册监听" if source_changed else "Telegram 监控连接已重建，重新注册监听", {"sources": dialogs})
+            add_log("info", "telegram", "Telegram 监控来源已变更，重新注册监听" if source_changed else "Telegram 监控连接已重建，重新注册监听", {"sources": list(source_key)})
 
         if not cls._handler_registered:
             async def handler(event) -> None:
@@ -1091,16 +1159,30 @@ class TelegramClientAdapter:
 
                 results = await self._links_from_message(client, event.message, str(event.chat_id))
                 if results:
-                    await attach_results_to_matching_subscriptions(results, event.message.raw_text or "")
+                    attached = await attach_results_to_matching_subscriptions(results, event.message.raw_text or "")
+                    if not attached:
+                        add_log(
+                            "debug",
+                            "telegram",
+                            "Telegram 实时消息提取到链接但未匹配任何订阅",
+                            {"chat_id": event.chat_id, "message_id": getattr(event.message, "id", None), "links": len(results)},
+                        )
+                else:
+                    add_log(
+                        "debug",
+                        "telegram",
+                        "Telegram 实时消息未提取到 115 链接",
+                        {"chat_id": event.chat_id, "message_id": getattr(event.message, "id", None)},
+                    )
 
-            client.add_event_handler(handler, events.NewMessage(chats=dialogs))
+            client.add_event_handler(handler, events.NewMessage(chats=[item["entity"] for item in dialogs]))
             cls._handler_registered = True
             cls._handler = handler
             cls._handler_sources = source_key
 
         if not listener_alive:
             cls._listener_task = asyncio.create_task(client.run_until_disconnected())
-            add_log("info", "telegram", "Telegram 实时监控已启动", {"sources": dialogs})
+            add_log("info", "telegram", "Telegram 实时监控已启动", {"sources": list(source_key)})
 
 
 class Pan115Adapter:

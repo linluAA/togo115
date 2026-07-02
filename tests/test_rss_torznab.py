@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.services.integrations import RssTorznabAdapter, SearchResult, extract_download_links
+from app.services.integrations import RssTorznabAdapter, SearchResult, TelegramClientAdapter, context_for_115_link, extract_download_links
 from app.services.subscription import result_matches_subscription
 
 
@@ -12,6 +12,31 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("magnet:?xt=urn:btih:abc123", links)
         self.assertIn("http://example.com/file.torrent", links)
         self.assertIn("https://115cdn.com/s/abc123", links)
+
+    def test_telegram_dialog_candidates_accept_plain_and_marked_channel_ids(self) -> None:
+        candidates = TelegramClientAdapter()._dialog_candidates("2330381084")
+
+        self.assertIn(2330381084, candidates)
+        self.assertIn(-1002330381084, candidates)
+
+    def test_115_link_context_keeps_title_lines_for_multi_link_messages(self) -> None:
+        link = "https://115.com/s/swssxf43nbi?password=8888"
+        text = "\n".join(
+            [
+                "电视剧：爱情有烟火 (2026)",
+                "S01E01-E36",
+                "TMDB ID: 230311",
+                "质量：[4K] [HDR10]",
+                "链接：https://115.com/s/old?password=1111",
+                "电视剧：爱情有烟火 (2026)",
+                "S01E33-E36",
+                f"链接：{link}",
+            ]
+        )
+        context = context_for_115_link(text, link, 2)
+
+        self.assertIn("爱情有烟火", context)
+        self.assertIn("S01E33-E36", context)
 
     async def test_torznab_parse_and_match(self) -> None:
         adapter = RssTorznabAdapter()
