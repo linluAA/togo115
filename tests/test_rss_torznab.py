@@ -13,6 +13,12 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("http://example.com/file.torrent", links)
         self.assertIn("https://115cdn.com/s/abc123", links)
 
+    def test_extract_115_links_accepts_wrapped_share_url(self) -> None:
+        text = "链接：https://115.com/s\n/swssxf43nbi?password=8888"
+        links = extract_download_links(text)
+
+        self.assertIn("https://115.com/s/swssxf43nbi?password=8888", links)
+
     def test_telegram_dialog_candidates_accept_plain_and_marked_channel_ids(self) -> None:
         candidates = TelegramClientAdapter()._dialog_candidates("2330381084")
 
@@ -37,6 +43,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("爱情有烟火", context)
         self.assertIn("S01E33-E36", context)
+        self.assertNotIn("old?password", context)
 
     async def test_torznab_parse_and_match(self) -> None:
         adapter = RssTorznabAdapter()

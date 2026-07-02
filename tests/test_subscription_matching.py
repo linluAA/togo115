@@ -72,6 +72,26 @@ class SubscriptionMatchingTest(unittest.TestCase):
 
         self.assertFalse(result_matches_missing_episodes(subscription, link_result))
 
+    def test_full_season_pack_matches_when_it_contains_missing_episodes(self) -> None:
+        subscription = {
+            "title": "爱情有烟火",
+            "media_type": "tv",
+            "keywords": ["爱情有烟火"],
+            "tmdb_id": 230311,
+            "release_year": 2026,
+            "tmdb_total_count": 36,
+            "emby_episode_keys": [f"1x{episode}" for episode in range(1, 33)],
+        }
+        link_result = result(
+            "电视剧：爱情有烟火 (2026)\n"
+            "S01E01-E36\n"
+            "TMDB ID: 230311\n"
+            "链接：https://115.com/s/swssxf43nbi?password=8888"
+        )
+
+        self.assertTrue(result_matches_subscription(subscription, link_result))
+        self.assertTrue(result_matches_missing_episodes(subscription, link_result))
+
 
 if __name__ == "__main__":
     unittest.main()

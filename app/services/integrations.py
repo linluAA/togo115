@@ -16,6 +16,10 @@ from app.config import settings
 from app.db import add_log, db, json_dumps, json_loads, utc_now
 
 PAN115_URL_RE = re.compile(r"(?:https?://)?(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?[^\s\"'<>)]+)?", re.I)
+PAN115_LOOSE_URL_RE = re.compile(
+    r"(?:(?:https?)\s*:\s*/\s*/)?(?:www\s*\.\s*)?(?P<host>115(?:cdn)?\s*\.\s*com)\s*/\s*s\s*/\s*(?P<code>[A-Za-z0-9_-]+)(?P<query>\s*\?[^\s\"'<>)]+)?",
+    re.I,
+)
 MAGNET_URL_RE = re.compile(r"magnet:\?[^\s\"'<>]+", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
 HTML_ANCHOR_RE = re.compile(r"<a\b(?P<attrs>[^>]*)>(?P<label>.*?)</a>", re.I | re.S)
@@ -87,12 +91,19 @@ class SearchResult:
 
 
 def _clean_download_link(link: str) -> str:
-    cleaned = link.rstrip("，。；,.;")
+    cleaned = re.sub(r"\s+", "", link).rstrip("，。；,.;")
     while cleaned.endswith(")") and cleaned.count(")") > cleaned.count("("):
         cleaned = cleaned[:-1]
     if re.match(r"(?i)^(?:www\.)?115(?:cdn)?\.com/s/", cleaned):
         cleaned = f"https://{cleaned}"
     return cleaned
+
+
+def _loose_115_link(match: re.Match[str]) -> str:
+    host = re.sub(r"\s+", "", match.group("host") or "").lower()
+    code = re.sub(r"\s+", "", match.group("code") or "")
+    query = re.sub(r"\s+", "", match.group("query") or "")
+    return f"https://{host}/s/{code}{query}"
 
 
 def extract_115_links(text: str | None) -> list[str]:
@@ -105,6 +116,11 @@ def extract_115_links(text: str | None) -> list[str]:
         if link not in seen:
             seen.add(link)
             links.append(link)
+    for match in PAN115_LOOSE_URL_RE.finditer(text):
+        link = _clean_download_link(_loose_115_link(match))
+        if link not in seen:
+            seen.add(link)
+            links.append(link)
     return links
 
 
@@ -114,7 +130,11 @@ def extract_download_links(text: str | None) -> list[str]:
     text = unescape(text)
     seen: set[str] = set()
     links: list[str] = []
-    for pattern in (PAN115_URL_RE, MAGNET_URL_RE, TORRENT_URL_RE):
+    for link in extract_115_links(text):
+        if link not in seen:
+            seen.add(link)
+            links.append(link)
+    for pattern in (MAGNET_URL_RE, TORRENT_URL_RE):
         for match in pattern.findall(text):
             link = _clean_download_link(match)
             if link not in seen:
@@ -264,11 +284,41 @@ def context_for_115_link(text: str | None, link: str, total_links: int) -> str:
     message = text or ""
     if not message or total_links <= 1:
         return message
+    try:
+        share_code = urlparse(link).path.rstrip("/").split("/")[-1]
+    except Exception:
+        share_code = ""
+
+    def line_matches_link(line: str) -> bool:
+        return link in line or bool(share_code and share_code in line)
+
+    def line_has_link_hint(line: str) -> bool:
+        return bool(PAN115_URL_RE.search(line) or PAN115_LOOSE_URL_RE.search(line) or "115.com/s" in line.casefold() or "115cdn.com/s" in line.casefold())
+
     lines = message.splitlines()
     for index, line in enumerate(lines):
-        if link in line:
-            start = max(0, index - 8)
-            end = min(len(lines), index + 4)
+        if line_matches_link(line):
+            previous_link_indexes = [line_index for line_index, value in enumerate(lines[:index]) if line_has_link_hint(value)]
+            if (
+                previous_link_indexes
+                and previous_link_indexes[-1] == index - 1
+                and share_code
+                and share_code in line
+                and share_code not in lines[index - 1]
+            ):
+                previous_link_indexes.pop()
+            start = (previous_link_indexes[-1] + 1) if previous_link_indexes else max(0, index - 8)
+            if index - start > 8:
+                start = index - 8
+            title_markers = [
+                line_index
+                for line_index in range(start, index + 1)
+                if re.search(r"(电视剧|电影|动漫|动画|综艺|剧集|名称|片名|标题|资源)", lines[line_index], re.I)
+            ]
+            if title_markers:
+                start = title_markers[-1]
+            next_link_indexes = [line_index for line_index, value in enumerate(lines[index + 1:], start=index + 1) if line_has_link_hint(value)]
+            end = min(next_link_indexes[0], index + 4, len(lines)) if next_link_indexes else min(len(lines), index + 4)
             context_lines = lines[start:end]
             return "\n".join(part for part in context_lines if part.strip())
     position = message.find(link)
