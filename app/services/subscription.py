@@ -247,10 +247,7 @@ def result_matches_subscription(subscription: dict, result: SearchResult, *extra
     release_year = _subscription_release_year(subscription)
     text_years = _years_from_text(text)
     if release_year:
-        if _result_is_magnet_web(result):
-            if not text_years or any(year != release_year for year in text_years):
-                return False
-        elif text_years and release_year not in text_years:
+        if text_years and release_year not in text_years:
             return False
     subscription_tmdb_id = str(subscription.get("tmdb_id") or "").lstrip("0")
     text_tmdb_ids = _tmdb_ids_from_text(text)
@@ -274,12 +271,7 @@ def _result_skip_reason(subscription: dict, result: SearchResult, *extra_texts: 
     release_year = _subscription_release_year(subscription)
     text_years = _years_from_text(text)
     if release_year:
-        if _result_is_magnet_web(result):
-            if not text_years:
-                return "磁力结果缺少年份"
-            if any(year != release_year for year in text_years):
-                return "年份不匹配"
-        elif text_years and release_year not in text_years:
+        if text_years and release_year not in text_years:
             return "年份不匹配"
     subscription_tmdb_id = str(subscription.get("tmdb_id") or "").lstrip("0")
     text_tmdb_ids = _tmdb_ids_from_text(text)

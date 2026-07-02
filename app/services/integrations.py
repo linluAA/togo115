@@ -530,7 +530,7 @@ class RssTorznabAdapter:
         challenge_url = urljoin(origin, "/recaptcha/v4/challenge?url=" + quote(origin, safe=":/") + "&s=1")
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
         uid = "".join(secrets.choice(alphabet) for _ in range(10)) + "_" + time.strftime("%Y%m%d%H%M%S")
-        client.cookies.set("aywcUid", uid, domain=f".{parsed.hostname or parsed.netloc}", path="/")
+        client.cookies.set("aywcUid", uid, domain=parsed.hostname or parsed.netloc, path="/")
         gen_res = await client.get(
             urljoin(origin, "/anti/recaptcha/v4/gen"),
             params={"aywcUid": uid, "_": str(int(time.time() * 1000))},
@@ -705,6 +705,9 @@ class RssTorznabAdapter:
             async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=25, follow_redirects=True) as client:
                 if source_type == "magnet_web":
                     res = await self._get_magnet_web_page(client, url)
+                    if self._is_magnet_web_challenge(str(res.url), res.text):
+                        add_log("warning", "rss", "磁力网页订阅源被浏览器验证拦截", {"source": name, "url": url})
+                        return []
                     results = await self._parse_magnet_web_source(source, url, res.text, client, self._query_release_year(query))
                 else:
                     res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})
@@ -712,6 +715,8 @@ class RssTorznabAdapter:
                     results = self._parse_feed(source, res.text)
                 for result in results:
                     result.priority = priority
+                if source_type == "magnet_web":
+                    add_log("debug", "rss", "磁力网页订阅源搜索完成", {"source": name, "url": url, "count": len(results)})
                 return results
         except Exception as exc:
             add_log("warning", "rss", "订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
@@ -796,7 +801,7 @@ class RssTorznabAdapter:
             same_year = [item for item in scored if item[2] and release_year in item[2]]
             if same_year:
                 scored = same_year
-            elif year_tagged:
+            elif year_tagged and not self._is_bt1207_url(source_url):
                 return []
         scored.sort(key=lambda item: item[0], reverse=True)
         return [(url, hint) for _, url, _, hint in scored[:MAGNET_WEB_DETAIL_LIMIT]]
@@ -897,6 +902,15 @@ class RssTorznabAdapter:
             async with httpx.AsyncClient(proxy=self._source_proxy(normalized), timeout=25, follow_redirects=True) as client:
                 if self._source_type(normalized) == "magnet_web":
                     res = await self._get_magnet_web_page(client, url)
+                    if self._is_magnet_web_challenge(str(res.url), res.text):
+                        return {
+                            "ok": False,
+                            "source": name,
+                            "url": url,
+                            "status_code": res.status_code,
+                            "latency_ms": round((time.perf_counter() - started) * 1000),
+                            "error": "磁力网页被浏览器验证拦截，未拿到真实搜索结果",
+                        }
                     results = await self._parse_magnet_web_source(normalized, url, res.text, client, self._query_release_year(query))
                 else:
                     res = await client.get(url, headers={"User-Agent": "ToGo115/1.0"})

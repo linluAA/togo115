@@ -137,6 +137,19 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         html = "<title>Recaptcha - Bot Challenge!</title><form action='/anti/recaptcha/v4/verify'></form>"
         self.assertTrue(adapter._is_magnet_web_challenge("https://bt1207to.cc/recaptcha/v4/challenge", html))
 
+    async def test_bt1207_year_filter_does_not_drop_detail_candidates(self) -> None:
+        adapter = RssTorznabAdapter()
+        search_html = """
+        <html><body>
+          <a href="/detail/06B46/Fy4bsmTLoWCPJKS1XcYt85jxSy0">宝莱坞机器人之恋</a>
+          <a href="/detail/F55D4/j6qMXb3d2GQw17dpwF-mnmlruHi">[2011.03.22] 宝莱坞机器人之恋</a>
+        </body></html>
+        """
+        detail_urls = adapter._magnet_web_detail_urls("https://bt1207to.cc/search?keyword=%E5%AE%9D%E8%8E%B1%E5%9D%9E%E6%9C%BA%E5%99%A8%E4%BA%BA%E4%B9%8B%E6%81%8B%202010", search_html, 2010)
+
+        self.assertTrue(detail_urls)
+        self.assertIn("https://bt1207to.cc/detail/06B46/Fy4bsmTLoWCPJKS1XcYt85jxSy0", detail_urls)
+
     async def test_magnet_web_detail_urls_and_page_parse(self) -> None:
         adapter = RssTorznabAdapter()
         search_html = """
