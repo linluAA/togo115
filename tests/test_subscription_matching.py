@@ -19,7 +19,13 @@ class SubscriptionMatchingTest(unittest.TestCase):
         subscription = {"title": "爱丽丝", "media_type": "tv", "tmdb_id": 12345, "keywords": ["爱丽丝"]}
 
         self.assertTrue(result_matches_subscription(subscription, result("爱丽丝.2020 {tmdb-12345} - S01E01")))
+        self.assertTrue(result_matches_subscription(subscription, result("电视剧：别名\nTMDB ID: 12345\nS01E01")))
         self.assertFalse(result_matches_subscription(subscription, result("爱丽丝与史蒂夫.2026 {tmdb-318203} - S01E02")))
+
+    def test_media_type_label_is_valid_chinese_title_prefix(self) -> None:
+        subscription = {"title": "爱情有烟火", "media_type": "tv", "tmdb_id": 230311, "release_year": 2026, "keywords": ["爱情有烟火"]}
+
+        self.assertTrue(result_matches_subscription(subscription, result("电视剧：爱情有烟火 (2026)\nS01E01-E36\nTMDB ID: 230311")))
 
     def test_release_year_rejects_other_versions_when_year_is_present(self) -> None:
         subscription = {"title": "生化危机战", "media_type": "movie", "tmdb_id": 0, "release_year": 2015, "keywords": ["生化危机战"]}

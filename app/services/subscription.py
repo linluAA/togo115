@@ -1,6 +1,7 @@
 import asyncio
 import re
 import sqlite3
+from collections import Counter
 from typing import Any
 
 from app.db import add_log, db, json_dumps, json_loads, row_to_dict, utc_now
@@ -9,10 +10,27 @@ from app.services.integrations import PAN115_URL_RE, EmbyAdapter, Pan115Adapter,
 
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
-TMDB_ID_RE = re.compile(r"(?i)(?:\{?\s*tmdb\s*[-_:： ]\s*(?P<id>\d{2,})\s*\}?)")
+TMDB_ID_RE = re.compile(r"(?i)(?:\{?\s*tmdb\s*(?:id)?\s*[-_:： ]\s*(?P<id>\d{2,})\s*\}?)")
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 CJK_RE = re.compile(r"[\u3400-\u9fff]")
-TITLE_PREFIX_LABELS = ("名称", "片名", "剧名", "标题", "资源", "资源名", "name", "title")
+TITLE_PREFIX_LABELS = (
+    "名称",
+    "片名",
+    "剧名",
+    "标题",
+    "资源",
+    "资源名",
+    "电视剧",
+    "电影",
+    "动漫",
+    "动画",
+    "综艺",
+    "剧集",
+    "短剧",
+    "番剧",
+    "name",
+    "title",
+)
 TITLE_SUFFIX_BOUNDARY_CHARS = set("第更连完终至季集话話期部篇上下中")
 EPISODE_TOKEN_RE = re.compile(
     r"(?i)(?:s(?P<season>\d{1,2})\s*)?e(?:p)?(?P<episode>\d{1,3})(?:\s*(?:-|~|–|—|至|到)\s*(?:e(?:p)?)?(?P<episode_end>\d{1,3}))?"
@@ -209,14 +227,18 @@ def _subscription_required_terms(subscription: dict) -> tuple[tuple[str, str] | 
     return title_term, keyword_terms
 
 
-def result_matches_subscription(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
+def _subscription_match_text(result: SearchResult, *extra_texts: str) -> str:
     primary_text = "\n".join(
         part
         for part in [getattr(result, "context", ""), result.title]
         if part
     )
     fallback_text = "\n".join(part for part in extra_texts if part)
-    text = primary_text or fallback_text
+    return primary_text or fallback_text
+
+
+def result_matches_subscription(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
+    text = _subscription_match_text(result, *extra_texts)
     if not text:
         return False
     raw_haystack = text.casefold()
@@ -240,6 +262,60 @@ def result_matches_subscription(subscription: dict, result: SearchResult, *extra
     if not tmdb_id_matched and (not title_term or not _title_term_in_text(title_term, text)):
         return False
     return all(_term_in_text(term, raw_haystack, compact_haystack) for term in keyword_terms)
+
+
+def _result_skip_reason(subscription: dict, result: SearchResult, *extra_texts: str) -> str:
+    text = _subscription_match_text(result, *extra_texts)
+    if not text:
+        return "文本为空"
+    raw_haystack = text.casefold()
+    compact_haystack = _compact_match_text(text)
+    title_term, keyword_terms = _subscription_required_terms(subscription)
+    release_year = _subscription_release_year(subscription)
+    text_years = _years_from_text(text)
+    if release_year:
+        if _result_is_magnet_web(result):
+            if not text_years:
+                return "磁力结果缺少年份"
+            if any(year != release_year for year in text_years):
+                return "年份不匹配"
+        elif text_years and release_year not in text_years:
+            return "年份不匹配"
+    subscription_tmdb_id = str(subscription.get("tmdb_id") or "").lstrip("0")
+    text_tmdb_ids = _tmdb_ids_from_text(text)
+    tmdb_id_matched = False
+    if subscription_tmdb_id and text_tmdb_ids:
+        if subscription_tmdb_id not in text_tmdb_ids:
+            return "TMDB ID 不匹配"
+        tmdb_id_matched = True
+    if not tmdb_id_matched and (not title_term or not _title_term_in_text(title_term, text)):
+        return "标题未命中"
+    for term in keyword_terms:
+        if not _term_in_text(term, raw_haystack, compact_haystack):
+            return f"关键词未命中:{term[0]}"
+    if subscription.get("media_type") != "tv":
+        return "电影已入库" if subscription.get("in_library") else "已匹配"
+    if subscription.get("emby_snapshot_failed"):
+        return "Emby 快照失败"
+    expected = _all_tmdb_episode_keys(subscription)
+    if not expected:
+        return "已匹配"
+    missing = _missing_episode_keys(subscription)
+    if not missing:
+        return "订阅已完整入库"
+    episodes = episodes_from_text(_result_text(result, *extra_texts))
+    if not episodes:
+        return "未识别到集数"
+    if not (episodes & missing):
+        return "集数不在缺集范围"
+    return "已匹配"
+
+
+def _skip_reason_summary(subscription: dict, results: list[SearchResult], *extra_texts: str) -> str:
+    counter = Counter(_result_skip_reason(subscription, result, *extra_texts) for result in results)
+    if not counter:
+        return ""
+    return "，".join(f"{reason} {count}" for reason, count in counter.most_common(4))
 
 
 def _result_text(result: SearchResult, *extra_texts: str) -> str:
@@ -836,7 +912,10 @@ async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, 
         conn.execute("UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?", (utc_now(), utc_now(), subscription_id))
     skipped = len(telegram_results) - len(telegram_matches)
     if skipped:
-        add_log("debug", "subscription", "TG 历史搜索结果未匹配订阅标题/关键词/缺集范围，已跳过", {"id": subscription_id, "skipped": skipped})
+        skipped_results = [result for result in telegram_results if result not in telegram_matches]
+        reason_summary = _skip_reason_summary(subscription, skipped_results)
+        message = f"TG 历史搜索结果未匹配订阅条件，已跳过（{reason_summary}）" if reason_summary else "TG 历史搜索结果未匹配订阅条件，已跳过"
+        add_log("debug", "subscription", message, {"id": subscription_id, "skipped": skipped})
     if telegram_matches:
         add_log("info", "subscription", "TG 已找到匹配资源，跳过订阅源/磁力搜索", {"id": subscription_id, "count": len(telegram_matches)})
         if created:
@@ -876,7 +955,15 @@ async def search_and_attach_resources(subscription_id: int, snapshot: dict[str, 
             break
     skipped = rss_total - matched_count
     if skipped:
-        add_log("debug", "subscription", "订阅源/磁力结果未匹配订阅标题/关键词/缺集范围，已跳过", {"id": subscription_id, "skipped": skipped})
+        skipped_results = [
+            result
+            for group in rss_groups
+            for result in group["results"]
+            if result not in _matching_results(subscription, list(group["results"]))
+        ]
+        reason_summary = _skip_reason_summary(subscription, skipped_results)
+        message = f"订阅源/磁力结果未匹配订阅条件，已跳过（{reason_summary}）" if reason_summary else "订阅源/磁力结果未匹配订阅条件，已跳过"
+        add_log("debug", "subscription", message, {"id": subscription_id, "skipped": skipped})
     if created:
         add_log("info", "subscription", "TG 未找到资源，订阅源/磁力发现新的资源链接", {"id": subscription_id, "count": len(created)})
         for item in created:
