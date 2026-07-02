@@ -10,6 +10,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         links = extract_download_links(text)
         self.assertIn("magnet:?xt=urn:btih:abc123", links)
         self.assertIn("http://example.com/file.torrent", links)
+        self.assertIn("https://115cdn.com/s/abc123", links)
 
     async def test_torznab_parse_and_match(self) -> None:
         adapter = RssTorznabAdapter()

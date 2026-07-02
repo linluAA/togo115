@@ -15,13 +15,14 @@ from telethon.errors import SessionPasswordNeededError
 from app.config import settings
 from app.db import add_log, db, json_dumps, json_loads, utc_now
 
-PAN115_URL_RE = re.compile(r"https?://(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?[^\s\"'<>)]+)?", re.I)
+PAN115_URL_RE = re.compile(r"(?:https?://)?(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?[^\s\"'<>)]+)?", re.I)
 MAGNET_URL_RE = re.compile(r"magnet:\?[^\s\"'<>]+", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
 HTML_ANCHOR_RE = re.compile(r"<a\b(?P<attrs>[^>]*)>(?P<label>.*?)</a>", re.I | re.S)
 HTML_HREF_RE = re.compile(r"\bhref\s*=\s*([\"'])(?P<href>.*?)\1|\bhref\s*=\s*(?P<bare>[^\s>]+)", re.I | re.S)
 HTML_TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title>", re.I | re.S)
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+LOCAL_SEARCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 HTML_CONTEXT_TAGS = ("li", "tr", "article", "section", "div", "p")
 MAGNET_WEB_DETAIL_LIMIT = 8
 
@@ -88,6 +89,8 @@ def _clean_download_link(link: str) -> str:
     cleaned = link.rstrip("，。；,.;")
     while cleaned.endswith(")") and cleaned.count(")") > cleaned.count("("):
         cleaned = cleaned[:-1]
+    if re.match(r"(?i)^(?:www\.)?115(?:cdn)?\.com/s/", cleaned):
+        cleaned = f"https://{cleaned}"
     return cleaned
 
 
@@ -242,6 +245,18 @@ def _truthy(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in ("1", "true", "yes", "on", "enabled")
+
+
+def _compact_search_text(value: str | None) -> str:
+    return LOCAL_SEARCH_DROP_RE.sub("", str(value or "").casefold())
+
+
+def _local_text_matches_query(text: str | None, query: str | None) -> bool:
+    compact_text = _compact_search_text(text)
+    parts = [part for part in re.split(r"\s+", str(query or "").strip()) if part]
+    if not compact_text or not parts:
+        return False
+    return all(_compact_search_text(part) in compact_text for part in parts)
 
 
 def context_for_115_link(text: str | None, link: str, total_links: int) -> str:
@@ -860,11 +875,40 @@ class TelegramClientAdapter:
             return []
         clean_keywords = [item.strip() for item in keywords if item and item.strip() and item.strip() != title]
         queries = [title, *(f"{title} {keyword}" for keyword in clean_keywords)]
+        try:
+            history_limit = int(config.get("history_limit") or 80)
+        except (TypeError, ValueError):
+            history_limit = 80
+        history_limit = max(history_limit, 1)
+        fallback_scan_limit = max(history_limit, 200)
         results: list[SearchResult] = []
+        seen_messages: set[tuple[str, int]] = set()
         for dialog in dialogs:
             for query in dict.fromkeys(queries):
-                async for message in client.iter_messages(dialog, search=query, limit=int(config.get("history_limit") or 80)):
-                    results.extend(await self._links_from_message(client, message, dialog))
+                query_message_count = 0
+                query_link_count = 0
+                async for message in client.iter_messages(dialog, search=query, limit=history_limit):
+                    query_message_count += 1
+                    seen_messages.add((dialog, int(message.id)))
+                    links = await self._links_from_message(client, message, dialog)
+                    query_link_count += len(links)
+                    results.extend(links)
+                if query_link_count:
+                    continue
+                async for message in client.iter_messages(dialog, limit=fallback_scan_limit):
+                    message_key = (dialog, int(message.id))
+                    if message_key in seen_messages:
+                        continue
+                    if not _local_text_matches_query(message.raw_text or "", query):
+                        continue
+                    seen_messages.add(message_key)
+                    links = await self._links_from_message(client, message, dialog)
+                    query_link_count += len(links)
+                    results.extend(links)
+                if query_message_count and not query_link_count:
+                    add_log("debug", "telegram", "Telegram 历史搜索命中消息但未提取到 115 链接", {"dialog": dialog, "query": query, "messages": query_message_count})
+                elif not query_message_count and not query_link_count:
+                    add_log("debug", "telegram", "Telegram 历史搜索未命中，已完成最近消息兜底扫描", {"dialog": dialog, "query": query, "limit": fallback_scan_limit})
         deduped: list[SearchResult] = []
         seen: set[tuple[str, str | None, str]] = set()
         for result in results:
@@ -885,12 +929,19 @@ class TelegramClientAdapter:
         }
         if getattr(message, "buttons", None):
             button_links = await self._click_buttons_for_links(message)
-            use_message_context = not direct_links and len(button_links) == 1
             for link, button_text in button_links:
                 context = "\n".join(
-                    part for part in ((message_text if use_message_context else ""), button_text) if part
+                    part for part in (message_text, button_text) if part
                 )
                 link_contexts.setdefault(link, context)
+        if not link_contexts:
+            button_labels = [
+                getattr(button, "text", "") or ""
+                for row in (getattr(message, "buttons", None) or [])
+                for button in row
+                if getattr(button, "text", "")
+            ]
+            add_log("debug", "telegram", "Telegram 消息未提取到 115 链接", {"message_id": getattr(message, "id", None), "buttons": button_labels[:8]})
         return [
             SearchResult(
                 title=(context or "Telegram 资源")[:120],
@@ -905,18 +956,41 @@ class TelegramClientAdapter:
     async def _click_buttons_for_links(self, message: Any) -> list[tuple[str, str]]:
         links: list[tuple[str, str]] = []
         link_button_words = ("115", "链接", "查看", "打开", "资源", "获取", "下载", "提取", "网盘", "详情", "link")
+
+        def add_links_from_text(text: Any, label: str) -> None:
+            value = ""
+            if isinstance(text, bytes):
+                value = text.decode("utf-8", errors="ignore")
+            elif text is not None:
+                value = str(text)
+            for link in extract_115_links(value):
+                links.append((link, "\n".join(part for part in (label, value) if part)))
+
         for row_index, row in enumerate(message.buttons or []):
             for col_index, button in enumerate(row):
                 label = getattr(button, "text", "") or ""
                 if not any(word in label.casefold() for word in link_button_words):
                     continue
+                add_links_from_text(getattr(button, "url", None), label)
+                raw_button = getattr(button, "button", None)
+                if raw_button is not None:
+                    add_links_from_text(getattr(raw_button, "url", None), label)
+                    add_links_from_text(getattr(raw_button, "data", None), label)
                 try:
                     response = await message.click(row_index, col_index)
+                    add_links_from_text(getattr(response, "url", None), label)
                     text = getattr(response, "raw_text", None) or getattr(response, "message", None) or (response if isinstance(response, str) else None)
-                    links.extend((link, text or label) for link in extract_115_links(text))
+                    add_links_from_text(text, label)
                 except Exception as exc:
                     add_log("debug", "telegram", "点击 Telegram 消息按钮未取得链接", {"message_id": message.id, "button": label, "error": str(exc)})
-        return links
+        deduped: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for link, text in links:
+            if link in seen:
+                continue
+            seen.add(link)
+            deduped.append((link, text))
+        return deduped
 
     async def ensure_monitoring(self) -> None:
         if not await self.is_authorized():
