@@ -23,6 +23,7 @@ PAN115_LOOSE_URL_RE = re.compile(
 )
 MAGNET_URL_RE = re.compile(r"magnet:\?[^\s\"'<>]+", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
+BTIH_HASH_RE = re.compile(r"(?:种子哈希|信息哈希|info\s*hash|btih|hash)\s*[：:]\s*([A-Fa-f0-9]{32,40})", re.I)
 HTML_ANCHOR_RE = re.compile(r"<a\b(?P<attrs>[^>]*)>(?P<label>.*?)</a>", re.I | re.S)
 HTML_HREF_RE = re.compile(r"\bhref\s*=\s*([\"'])(?P<href>.*?)\1|\bhref\s*=\s*(?P<bare>[^\s>]+)", re.I | re.S)
 HTML_TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title>", re.I | re.S)
@@ -143,6 +144,11 @@ def extract_download_links(text: str | None) -> list[str]:
             if link not in seen:
                 seen.add(link)
                 links.append(link)
+    for match in BTIH_HASH_RE.finditer(text):
+        link = f"magnet:?xt=urn:btih:{match.group(1).upper()}"
+        if link not in seen:
+            seen.add(link)
+            links.append(link)
     return links
 
 
@@ -501,9 +507,18 @@ class RssTorznabAdapter:
     def _is_bt1207_search_home_fallback(self, requested_url: str, response_url: str, html_text: str) -> bool:
         if not self._is_bt1207_search_url(requested_url):
             return False
+        return self._is_bt1207_home_fallback(requested_url, response_url, html_text)
+
+    def _is_bt1207_home_fallback(self, requested_url: str, response_url: str, html_text: str) -> bool:
+        if not self._is_bt1207_url(requested_url):
+            return False
+        requested = urlparse(str(requested_url or ""))
+        requested_path = requested.path.rstrip("/") or "/"
+        if requested_path == "/":
+            return False
         final = urlparse(str(response_url or ""))
         final_path = final.path.rstrip("/") or "/"
-        if final_path == "/search":
+        if final_path == requested_path:
             return False
         title = _html_page_title(html_text or "", "")
         return final_path == "/" or title == "BT1207 - 好用的磁力链接搜索引擎"
@@ -587,15 +602,17 @@ class RssTorznabAdapter:
         res = await client.get(url, headers=self._magnet_web_headers(request_referer))
         res.raise_for_status()
         challenged = self._is_magnet_web_challenge(str(res.url), res.text)
-        home_fallback = self._is_bt1207_search_home_fallback(url, str(res.url), res.text)
+        home_fallback = self._is_bt1207_home_fallback(url, str(res.url), res.text)
         if self._is_bt1207_url(url) and (challenged or home_fallback):
             if home_fallback:
-                add_log("debug", "rss", "BT1207 搜索页被打回首页，重新验证后重试", {"url": url, "final_url": str(res.url)})
+                add_log("debug", "rss", "BT1207 页面被打回首页，重新验证后重试", {"url": url, "final_url": str(res.url)})
             if await self._solve_bt1207_challenge(client, url):
                 res = await client.get(url, headers=self._magnet_web_headers(request_referer))
                 res.raise_for_status()
-                if self._is_bt1207_search_home_fallback(url, str(res.url), res.text):
-                    add_log("warning", "rss", "BT1207 搜索页重试后仍返回首页", {"url": url, "final_url": str(res.url), "title": _html_page_title(res.text, "")})
+                if self._is_bt1207_home_fallback(url, str(res.url), res.text):
+                    add_log("warning", "rss", "BT1207 页面重试后仍返回首页", {"url": url, "final_url": str(res.url), "title": _html_page_title(res.text, "")})
+                    if not self._is_bt1207_search_url(url):
+                        raise RuntimeError("BT1207 detail page returned home page")
         return res
 
     def _query_release_year(self, query: str | None) -> int | None:

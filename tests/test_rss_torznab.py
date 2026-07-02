@@ -13,6 +13,12 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("http://example.com/file.torrent", links)
         self.assertIn("https://115cdn.com/s/abc123", links)
 
+    def test_extract_download_links_builds_magnet_from_btih_hash(self) -> None:
+        text = "种子哈希：DB7F7B1C023B944805B2DC2B1854B241DE8BA7C9"
+        links = extract_download_links(text)
+
+        self.assertIn("magnet:?xt=urn:btih:DB7F7B1C023B944805B2DC2B1854B241DE8BA7C9", links)
+
     def test_extract_115_links_accepts_wrapped_share_url(self) -> None:
         text = "链接：https://115.com/s\n/swssxf43nbi?password=8888"
         links = extract_download_links(text)
