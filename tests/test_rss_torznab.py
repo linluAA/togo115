@@ -19,6 +19,18 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("magnet:?xt=urn:btih:DB7F7B1C023B944805B2DC2B1854B241DE8BA7C9", links)
 
+    def test_magnet_web_page_parse_builds_magnet_from_stripped_hash(self) -> None:
+        adapter = RssTorznabAdapter()
+        html = """
+        <html><head><title>宝莱坞机器人之恋 - 磁力链接与种子详情 - BT1207</title></head><body>
+          <ul><li>种子哈希：</li><li>DB7F7B1C023B944805B2DC2B1854B241DE8BA7C9</li></ul>
+        </body></html>
+        """
+        source = {"name": "BT1207", "type": "magnet_web", "url": "https://bt1207to.cc/", "enabled": True}
+        results = adapter._parse_magnet_web_page(source, "https://bt1207to.cc/detail/test/hash", html)
+
+        self.assertEqual(results[0].url, "magnet:?xt=urn:btih:DB7F7B1C023B944805B2DC2B1854B241DE8BA7C9")
+
     def test_extract_115_links_accepts_wrapped_share_url(self) -> None:
         text = "链接：https://115.com/s\n/swssxf43nbi?password=8888"
         links = extract_download_links(text)

@@ -445,6 +445,16 @@ class RssTorznabAdapter:
         except (TypeError, ValueError):
             return 0
 
+    def _dedupe_links(self, links: list[str]) -> list[str]:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for link in links:
+            if not link or link in seen:
+                continue
+            seen.add(link)
+            deduped.append(link)
+        return deduped
+
     def _source_supports_query(self, source: dict[str, Any]) -> bool:
         url = str(source.get("url") or "")
         source_type = self._source_type(source)
@@ -943,13 +953,22 @@ class RssTorznabAdapter:
         normalized_html = unescape(html_text or "")
         page_title = _html_page_title(normalized_html, name)
         page_text = _strip_html(normalized_html)
-        links = extract_download_links(normalized_html)
+        links = self._dedupe_links([*extract_download_links(normalized_html), *extract_download_links(page_text)])
+        if self._is_bt1207_url(page_url) and "/detail/" in urlparse(page_url).path and not links:
+            add_log(
+                "debug",
+                "rss",
+                "BT1207 详情页未解析到磁力或种子哈希",
+                {"url": page_url, "title": page_title, "length": len(normalized_html), "snippet": page_text[:260]},
+            )
         results: list[SearchResult] = []
+        filtered = 0
         for link in links:
             context = _link_context_from_html(normalized_html, link) or page_text[:1200]
             title = _title_from_link_context(context, page_title)
             text = "\n".join(part for part in (title, page_title, source_context, context) if part)
             if not self._source_matches_filters(source, text):
+                filtered += 1
                 continue
             results.append(
                 SearchResult(
@@ -959,6 +978,13 @@ class RssTorznabAdapter:
                     message_id=page_url,
                     context=text,
                 )
+            )
+        if self._is_bt1207_url(page_url) and "/detail/" in urlparse(page_url).path and links and not results:
+            add_log(
+                "debug",
+                "rss",
+                "BT1207 详情页磁力被订阅源过滤条件跳过",
+                {"url": page_url, "title": page_title, "links": len(links), "filtered": filtered, "keywords": source.get("keywords"), "quality": source.get("quality")},
             )
         return results
 
