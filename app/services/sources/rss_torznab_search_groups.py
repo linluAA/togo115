@@ -7,7 +7,7 @@ from app.services.types import SearchResult
 
 
 class RssTorznabSearchGroupsMixin:
-    async def search_history_by_source(self, title: str, keywords: list[str]) -> list[dict[str, Any]]:
+    async def search_history_by_source(self, title: str, keywords: list[str], query_context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         sources = self._sources()
         if not sources:
             add_log("debug", "rss", "没有启用的订阅源/磁力源，跳过搜索", {"title": title})
@@ -15,7 +15,7 @@ class RssTorznabSearchGroupsMixin:
         groups: list[dict[str, Any]] = []
         queries = self._search_queries(title, keywords)
         for source in sources:
-            source_results = await self._fetch_source_for_queries(source, queries)
+            source_results = await self._fetch_source_for_queries(source, queries, query_context) if query_context else await self._fetch_source_for_queries(source, queries)
             if source_results:
                 groups.append({"source": source, "priority": self._source_priority(source), "results": source_results})
         count = sum(len(group["results"]) for group in groups)
@@ -27,6 +27,7 @@ class RssTorznabSearchGroupsMixin:
         title: str,
         keywords: list[str],
         matcher: Callable[[SearchResult], bool],
+        query_context: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         sources = self._sources()
         if not sources:
@@ -39,7 +40,7 @@ class RssTorznabSearchGroupsMixin:
             priority = self._source_priority(source)
             if state.should_stop(priority):
                 break
-            source_results = await self._fetch_source_for_queries(source, queries)
+            source_results = await self._fetch_source_for_queries(source, queries, query_context) if query_context else await self._fetch_source_for_queries(source, queries)
             state.searched_sources += 1
             if not source_results:
                 continue
@@ -49,8 +50,8 @@ class RssTorznabSearchGroupsMixin:
         _log_priority_search_done(groups, state, title)
         return groups
 
-    async def search_history(self, title: str, keywords: list[str]) -> list[SearchResult]:
-        groups = await self.search_history_by_source(title, keywords)
+    async def search_history(self, title: str, keywords: list[str], query_context: dict[str, Any] | None = None) -> list[SearchResult]:
+        groups = await self.search_history_by_source(title, keywords, query_context)
         results = [result for group in groups for result in group["results"]]
         return self._dedupe_results(results)
 

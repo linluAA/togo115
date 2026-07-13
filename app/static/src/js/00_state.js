@@ -1,10 +1,11 @@
 const VIEW_KEYS = ["tmdb", "emby", "subscriptions", "logs", "settings"];
 const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "tg_bot", "emby", "backup"];
 const TMDB_MORE_MIN_PAGE_SIZE = 40;
-const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4"]);
+const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4", "hdhive"]);
 const BUILTIN_RSS_SOURCES = [
   { id: "builtin_bt1207", name: "BT1207", type: "site_plugin", plugin: "bt1207", url: "https://bt1207to.cc/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
   { id: "builtin_qmp4", name: "QMP4 / 七味", type: "site_plugin", plugin: "qmp4", url: "https://www.qmp4.com/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
+  { id: "builtin_hdhive", name: "HDHive / 影巢", type: "site_plugin", plugin: "hdhive", url: "https://hdhive.com/", enabled: false, use_proxy: false, priority: -40, refresh_interval: 30, test_query: "tv:86344", points_threshold: 0, browser_path: "", browser_user_data_dir: "" },
 ];
 
 const state = {

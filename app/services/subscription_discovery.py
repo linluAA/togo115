@@ -115,6 +115,7 @@ async def search_fallback_sources(
                 search_title,
                 _extra_search_keywords(subscription),
                 fallback_usable_checker(facade, subscription),
+                query_context=_rss_query_context(subscription),
             ),
             timeout=runtime.RSS_SEARCH_TIMEOUT_SECONDS,
         )
@@ -133,3 +134,12 @@ async def search_fallback_sources(
             {"id": subscription_id, "title": search_title, "error": str(exc)},
         )
     return []
+
+
+def _rss_query_context(subscription: dict) -> dict[str, Any]:
+    return {
+        "title": subscription.get("title"),
+        "media_type": subscription.get("media_type"),
+        "tmdb_id": subscription.get("tmdb_id"),
+        "release_year": subscription.get("release_year"),
+    }

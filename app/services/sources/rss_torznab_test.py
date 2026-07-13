@@ -64,6 +64,9 @@ class RssTorznabTestMixin:
         client: httpx.AsyncClient,
         started: float,
     ) -> tuple[str, httpx.Response | None, list]:
+        if self._site_plugin_id(source) == "hdhive":
+            results = await self._fetch_hdhive_source(source, query, _hdhive_test_context(source, query))
+            return url, None, results
         if self._site_plugin_id(source) == "qmp4":
             return await self._test_qmp4_source(source, url, query, client, started)
         res = await self._get_magnet_web_page(client, url)
@@ -112,6 +115,11 @@ class RssTorznabTestMixin:
     def _source_test_diagnostic(self, source: dict[str, Any], url: str, res: httpx.Response | None, results: list, query: str) -> dict[str, Any]:
         if self._source_type(source) != "site_plugin" or results:
             return {}
+        if self._site_plugin_id(source) == "hdhive":
+            return {
+                "message": "HDHive 需要已登录浏览器态，并建议使用测试关键字 tv:86344 或 movie:TMDB_ID。",
+                "final_url": url,
+            }
         if res is None:
             return {}
         diagnostic = {
@@ -151,4 +159,20 @@ class _SourceTestFailure(Exception):
     def __init__(self, payload: dict[str, Any]) -> None:
         super().__init__(payload.get("error") or "订阅源测试失败")
         self.payload = payload
+
+
+def _hdhive_test_context(source: dict[str, Any], query: str | None) -> dict[str, Any]:
+    media_type = str(source.get("test_media_type") or source.get("media_type") or "").strip().lower()
+    tmdb_id = source.get("test_tmdb_id") or source.get("tmdb_id")
+    value = str(query or "").strip()
+    if ":" in value:
+        left, right = value.split(":", 1)
+        if left.strip().lower() in {"movie", "tv"}:
+            media_type = left.strip().lower()
+            tmdb_id = right.strip()
+    return {
+        "title": str(source.get("test_title") or source.get("name") or "HDHive").strip(),
+        "media_type": media_type,
+        "tmdb_id": tmdb_id,
+    }
 

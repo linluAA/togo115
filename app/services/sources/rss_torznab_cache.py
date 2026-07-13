@@ -34,19 +34,21 @@ class RssTorznabCacheMixin:
                     self._search_cache.pop(key, None)
         self._search_cache[self._search_cache_key(source, query)] = (time.time(), list(results))
 
-    async def _fetch_source_for_queries(self, source: dict[str, Any], queries: list[str]) -> list[SearchResult]:
+    async def _fetch_source_for_queries(self, source: dict[str, Any], queries: list[str], query_context: dict[str, Any] | None = None) -> list[SearchResult]:
         results: list[SearchResult] = []
         source_queries = self._source_queries(source, queries)
         if not source_queries:
             return []
         async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True) as client:
             for query in source_queries:
-                cached = self._cached_source_results(source, query)
+                cacheable = self._site_plugin_id(source) != "hdhive"
+                cached = self._cached_source_results(source, query) if cacheable else None
                 if cached is not None:
                     results.extend(cached)
                     continue
-                fetched = await self._fetch_source(source, query, client)
-                self._store_source_results_cache(source, query, fetched)
+                fetched = await self._fetch_source(source, query, client, query_context) if query_context else await self._fetch_source(source, query, client)
+                if cacheable:
+                    self._store_source_results_cache(source, query, fetched)
                 results.extend(fetched)
         return self._dedupe_results(results)
 

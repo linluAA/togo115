@@ -54,6 +54,7 @@ async def _manual_search_resources(payload: SearchRequest) -> dict:
                 search_title,
                 payload.keywords,
                 lambda result: bool(_matching_results(subscription_like, [result])),
+                query_context=subscription_like,
             )
         except Exception as exc:
             source_groups = []

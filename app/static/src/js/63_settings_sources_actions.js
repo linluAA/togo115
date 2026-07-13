@@ -8,47 +8,27 @@ async function saveRssSources(event) {
     .map((row) => {
       const id = row.dataset.sourceId || `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       const original = originals.get(id) || {};
-      const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
-      const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10);
       const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "rss");
       const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || original.plugin || "generic_magnet", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
-      return {
-        id,
-        name: row.querySelector(".rss-source-name")?.value.trim() || "",
-        url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
-        type,
-        plugin,
-        enabled: original.enabled !== false,
-        use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-        keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-        quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-        test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-        priority: Number.isFinite(priority) ? priority : 0,
-        refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
-        ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
-      };
+      return rssSourceFromRow(row, id, original, type, plugin);
     })
     .filter((source) => source.url);
+
   const builtin_sources = Object.fromEntries(
     Array.from(builtinOriginals.values()).map((source) => [source.id, builtinRssOverrideFromSource(source)])
   );
   builtinRows.forEach((row) => {
     const id = row.dataset.builtinSourceId;
     const original = builtinOriginals.get(id) || {};
-    const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
-    const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "-50", 10);
+    const plugin = normalizeSitePlugin(original);
+    const value = rssSourceFromRow(row, id, original, "site_plugin", plugin);
     builtin_sources[id] = builtinRssOverrideFromSource({
       ...original,
-      url: row.querySelector(".rss-source-url-input")?.value.trim() || original.url || "",
+      ...value,
       enabled: Boolean(row.querySelector(".rss-source-enabled")?.checked),
-      use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-      keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-      quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-      test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-      priority: Number.isFinite(priority) ? priority : -50,
-      refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
     });
   });
+
   await api("/api/settings/rss_sources", { method: "PUT", body: JSON.stringify({ value: { ...rssSourcesConfig(), sources, builtin_sources } }) });
   state.settings = await api("/api/settings");
   state.rssSourceExpanded.clear();
@@ -66,19 +46,11 @@ async function testRssSource(event) {
   const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
   const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
   if (!row || !resultBox) return;
+  const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "rss");
+  const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "generic_magnet", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
   const source = {
-    id,
-    name: row.querySelector(".rss-source-name")?.value.trim() || "",
-    url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
-    type: normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "rss"),
-    plugin: normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "generic_magnet", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" }),
+    ...rssSourceFromRow(row, id, {}, type, plugin),
     enabled: true,
-    use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-    keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-    quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-    test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-    priority: Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10) || 0,
-    refresh_interval: Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10) || 30,
   };
   resultBox.classList.remove("hidden");
   resultBox.innerHTML = `<span class="muted">正在测试...</span>`;
@@ -108,5 +80,3 @@ async function testRssSource(event) {
     resultBox.innerHTML = `<span class="warn-text">不可用</span> · ${escapeHtml(error.message)}`;
   }
 }
-
-

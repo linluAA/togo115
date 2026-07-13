@@ -40,6 +40,9 @@ function builtinRssOverrideFromSource(source) {
     keywords: source.keywords || "",
     quality: source.quality || "",
     test_query: source.test_query || "",
+    points_threshold: Number.parseInt(source.points_threshold, 10) || 0,
+    browser_path: source.browser_path || "",
+    browser_user_data_dir: source.browser_user_data_dir || "",
     priority: Number.isFinite(priority) ? priority : -50,
     refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
   };
@@ -57,6 +60,9 @@ function normalizeRssSource(source) {
     test_query: source.test_query || "",
     keywords: source.keywords || "",
     quality: source.quality || "",
+    points_threshold: Number.parseInt(source.points_threshold, 10) || 0,
+    browser_path: source.browser_path || "",
+    browser_user_data_dir: source.browser_user_data_dir || "",
   };
 }
 
@@ -74,9 +80,11 @@ function normalizeSitePlugin(source) {
   const raw = String(source?.plugin || source?.site_plugin || "").toLowerCase();
   if (["bt1207", "bt1207_magnet"].includes(raw)) return "bt1207";
   if (["qmp4", "qiwei", "qmp4_magnet"].includes(raw)) return "qmp4";
+  if (["hdhive", "yingchao", "hdhive_115"].includes(raw)) return "hdhive";
   const url = String(source?.url || "").toLowerCase();
   if (url.includes("bt1207")) return "bt1207";
   if (url.includes("qmp4.com")) return "qmp4";
+  if (url.includes("hdhive.com")) return "hdhive";
   return "generic_magnet";
 }
 
@@ -88,7 +96,8 @@ function isBuiltinRssSource(source) {
 function sitePluginLabel(plugin) {
   const normalized = normalizeSitePlugin({ plugin });
   if (normalized === "bt1207") return "BT1207";
-  if (normalized === "qmp4") return "QMP4 / 七味";
+  if (normalized === "qmp4") return "QMP4";
+  if (normalized === "hdhive") return "HDHive / 影巢";
   return "通用磁力站";
 }
 
@@ -103,6 +112,7 @@ function rssSourceUrlLabel(type, plugin = "generic_magnet") {
   const value = normalizeRssSourceType(type);
   if (value === "site_plugin") {
     const normalized = normalizeSitePlugin({ plugin });
+    if (normalized === "hdhive") return "HDHive 站点首页";
     return "站点首页 / 搜索 URL 模板";
   }
   if (value === "torznab") return "Torznab URL";
@@ -115,6 +125,7 @@ function rssSourceUrlPlaceholder(type, plugin = "generic_magnet") {
     const normalized = normalizeSitePlugin({ plugin });
     if (normalized === "bt1207") return "例如：https://bt1207to.cc/";
     if (normalized === "qmp4") return "例如：https://www.qmp4.com/";
+    if (normalized === "hdhive") return "https://hdhive.com/";
     return "例如：https://yhdm33.com/s/{query}.html，也可以只填站点首页";
   }
   if (value === "torznab") return "例如：https://example.com/api?t=search&q={query}";
@@ -133,15 +144,15 @@ function sourceStatFor(source) {
 }
 
 function sourceHealthLabel(reason) {
-  if (reason === "recent_failures") return "\u6700\u8fd1\u5931\u8d25\u8f83\u591a";
-  if (reason === "slow_source") return "\u54cd\u5e94\u8fc7\u6162";
-  return "\u72b6\u6001\u5f02\u5e38";
+  if (reason === "recent_failures") return "最近失败较多";
+  if (reason === "slow_source") return "响应过慢";
+  return "状态异常";
 }
 
 function sourceHealthChip(stat) {
   if (!stat) return "";
   if (stat.degraded) {
-    return `<span class="source-chip-warning">\u4e34\u65f6\u964d\u7ea7\uff1a${escapeHtml(sourceHealthLabel(stat.degrade_reason))}</span>`;
+    return `<span class="source-chip-warning">临时降级：${escapeHtml(sourceHealthLabel(stat.degrade_reason))}</span>`;
   }
-  return `<span class="source-chip-ok">\u72b6\u6001\u6b63\u5e38</span>`;
+  return `<span class="source-chip-ok">状态正常</span>`;
 }

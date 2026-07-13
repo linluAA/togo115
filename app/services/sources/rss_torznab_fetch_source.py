@@ -16,6 +16,7 @@ class RssTorznabFetchSourceMixin:
         source: dict[str, Any],
         query: str | None = None,
         client: httpx.AsyncClient | None = None,
+        query_context: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
         name = str(source.get("name") or "订阅源").strip()
         url = self._source_url(source, query)
@@ -36,7 +37,7 @@ class RssTorznabFetchSourceMixin:
         owns_client = client is None
         active_client = client or httpx.AsyncClient(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True)
         try:
-            results = await self._fetch_source_results(source, context, active_client, query)
+            results = await self._fetch_source_results(source, context, active_client, query, query_context)
             for result in results:
                 result.priority = context.priority
             context.record(True, len(results))
@@ -61,9 +62,10 @@ class RssTorznabFetchSourceMixin:
         context: "_FetchContext",
         client: httpx.AsyncClient,
         query: str | None,
+        query_context: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
         if context.source_type == "site_plugin":
-            return await self._fetch_site_plugin_results(source, context, client, query)
+            return await self._fetch_site_plugin_results(source, context, client, query, query_context)
 
         res = await client.get(context.url, headers={"User-Agent": "ToGo115/1.0"})
         res.raise_for_status()
@@ -75,7 +77,13 @@ class RssTorznabFetchSourceMixin:
         context: "_FetchContext",
         client: httpx.AsyncClient,
         query: str | None,
+        query_context: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
+        if self._site_plugin_id(source) == "hdhive":
+            results = await self._fetch_hdhive_source(source, query, query_context)
+            add_log("debug", "rss", f"HDHive 订阅源搜索完成：{len(results)} 条", {"source": context.name, "url": context.url, "count": len(results)})
+            return results
+
         res = await self._get_magnet_web_page(client, context.url)
         if self._is_magnet_web_challenge(str(res.url), res.text):
             add_log("warning", "rss", "站点插件订阅源被浏览器验证拦截", {"source": context.name, "url": context.url, "plugin": self._site_plugin_id(source)})

@@ -9,6 +9,7 @@ import httpx
 from app.config import settings
 from app.db import init_db
 from app.services.integrations import RssTorznabAdapter, SearchResult, TelegramClientAdapter, TmdbAdapter, context_for_115_link, extract_download_links, telegram_message_text
+from app.services.sources.rss_torznab_hdhive import extract_hdhive_resource_candidates, order_hdhive_candidates
 from app.services.subscription_matching import result_matches_subscription
 
 
@@ -1251,6 +1252,43 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         result = await adapter.test_source(source)
         self.assertIn("ok", result)
         self.assertIn("source", result)
+
+    def test_hdhive_orders_free_resources_before_points_resources(self) -> None:
+        items = [
+            {"href": "https://hdhive.com/resource/115/paid", "text": "HDHive paid 1080p 需要 5 积分解锁 80GB"},
+            {"href": "https://hdhive.com/resource/115/free", "text": "HDHive free 1080p 已解锁 20GB"},
+            {"href": "https://hdhive.com/resource/115/dead", "text": "HDHive dead 疑似失效 已解锁 100GB"},
+        ]
+
+        ordered = order_hdhive_candidates(extract_hdhive_resource_candidates(items), max_points=10)
+
+        self.assertEqual([item.href.rsplit("/", 1)[-1] for item in ordered], ["free", "paid"])
+
+    def test_hdhive_filters_points_above_threshold(self) -> None:
+        items = [
+            {"href": "https://hdhive.com/resource/115/paid", "text": "HDHive paid 需要 20 积分解锁"},
+            {"href": "https://hdhive.com/resource/115/unknown", "text": "HDHive unknown 需要积分解锁"},
+        ]
+
+        ordered = order_hdhive_candidates(extract_hdhive_resource_candidates(items), max_points=10)
+
+        self.assertEqual(ordered, [])
+
+    async def test_hdhive_source_uses_tmdb_context(self) -> None:
+        adapter = RssTorznabAdapter()
+        captured: dict[str, object] = {}
+
+        async def fake_search(media_type, tmdb_id, context):
+            captured.update({"media_type": media_type, "tmdb_id": tmdb_id, "context": context})
+            return [SearchResult(title="HDHive", url="https://115cdn.com/s/test?password=1234", source="site_plugin:HDHive")]
+
+        source = {"name": "HDHive", "type": "site_plugin", "plugin": "hdhive", "url": "https://hdhive.com/", "enabled": True}
+        with patch("app.services.sources.rss_torznab_hdhive.HdhiveBrowserClient.search_tmdb", side_effect=fake_search):
+            results = await adapter._fetch_hdhive_source(source, "铁梨花", {"media_type": "tv", "tmdb_id": 86344, "title": "铁梨花"})
+
+        self.assertEqual(results[0].url, "https://115cdn.com/s/test?password=1234")
+        self.assertEqual(captured["media_type"], "tv")
+        self.assertEqual(captured["tmdb_id"], 86344)
 
 
 if __name__ == "__main__":

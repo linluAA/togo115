@@ -4,10 +4,11 @@
 const VIEW_KEYS = ["tmdb", "emby", "subscriptions", "logs", "settings"];
 const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "tg_bot", "emby", "backup"];
 const TMDB_MORE_MIN_PAGE_SIZE = 40;
-const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4"]);
+const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4", "hdhive"]);
 const BUILTIN_RSS_SOURCES = [
   { id: "builtin_bt1207", name: "BT1207", type: "site_plugin", plugin: "bt1207", url: "https://bt1207to.cc/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
   { id: "builtin_qmp4", name: "QMP4 / 七味", type: "site_plugin", plugin: "qmp4", url: "https://www.qmp4.com/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
+  { id: "builtin_hdhive", name: "HDHive / 影巢", type: "site_plugin", plugin: "hdhive", url: "https://hdhive.com/", enabled: false, use_proxy: false, priority: -40, refresh_interval: 30, test_query: "tv:86344", points_threshold: 0, browser_path: "", browser_user_data_dir: "" },
 ];
 
 const state = {
@@ -1509,6 +1510,9 @@ function builtinRssOverrideFromSource(source) {
     keywords: source.keywords || "",
     quality: source.quality || "",
     test_query: source.test_query || "",
+    points_threshold: Number.parseInt(source.points_threshold, 10) || 0,
+    browser_path: source.browser_path || "",
+    browser_user_data_dir: source.browser_user_data_dir || "",
     priority: Number.isFinite(priority) ? priority : -50,
     refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
   };
@@ -1526,6 +1530,9 @@ function normalizeRssSource(source) {
     test_query: source.test_query || "",
     keywords: source.keywords || "",
     quality: source.quality || "",
+    points_threshold: Number.parseInt(source.points_threshold, 10) || 0,
+    browser_path: source.browser_path || "",
+    browser_user_data_dir: source.browser_user_data_dir || "",
   };
 }
 
@@ -1543,9 +1550,11 @@ function normalizeSitePlugin(source) {
   const raw = String(source?.plugin || source?.site_plugin || "").toLowerCase();
   if (["bt1207", "bt1207_magnet"].includes(raw)) return "bt1207";
   if (["qmp4", "qiwei", "qmp4_magnet"].includes(raw)) return "qmp4";
+  if (["hdhive", "yingchao", "hdhive_115"].includes(raw)) return "hdhive";
   const url = String(source?.url || "").toLowerCase();
   if (url.includes("bt1207")) return "bt1207";
   if (url.includes("qmp4.com")) return "qmp4";
+  if (url.includes("hdhive.com")) return "hdhive";
   return "generic_magnet";
 }
 
@@ -1557,7 +1566,8 @@ function isBuiltinRssSource(source) {
 function sitePluginLabel(plugin) {
   const normalized = normalizeSitePlugin({ plugin });
   if (normalized === "bt1207") return "BT1207";
-  if (normalized === "qmp4") return "QMP4 / 七味";
+  if (normalized === "qmp4") return "QMP4";
+  if (normalized === "hdhive") return "HDHive / 影巢";
   return "通用磁力站";
 }
 
@@ -1572,6 +1582,7 @@ function rssSourceUrlLabel(type, plugin = "generic_magnet") {
   const value = normalizeRssSourceType(type);
   if (value === "site_plugin") {
     const normalized = normalizeSitePlugin({ plugin });
+    if (normalized === "hdhive") return "HDHive 站点首页";
     return "站点首页 / 搜索 URL 模板";
   }
   if (value === "torznab") return "Torznab URL";
@@ -1584,6 +1595,7 @@ function rssSourceUrlPlaceholder(type, plugin = "generic_magnet") {
     const normalized = normalizeSitePlugin({ plugin });
     if (normalized === "bt1207") return "例如：https://bt1207to.cc/";
     if (normalized === "qmp4") return "例如：https://www.qmp4.com/";
+    if (normalized === "hdhive") return "https://hdhive.com/";
     return "例如：https://yhdm33.com/s/{query}.html，也可以只填站点首页";
   }
   if (value === "torznab") return "例如：https://example.com/api?t=search&q={query}";
@@ -1602,17 +1614,17 @@ function sourceStatFor(source) {
 }
 
 function sourceHealthLabel(reason) {
-  if (reason === "recent_failures") return "\u6700\u8fd1\u5931\u8d25\u8f83\u591a";
-  if (reason === "slow_source") return "\u54cd\u5e94\u8fc7\u6162";
-  return "\u72b6\u6001\u5f02\u5e38";
+  if (reason === "recent_failures") return "最近失败较多";
+  if (reason === "slow_source") return "响应过慢";
+  return "状态异常";
 }
 
 function sourceHealthChip(stat) {
   if (!stat) return "";
   if (stat.degraded) {
-    return `<span class="source-chip-warning">\u4e34\u65f6\u964d\u7ea7\uff1a${escapeHtml(sourceHealthLabel(stat.degrade_reason))}</span>`;
+    return `<span class="source-chip-warning">临时降级：${escapeHtml(sourceHealthLabel(stat.degrade_reason))}</span>`;
   }
-  return `<span class="source-chip-ok">\u72b6\u6001\u6b63\u5e38</span>`;
+  return `<span class="source-chip-ok">状态正常</span>`;
 }
 
 /* source: static/src/js/62_settings_sources_view.js */
@@ -1629,7 +1641,7 @@ function rssSourcesCard() {
     <div class="builtin-source-panel">
       <div>
         <strong>内置订阅源</strong>
-        <span>Telegram 未命中后会自动搜索，不需要手动配置。</span>
+        <span>Telegram 未命中后会自动搜索，可按需启用和调整优先级。</span>
       </div>
       <div class="builtin-source-list">
         ${builtinSources.map((source) => `<button type="button" class="source-chip builtin-source-chip ${state.builtinRssSourceExpanded.has(source.id) ? "active" : ""}" data-toggle-builtin-source="${escapeHtml(source.id)}" title="${escapeHtml(source.url)}">${escapeHtml(source.name)}</button>`).join("")}
@@ -1663,6 +1675,7 @@ function builtinRssSourceItemHtml(source) {
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.enabled === false ? "停用" : "启用"}</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
+          ${plugin === "hdhive" ? `<span>积分 <= ${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}</span>` : ""}
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
           ${stat ? `<span>成功率 ${escapeHtml(stat.success_rate || 0)}%</span><span>命中 ${escapeHtml(stat.match_count || 0)}</span><span>${escapeHtml(stat.last_latency_ms || "-")} ms</span>` : ""}
         </div>
@@ -1676,14 +1689,7 @@ function builtinRssSourceItemHtml(source) {
       <input type="hidden" class="rss-source-name" value="${escapeHtml(source.name)}" />
       <input type="hidden" class="rss-source-type" value="site_plugin" />
       <input type="hidden" class="rss-source-plugin" value="${escapeHtml(source.plugin)}" />
-      <label class="rss-source-url"><span class="rss-source-url-label">站点首页</span> <input class="rss-source-url-input" placeholder="${rssSourceUrlPlaceholder("site_plugin", source.plugin)}" value="${escapeHtml(source.url || "")}" /></label>
-      <label>优先级 <input class="rss-source-priority" type="number" step="1" value="${escapeHtml(priority)}" /></label>
-      <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
-      <label>测试关键词 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
-      <label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>
-      <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
-      <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
-      <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>
+      ${rssSourceCommonFields(source, "site_plugin", plugin, priority, interval, testQuery, true)}
     </div>
     <div class="rss-source-test-result muted hidden" data-rss-test-result="${escapeHtml(source.id)}"></div>
   </section>`;
@@ -1712,6 +1718,7 @@ function rssSourceItemHtml(source, index) {
           <span>优先级 ${escapeHtml(priority)}</span>
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
+          ${plugin === "hdhive" ? `<span>积分 <= ${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}</span>` : ""}
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
           ${keywordCount ? `<span>关键词 ${keywordCount}</span>` : ""}
           ${qualityCount ? `<span>质量 ${qualityCount}</span>` : ""}
@@ -1736,18 +1743,34 @@ function rssSourceItemHtml(source, index) {
       <label class="rss-source-plugin-row ${type === "site_plugin" ? "" : "hidden"}">插件
         <select class="rss-source-plugin">
           <option value="generic_magnet" ${plugin === "generic_magnet" ? "selected" : ""}>通用磁力站</option>
+          <option value="hdhive" ${plugin === "hdhive" ? "selected" : ""}>HDHive / 影巢</option>
         </select>
       </label>
-      <label class="rss-source-url"><span class="rss-source-url-label">${rssSourceUrlLabel(type, plugin)}</span> <input class="rss-source-url-input" placeholder="${rssSourceUrlPlaceholder(type, plugin)}" value="${escapeHtml(source.url || "")}" /></label>
-      <label>优先级 <input class="rss-source-priority" type="number" step="1" value="${escapeHtml(priority)}" /></label>
-      <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
-      <label>测试关键词 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
-      <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
-      <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
-      <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>
+      ${rssSourceCommonFields(source, type, plugin, priority, interval, testQuery, false)}
     </div>
     <div class="rss-source-test-result muted hidden" data-rss-test-result="${escapeHtml(source.id)}"></div>
   </section>`;
+}
+
+function rssSourceCommonFields(source, type, plugin, priority, interval, testQuery, builtin) {
+  return `
+    <label class="rss-source-url"><span class="rss-source-url-label">${rssSourceUrlLabel(type, plugin)}</span> <input class="rss-source-url-input" placeholder="${rssSourceUrlPlaceholder(type, plugin)}" value="${escapeHtml(source.url || "")}" /></label>
+    <label>优先级 <input class="rss-source-priority" type="number" step="1" value="${escapeHtml(priority)}" /></label>
+    <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
+    <label>测试关键字 <input class="rss-source-test-query" placeholder="${plugin === "hdhive" ? "例如：tv:86344" : "例如：斗罗大陆"}" value="${escapeHtml(testQuery)}" /></label>
+    ${builtin ? `<label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>` : ""}
+    <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
+    ${rssSourceHdhiveFields(source, plugin)}
+    <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
+    <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>`;
+}
+
+function rssSourceHdhiveFields(source, plugin) {
+  const hidden = plugin === "hdhive" ? "" : "hidden";
+  return `
+    <label class="hdhive-source-field ${hidden}">积分阈值 <input class="rss-source-points-threshold" type="number" min="0" step="1" value="${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}" /></label>
+    <label class="hdhive-source-field ${hidden}">浏览器路径 <input class="rss-source-browser-path" placeholder="留空使用镜像内 Chromium" value="${escapeHtml(source.browser_path || "")}" /></label>
+    <label class="hdhive-source-field ${hidden}">浏览器用户目录 <input class="rss-source-browser-user-data-dir" placeholder="留空使用 data/hdhive-browser" value="${escapeHtml(source.browser_user_data_dir || "")}" /></label>`;
 }
 
 function syncRssSourceTypeUi(event) {
@@ -1760,6 +1783,8 @@ function syncRssSourceTypeUi(event) {
   const pluginRow = row.querySelector(".rss-source-plugin-row");
   if (label) label.textContent = rssSourceUrlLabel(type, plugin);
   if (input) input.placeholder = rssSourceUrlPlaceholder(type, plugin);
+  if (pluginRow) pluginRow.classList.toggle("hidden", type !== "site_plugin");
+  row.querySelectorAll(".hdhive-source-field").forEach((field) => field.classList.toggle("hidden", plugin !== "hdhive"));
   if (event.currentTarget.classList.contains("rss-source-plugin")) {
     updateRssSourceDraftFromRow(row, type, plugin);
     renderSettings();
@@ -1771,24 +1796,33 @@ function updateRssSourceDraftFromRow(row, type, plugin) {
   if (!id || row.dataset.builtinSourceId) return;
   const sources = ensureRssSourceIds(rssSourcesValue()).map((source) => {
     if (source.id !== id) return source;
-    const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
-    const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10);
-    return {
-      ...source,
-      name: row.querySelector(".rss-source-name")?.value.trim() || "",
-      url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
-      type,
-      plugin,
-      use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-      keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-      quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-      test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-      priority: Number.isFinite(priority) ? priority : 0,
-      refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
-    };
+    return { ...source, ...rssSourceFromRow(row, id, source, type, plugin) };
   });
   state.rssSourceExpanded.add(id);
   state.settings.rss_sources = { value: { ...rssSourcesConfig(), sources } };
+}
+
+function rssSourceFromRow(row, id, original, type, plugin) {
+  const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
+  const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10);
+  return {
+    id,
+    name: row.querySelector(".rss-source-name")?.value.trim() || "",
+    url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
+    type,
+    plugin,
+    enabled: original.enabled !== false,
+    use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
+    keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
+    quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
+    test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
+    points_threshold: Number.parseInt(row.querySelector(".rss-source-points-threshold")?.value || "0", 10) || 0,
+    browser_path: row.querySelector(".rss-source-browser-path")?.value.trim() || "",
+    browser_user_data_dir: row.querySelector(".rss-source-browser-user-data-dir")?.value.trim() || "",
+    priority: Number.isFinite(priority) ? priority : 0,
+    refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
+    ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
+  };
 }
 
 function splitFilterText(value) {
@@ -1811,6 +1845,9 @@ function addRssSource() {
     priority: 0,
     refresh_interval: 30,
     test_query: "",
+    points_threshold: 0,
+    browser_path: "",
+    browser_user_data_dir: "",
   });
   state.rssSourceExpanded.add(id);
   state.settings.rss_sources = { value: { ...rssSourcesConfig(), sources } };
@@ -1851,47 +1888,27 @@ async function saveRssSources(event) {
     .map((row) => {
       const id = row.dataset.sourceId || `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       const original = originals.get(id) || {};
-      const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
-      const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10);
       const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "rss");
       const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || original.plugin || "generic_magnet", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
-      return {
-        id,
-        name: row.querySelector(".rss-source-name")?.value.trim() || "",
-        url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
-        type,
-        plugin,
-        enabled: original.enabled !== false,
-        use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-        keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-        quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-        test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-        priority: Number.isFinite(priority) ? priority : 0,
-        refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
-        ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
-      };
+      return rssSourceFromRow(row, id, original, type, plugin);
     })
     .filter((source) => source.url);
+
   const builtin_sources = Object.fromEntries(
     Array.from(builtinOriginals.values()).map((source) => [source.id, builtinRssOverrideFromSource(source)])
   );
   builtinRows.forEach((row) => {
     const id = row.dataset.builtinSourceId;
     const original = builtinOriginals.get(id) || {};
-    const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
-    const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "-50", 10);
+    const plugin = normalizeSitePlugin(original);
+    const value = rssSourceFromRow(row, id, original, "site_plugin", plugin);
     builtin_sources[id] = builtinRssOverrideFromSource({
       ...original,
-      url: row.querySelector(".rss-source-url-input")?.value.trim() || original.url || "",
+      ...value,
       enabled: Boolean(row.querySelector(".rss-source-enabled")?.checked),
-      use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-      keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-      quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-      test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-      priority: Number.isFinite(priority) ? priority : -50,
-      refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
     });
   });
+
   await api("/api/settings/rss_sources", { method: "PUT", body: JSON.stringify({ value: { ...rssSourcesConfig(), sources, builtin_sources } }) });
   state.settings = await api("/api/settings");
   state.rssSourceExpanded.clear();
@@ -1909,19 +1926,11 @@ async function testRssSource(event) {
   const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
   const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
   if (!row || !resultBox) return;
+  const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "rss");
+  const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "generic_magnet", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
   const source = {
-    id,
-    name: row.querySelector(".rss-source-name")?.value.trim() || "",
-    url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
-    type: normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "rss"),
-    plugin: normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "generic_magnet", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" }),
+    ...rssSourceFromRow(row, id, {}, type, plugin),
     enabled: true,
-    use_proxy: Boolean(row.querySelector(".rss-source-proxy")?.checked),
-    keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
-    quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
-    test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-    priority: Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10) || 0,
-    refresh_interval: Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10) || 30,
   };
   resultBox.classList.remove("hidden");
   resultBox.innerHTML = `<span class="muted">正在测试...</span>`;
