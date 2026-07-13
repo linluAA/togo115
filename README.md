@@ -21,6 +21,16 @@ docker compose up -d --build
 http://localhost:8000
 ```
 
+noVNC 虚拟桌面：
+
+```text
+http://localhost:6080/vnc.html
+```
+
+默认 VNC 密码是 `togo115`，可在 `docker-compose.yml` 的 `VNC_PASSWORD` 修改。
+
+在“设置 → 订阅源 → HDHive / 影巢”点击“登录”后，影巢浏览器会出现在 noVNC 虚拟桌面里。完成 Telegram 登录后关闭浏览器窗口，登录态会保存在 `./data/hdhive-browser`，后续搜索会复用该目录。
+
 数据会持久化到宿主机 `./data` 目录。
 
 ## 已实现模块
