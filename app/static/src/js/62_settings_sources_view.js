@@ -236,8 +236,9 @@ function toggleRssSource(event) {
 function toggleBuiltinRssSource(event) {
   const id = event.currentTarget.dataset.toggleBuiltinSource;
   if (!id) return;
-  if (state.builtinRssSourceExpanded.has(id)) state.builtinRssSourceExpanded.delete(id);
-  else state.builtinRssSourceExpanded.add(id);
+  const alreadyExpanded = state.builtinRssSourceExpanded.has(id);
+  state.builtinRssSourceExpanded.clear();
+  if (!alreadyExpanded) state.builtinRssSourceExpanded.add(id);
   renderSettings();
 }
 
