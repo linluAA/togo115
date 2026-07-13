@@ -1,0 +1,14 @@
+@media (max-width: 1180px) {
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .subscription-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .subscription-controls {
+    justify-items: start;
+  }
+}

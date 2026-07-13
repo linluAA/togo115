@@ -1,0 +1,190 @@
+:root {
+  --bg: #080d0f;
+  --bg-2: #0d1417;
+  --surface: #121a1d;
+  --surface-2: #182326;
+  --surface-3: #223033;
+  --line: rgba(255, 255, 255, .10);
+  --line-strong: rgba(255, 255, 255, .18);
+  --ink: #f5f7f4;
+  --ink-soft: #d4ddd8;
+  --muted: #8b9994;
+  --brand: #2dd4bf;
+  --brand-2: #f4b63f;
+  --accent: #e8684a;
+  --ok: #43d17a;
+  --warn: #f4b63f;
+  --danger: #ef5b5b;
+  --shadow: 0 22px 58px rgba(0, 0, 0, .38);
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, .26);
+  --radius: 8px;
+  --sidebar-width: 116px;
+  --sidebar-mini: 76px;
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+* {
+  scrollbar-color: rgba(244, 182, 63, .44) rgba(255, 255, 255, .06);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, .05);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(244, 182, 63, .44);
+  background-clip: content-box;
+}
+
+html {
+  min-width: 0;
+  min-height: 100%;
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(45, 212, 191, .06), transparent 28rem),
+    linear-gradient(135deg, #080d0f 0%, #0d1417 48%, #101719 100%);
+  font-size: 14px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 36px;
+  border: 1px solid rgba(45, 212, 191, .38);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  color: #08201d;
+  background: var(--brand);
+  cursor: pointer;
+  font-weight: 800;
+  line-height: 1.1;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(45, 212, 191, .8);
+  box-shadow: 0 10px 24px rgba(45, 212, 191, .16);
+}
+
+button.secondary {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, .06);
+}
+
+button.secondary:hover {
+  color: #fff;
+  border-color: rgba(244, 182, 63, .44);
+  background: rgba(244, 182, 63, .12);
+  box-shadow: none;
+}
+
+button.danger,
+.danger-lite {
+  color: #fff;
+  border-color: rgba(239, 91, 91, .54);
+  background: rgba(239, 91, 91, .82);
+}
+
+button.danger:hover,
+.danger-lite:hover {
+  border-color: rgba(239, 91, 91, .8);
+  background: rgba(239, 91, 91, .95);
+}
+
+button:disabled {
+  opacity: .58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .055);
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(45, 212, 191, .72);
+  background: rgba(255, 255, 255, .08);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, .12);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(216, 207, 192, .44);
+}
+
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  color: #10201d;
+  background: #f8fafc;
+}
+
+select option:checked {
+  color: #071d1a;
+  background: #cbd5d6;
+}
+
+select option:disabled {
+  color: #64748b;
+  background: #eef2f4;
+}
+
+textarea {
+  resize: vertical;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+label input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+}
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}

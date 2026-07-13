@@ -1,0 +1,79 @@
+@media (max-width: 520px) {
+  .hero-metrics {
+    gap: 6px;
+  }
+
+  .hero-metrics span {
+    padding: 8px 4px;
+    font-size: 10.5px;
+  }
+
+  .hero-metrics b {
+    font-size: 20px;
+  }
+
+  .media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .subscription-card {
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .subscription-info h3 {
+    font-size: 15px;
+  }
+
+  .section,
+  .card {
+    padding: 14px;
+  }
+
+  .resource-table-wrap {
+    border: 0;
+    max-height: 360px;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tr {
+    margin-bottom: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, .04);
+    overflow: hidden;
+  }
+
+  .table td {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-weight: 900;
+  }
+
+  .table td:last-child {
+    border-bottom: 0;
+  }
+}

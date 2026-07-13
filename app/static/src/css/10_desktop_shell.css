@@ -1,0 +1,227 @@
+@media (min-width: 861px) {
+  body {
+    background:
+      linear-gradient(135deg, rgba(45, 212, 191, .08), transparent 32rem),
+      linear-gradient(180deg, #080d0f 0%, #0d1417 52%, #101719 100%);
+  }
+
+  .shell {
+    grid-template-columns: calc(var(--sidebar-width) + 16px) minmax(0, 1fr);
+    min-height: 100vh;
+  }
+
+  .shell.sidebar-collapsed {
+    grid-template-columns: calc(var(--sidebar-mini) + 16px) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    top: 16px;
+    height: calc(100vh - 32px);
+    margin-left: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(11, 17, 19, .86);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .brand {
+    min-height: 128px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 8px;
+    text-align: center;
+  }
+
+  .brand-copy strong {
+    font-size: 13px;
+  }
+
+  .brand-copy span {
+    display: none;
+  }
+
+  .nav {
+    gap: 8px;
+    padding: 12px 10px;
+  }
+
+  .nav button {
+    min-height: 76px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 6px;
+    text-align: center;
+  }
+
+  .nav button.active::before {
+    left: auto;
+    top: 8px;
+    right: 8px;
+    width: 7px;
+    height: 7px;
+  }
+
+  .nav-copy strong {
+    font-size: 13px;
+    white-space: normal;
+  }
+
+  .nav-copy small {
+    display: none;
+  }
+
+  .shell.sidebar-collapsed .brand {
+    min-height: 94px;
+  }
+
+  .shell.sidebar-collapsed .brand-copy,
+  .shell.sidebar-collapsed .nav-copy {
+    display: none;
+  }
+
+  .sidebar-toggle {
+    width: 44px;
+    min-height: 44px;
+    margin: auto auto 12px;
+    padding: 0;
+  }
+
+  .main {
+    padding: 16px clamp(22px, 3vw, 42px) 42px;
+  }
+
+  .topbar {
+    top: 16px;
+    min-height: 64px;
+    margin: 0 0 22px;
+    padding: 12px 14px 12px 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(11, 17, 19, .78);
+    box-shadow: var(--shadow-soft);
+  }
+
+  #view {
+    gap: 24px;
+  }
+
+  .tmdb-hero {
+    min-height: 342px;
+    align-items: stretch;
+    padding: 34px;
+    background:
+      linear-gradient(90deg, rgba(9, 15, 17, .94), rgba(9, 15, 17, .62), rgba(9, 15, 17, .28)),
+      linear-gradient(135deg, rgba(45, 212, 191, .14), rgba(244, 182, 63, .08));
+    background-size: cover;
+    background-position: center;
+  }
+
+  .tmdb-hero h1 {
+    max-width: 620px;
+    font-size: clamp(42px, 4.5vw, 58px);
+    line-height: .96;
+  }
+
+  .tmdb-search {
+    grid-template-columns: minmax(0, 1fr) 118px;
+    width: 100%;
+  }
+
+  .tmdb-board {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    gap: 18px;
+    align-items: start;
+  }
+
+  .tmdb-board .media-section {
+    padding: 18px;
+    border: 1px solid var(--line);
+    background: rgba(18, 26, 29, .68);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .tmdb-board-wide {
+    grid-column: 1 / -1;
+  }
+
+  .tmdb-board-main .media-grid,
+  .tmdb-board-wide .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
+  }
+
+  .tmdb-rank-panel {
+    position: sticky;
+    top: 104px;
+  }
+
+  .emby-console {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .emby-overview-panel {
+    position: sticky;
+    top: 104px;
+  }
+
+  .emby-overview-panel .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .emby-library-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
+
+  .subscription-panel {
+    grid-template-columns: 310px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .subscription-toolbar {
+    position: sticky;
+    top: 104px;
+    min-height: calc(100vh - 128px);
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .subscription-toolbar h1 {
+    font-size: 42px;
+  }
+
+  .subscription-controls,
+  .control-group,
+  .action-group,
+  .filter-group {
+    width: 100%;
+    align-items: stretch;
+    justify-items: stretch;
+  }
+
+  .subscription-controls,
+  .control-group {
+    display: grid;
+  }
+
+  .filter-group select,
+  .subscription-controls button {
+    width: 100%;
+  }
+
+  .subscription-filter-strip select,
+  .subscription-controls .compact-tool {
+    width: auto;
+  }
+
+  .subscription-grid {
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  }
+}
+
+.mobile-bottom-nav {
+  display: none;
+}

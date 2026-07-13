@@ -1,0 +1,14 @@
+.agents/
+.codex/
+.helloagents/
+.tools/
+.pytest_cache/
+.venv/
+__pycache__/
+*.pyc
+*.log
+*.err.log
+*.out.log
+data/*.sqlite3
+data/hdhive*.html
+data/hdhive_js_*.js
