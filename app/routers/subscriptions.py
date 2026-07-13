@@ -18,8 +18,7 @@ from app.services.subscription_crud import (
     update_subscription,
 )
 from app.services.subscription_delivery import deliver_resource, list_failed_resources, retry_failed_resources as retry_failed_resources_impl
-from app.services.subscription_library import sync_subscription_list_with_emby
-from app.services.subscription_tasks import schedule_search_all_active_subscriptions, schedule_subscription_search
+from app.services.subscription_tasks import schedule_emby_subscription_sync, schedule_search_all_active_subscriptions, schedule_subscription_search
 
 
 router = APIRouter()
@@ -32,8 +31,7 @@ async def subscriptions(user: dict = Depends(current_user)) -> list[dict]:
 
 @router.post("/api/subscriptions/sync-emby")
 async def sync_subscription_emby_status(user: dict = Depends(current_user)) -> dict:
-    items = await asyncio.to_thread(list_subscriptions, include_completed=True)
-    return await sync_subscription_list_with_emby(items, force=True)
+    return schedule_emby_subscription_sync()
 
 
 @router.post("/api/subscriptions/search-all")

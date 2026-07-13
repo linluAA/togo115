@@ -1,5 +1,6 @@
 import asyncio
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -791,6 +792,61 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
                     await asyncio.wait_for(task, timeout=1)
         finally:
             runtime_module.search_all_task = old_task
+
+    async def test_scheduled_emby_sync_runs_outside_api_event_loop_when_worker_blocks(self) -> None:
+        async def blocking_emby_sync():
+            time.sleep(0.08)
+            return {"ok": True}
+
+        old_task = runtime_module.emby_sync_task
+        runtime_module.emby_sync_task = None
+        try:
+            with patch.object(runtime_module, "EMBY_SYNC_START_DELAY_SECONDS", 0), patch(
+                "app.services.subscription_tasks._default_emby_sync",
+                blocking_emby_sync,
+            ):
+                started = time.perf_counter()
+                result = subscription_tasks.schedule_emby_subscription_sync()
+                await asyncio.sleep(0.01)
+                elapsed = time.perf_counter() - started
+                task = runtime_module.emby_sync_task
+
+                self.assertTrue(result["running"])
+                self.assertLess(elapsed, 0.05)
+                if task:
+                    await asyncio.wait_for(task, timeout=1)
+        finally:
+            runtime_module.emby_sync_task = old_task
+
+    async def test_scheduled_emby_sync_skips_duplicate_trigger(self) -> None:
+        started = threading.Event()
+        release = threading.Event()
+
+        async def slow_emby_sync():
+            started.set()
+            await asyncio.to_thread(release.wait)
+            return {"ok": True}
+
+        old_task = runtime_module.emby_sync_task
+        runtime_module.emby_sync_task = None
+        try:
+            with patch.object(runtime_module, "EMBY_SYNC_START_DELAY_SECONDS", 0), patch(
+                "app.services.subscription_tasks._default_emby_sync",
+                slow_emby_sync,
+            ):
+                first = subscription_tasks.schedule_emby_subscription_sync()
+                self.assertTrue(await asyncio.to_thread(started.wait, 1))
+                second = subscription_tasks.schedule_emby_subscription_sync()
+                release.set()
+                task = runtime_module.emby_sync_task
+
+                self.assertTrue(first["queued"])
+                self.assertFalse(second["queued"])
+                self.assertTrue(second["running"])
+                if task:
+                    await asyncio.wait_for(task, timeout=1)
+        finally:
+            runtime_module.emby_sync_task = old_task
 
 
 if __name__ == "__main__":

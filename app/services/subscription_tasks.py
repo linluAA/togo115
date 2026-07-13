@@ -31,6 +31,13 @@ async def _default_search_all() -> dict:
     return await search_all_active_subscriptions()
 
 
+async def _default_emby_sync() -> dict:
+    from app.services.subscription_crud import list_subscriptions
+    from app.services.subscription_library import sync_subscription_list_with_emby
+
+    return await sync_subscription_list_with_emby(list_subscriptions(include_completed=True), force=True)
+
+
 async def _search_and_attach_resources_guarded(
     subscription_id: int,
     snapshot: dict[str, list[dict[str, Any]]] | None = None,
@@ -125,3 +132,45 @@ async def _search_all_in_worker_thread(
 
 def _run_search_all_sync(search_all_func: Callable[[], Awaitable[dict]] | None) -> None:
     asyncio.run(_search_all_background(search_all_func=search_all_func))
+
+
+async def _emby_sync_background(
+    *,
+    sync_func: Callable[[], Awaitable[dict]] | None = None,
+) -> None:
+    try:
+        await asyncio.sleep(runtime.EMBY_SYNC_START_DELAY_SECONDS)
+        sync_func = sync_func or _default_emby_sync
+        result = await sync_func()
+        level = "info" if result.get("ok") else "warning"
+        add_log(
+            level,
+            "emby",
+            "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5b8c\u6210" if result.get("ok") else "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5931\u8d25",
+            result,
+        )
+    except Exception as exc:
+        add_log("error", "emby", "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u540e\u53f0\u4efb\u52a1\u5931\u8d25", {"error": str(exc), "error_type": type(exc).__name__})
+    finally:
+        runtime.emby_sync_task = None
+
+
+def schedule_emby_subscription_sync() -> dict:
+    task = runtime.emby_sync_task
+    if task and not task.done():
+        return {"ok": True, "queued": False, "running": True}
+    runtime.emby_sync_task = asyncio.create_task(_emby_sync_in_worker_thread())
+    add_log("info", "emby", "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5df2\u52a0\u5165\u540e\u53f0\u961f\u5217")
+    return {"ok": True, "queued": True, "running": True}
+
+
+async def _emby_sync_in_worker_thread(
+    *,
+    sync_func: Callable[[], Awaitable[dict]] | None = None,
+) -> None:
+    """Run manual Emby subscription sync outside the API event loop."""
+    await asyncio.to_thread(_run_emby_sync_sync, sync_func)
+
+
+def _run_emby_sync_sync(sync_func: Callable[[], Awaitable[dict]] | None) -> None:
+    asyncio.run(_emby_sync_background(sync_func=sync_func))

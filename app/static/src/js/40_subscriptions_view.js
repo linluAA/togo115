@@ -37,6 +37,10 @@ async function renderSubscriptions() {
   $("#syncEmbySubscriptions")?.addEventListener("click", async () => {
     try {
       const result = await api("/api/subscriptions/sync-emby", { method: "POST" });
+      if (result.running) {
+        toast(result.queued === false ? "媒体库同步正在后台运行，请稍后刷新" : "媒体库同步已加入后台队列，请稍后刷新");
+        return;
+      }
       await refreshSubscriptionData();
       renderSubscriptions();
       toast(result.ok ? `媒体库同步完成，匹配 ${result.matched || 0} 个订阅` : `媒体库同步失败：${result.error || "请查看日志"}`);

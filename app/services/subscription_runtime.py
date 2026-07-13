@@ -7,10 +7,12 @@ TELEGRAM_SEARCH_TIMEOUT_SECONDS = 75
 RSS_SEARCH_TIMEOUT_SECONDS = 60
 SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS = 120
 SEARCH_ALL_START_DELAY_SECONDS = 0.35
+EMBY_SYNC_START_DELAY_SECONDS = 0.1
 SEARCH_ALL_BETWEEN_SUBSCRIPTIONS_DELAY_SECONDS = 0.05
 SUBSCRIPTION_SEARCH_CONCURRENCY = 1
 
 search_all_task: asyncio.Task | None = None
+emby_sync_task: asyncio.Task | None = None
 subscription_search_tasks: dict[int, asyncio.Task] = {}
 subscription_search_semaphore: asyncio.Semaphore | None = None
 subscription_search_semaphore_loop: asyncio.AbstractEventLoop | None = None
