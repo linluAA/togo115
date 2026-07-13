@@ -228,7 +228,7 @@ async def start_hdhive_login_browser(source: dict[str, Any]) -> dict[str, Any]:
     """Open a headed HDHive browser session for manual login."""
     global _hdhive_login_browser_task
     if _hdhive_login_browser_task and not _hdhive_login_browser_task.done():
-        return {"ok": True, "running": True, "queued": False, "message": "HDHive login browser is already running"}
+        return _with_hdhive_novnc_url(source, {"ok": True, "running": True, "queued": False, "message": "HDHive login browser is already running"})
 
     loop = asyncio.get_running_loop()
     started = loop.create_future()
@@ -237,7 +237,7 @@ async def start_hdhive_login_browser(source: dict[str, Any]) -> dict[str, Any]:
     try:
         return await asyncio.wait_for(asyncio.shield(started), timeout=8)
     except asyncio.TimeoutError:
-        return {"ok": True, "running": True, "queued": True, "message": "HDHive login browser is starting"}
+        return _with_hdhive_novnc_url(source, {"ok": True, "running": True, "queued": True, "message": "HDHive login browser is starting"})
 
 
 def _clear_hdhive_login_browser_task() -> None:
@@ -274,14 +274,14 @@ async def _run_hdhive_login_browser(source: dict[str, Any], started: asyncio.Fut
                 await page.goto(base_url, wait_until="domcontentloaded", timeout=timeout_ms)
                 _resolve_hdhive_login_start(
                     started,
-                    {
+                    _with_hdhive_novnc_url(login_source, {
                         "ok": True,
                         "running": True,
                         "queued": True,
                         "url": base_url,
                         "user_data_dir": user_data_dir,
                         "message": "HDHive login browser opened",
-                    },
+                    }),
                 )
                 await _wait_for_hdhive_login_browser_close(browser)
             finally:
@@ -309,10 +309,31 @@ def _hdhive_login_error(exc: Exception, user_data_dir: str | None = None) -> dic
     message = str(exc).strip() or type(exc).__name__
     if "headed browser without XServer" in message or "Missing X server" in message or "DISPLAY" in message:
         message = "当前运行环境没有图形界面，无法直接弹出影巢登录浏览器。请在桌面环境运行，或把已登录的浏览器用户目录挂载到浏览器用户目录字段。"
+    if _hdhive_profile_is_locked(message):
+        payload: dict[str, Any] = {
+            "ok": True,
+            "running": True,
+            "queued": False,
+            "message": "HDHive login browser profile is already in use",
+            "warning": "影巢浏览器用户目录已被 Chromium 占用，通常表示登录浏览器已经在 noVNC 桌面里运行。",
+        }
+        if user_data_dir:
+            payload["user_data_dir"] = user_data_dir
+        return _with_hdhive_novnc_url({}, payload)
     payload: dict[str, Any] = {"ok": False, "running": False, "error": message}
     if user_data_dir:
         payload["user_data_dir"] = user_data_dir
-    return payload
+    return _with_hdhive_novnc_url({}, payload)
+
+
+def _hdhive_profile_is_locked(message: str) -> bool:
+    value = str(message or "").lower()
+    return any(marker in value for marker in ("profile appears to be in use", "processsingleton", "locked the profile"))
+
+
+def _with_hdhive_novnc_url(source: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    novnc_url = str(source.get("novnc_url") or os.getenv("TOGO115_NOVNC_URL") or "").strip()
+    return {**payload, **({"novnc_url": novnc_url} if novnc_url else {})}
 
 
 async def _settle_page(page: Any, timeout_ms: int) -> None:

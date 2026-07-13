@@ -86,6 +86,7 @@ async function loginHdhiveSource(event) {
   const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
   const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
   if (!row) return;
+  const vncWindow = openHdhiveNoVncWindow();
   const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "site_plugin");
   const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "hdhive", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
   const source = {
@@ -102,17 +103,44 @@ async function loginHdhiveSource(event) {
       timeoutMs: 12000,
       body: JSON.stringify({ source }),
     });
+    navigateHdhiveNoVncWindow(vncWindow, data.novnc_url);
     if (data.ok) {
       const message = data.queued === false ? "影巢登录浏览器已在运行" : "影巢登录浏览器已打开，登录完成后关闭窗口";
       toast(message);
-      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span><div class="rss-source-diagnostic"><span>用户目录：${escapeHtml(data.user_data_dir || "data/hdhive-browser")}</span></div>`;
+      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span><div class="rss-source-diagnostic"><span>noVNC：${escapeHtml(hdhiveNoVncUrl(data.novnc_url))}</span><span>用户目录：${escapeHtml(data.user_data_dir || "data/hdhive-browser")}</span>${data.warning ? `<span>${escapeHtml(data.warning)}</span>` : ""}</div>`;
     } else {
       const message = data.error || "打开影巢登录浏览器失败";
       toast(message);
-      if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(message)}`;
+      if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(message)}<div class="rss-source-diagnostic"><span>noVNC：${escapeHtml(hdhiveNoVncUrl(data.novnc_url))}</span></div>`;
     }
   } catch (error) {
+    navigateHdhiveNoVncWindow(vncWindow);
     toast(`打开影巢登录浏览器失败：${error.message}`);
-    if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(error.message)}`;
+    if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(error.message)}<div class="rss-source-diagnostic"><span>noVNC：${escapeHtml(hdhiveNoVncUrl())}</span></div>`;
   }
+}
+
+function openHdhiveNoVncWindow() {
+  const win = window.open("about:blank", "_blank");
+  if (win) {
+    win.document.title = "HDHive noVNC";
+    win.document.body.innerHTML = "正在打开 noVNC...";
+  }
+  return win;
+}
+
+function navigateHdhiveNoVncWindow(win, url) {
+  const target = hdhiveNoVncUrl(url);
+  if (win && !win.closed) win.location.href = target;
+  else window.open(target, "_blank");
+}
+
+function hdhiveNoVncUrl(url) {
+  if (url) return url;
+  const target = new URL(window.location.href);
+  target.port = "6080";
+  target.pathname = "/vnc.html";
+  target.search = "autoconnect=true&resize=remote";
+  target.hash = "";
+  return target.toString();
 }
