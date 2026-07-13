@@ -7,6 +7,7 @@ from app.db import add_log, db, json_dumps, utc_now
 from app.schemas import SubscriptionCreate
 from app.services.subscription_crud_duplicates import _duplicate_subscription
 from app.services.subscription_crud_rows import get_subscription
+from app.services.subscription_library_sync import sync_subscription_list_with_emby
 from app.services.subscription_matching import _normalize_quality_rules, _subscription_release_year
 
 
@@ -15,7 +16,9 @@ async def create_subscription(payload: SubscriptionCreate) -> dict:
     if existing:
         add_log("info", "subscription", "订阅已存在，跳过重复创建", {"id": existing.get("id"), "title": existing.get("title")})
         return existing
+
     subscription_id = _insert_subscription_payload(payload)
+    await _sync_created_subscription_with_emby(subscription_id)
     add_log("info", "subscription", "创建订阅，历史消息搜索已进入后台", {"title": payload.title})
     _schedule_subscription_search(subscription_id)
     return get_subscription(subscription_id) or {}
@@ -62,6 +65,16 @@ def _create_subscription_values(payload: SubscriptionCreate, now: str) -> tuple:
         now,
         now,
     )
+
+
+async def _sync_created_subscription_with_emby(subscription_id: int) -> None:
+    subscription = get_subscription(subscription_id)
+    if not subscription:
+        return
+    try:
+        await sync_subscription_list_with_emby([subscription])
+    except Exception as exc:
+        add_log("warning", "emby", "创建订阅后同步 Emby 已有集数失败", {"id": subscription_id, "error": str(exc)})
 
 
 def _schedule_subscription_search(subscription_id: int) -> None:

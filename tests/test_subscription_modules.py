@@ -26,13 +26,36 @@ class SplitSubscriptionModuleTest(unittest.IsolatedAsyncioTestCase):
     async def test_crud_create_keeps_subscription_schedule_hook_patchable(self) -> None:
         payload = SubscriptionCreate(title="Drama", media_type="tv", keywords=["Drama"], target_path="/tv/Drama")
 
-        with patch.object(subscription_tasks, "schedule_subscription_search", Mock(return_value={"ok": True})) as schedule:
+        with patch.object(subscription_tasks, "schedule_subscription_search", Mock(return_value={"ok": True})) as schedule, patch(
+            "app.services.subscription_create.sync_subscription_list_with_emby", AsyncMock(return_value={"ok": True, "updated": 0})
+        ) as sync_emby:
             created = await subscription_crud.create_subscription(payload)
             duplicate = await subscription_crud.create_subscription(payload)
 
         self.assertEqual(created["title"], "Drama")
         self.assertEqual(duplicate["id"], created["id"])
         schedule.assert_called_once_with(created["id"])
+        sync_emby.assert_awaited_once()
+
+    async def test_crud_create_returns_emby_synced_episode_count(self) -> None:
+        payload = SubscriptionCreate(title="Drama", media_type="tv", keywords=["Drama"], target_path="/tv/Drama")
+
+        async def sync_created(items):
+            subscription_id = int(items[0]["id"])
+            with db() as conn:
+                conn.execute(
+                    "UPDATE subscriptions SET emby_count = ?, emby_episode_keys = ? WHERE id = ?",
+                    (3, json_dumps(["1x1", "1x2", "1x3"]), subscription_id),
+                )
+            return {"ok": True, "updated": 1}
+
+        with patch.object(subscription_tasks, "schedule_subscription_search", Mock(return_value={"ok": True})), patch(
+            "app.services.subscription_create.sync_subscription_list_with_emby", AsyncMock(side_effect=sync_created)
+        ):
+            created = await subscription_crud.create_subscription(payload)
+
+        self.assertEqual(created["emby_count"], 3)
+        self.assertEqual(created["emby_episode_keys"], ["1x1", "1x2", "1x3"])
 
     async def test_delivery_module_accepts_injected_adapters(self) -> None:
         now = utc_now()

@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.services import media_catalog
+from app.services.adapters.media_emby import EmbyAdapter
 
 
 class MediaCatalogTest(unittest.IsolatedAsyncioTestCase):
@@ -42,3 +43,37 @@ class MediaCatalogTest(unittest.IsolatedAsyncioTestCase):
         adapter.dashboard.assert_awaited_once_with()
         adapter.image_response.assert_awaited_once_with("item-1")
         adapter.user_image_response.assert_awaited_once_with("user-1")
+
+    async def test_emby_library_snapshot_reads_all_pages(self) -> None:
+        adapter = EmbyAdapter()
+        calls: list[tuple[str, int]] = []
+
+        async def fake_get(client, base_url, path, api_key, params=None):
+            item_types = params["IncludeItemTypes"]
+            start = int(params.get("StartIndex") or 0)
+            calls.append((item_types, start))
+            if item_types == "Movie,Series":
+                items = [
+                    {"Id": "movie-1", "Type": "Movie"},
+                    {"Id": "series-1", "Type": "Series"},
+                ]
+            else:
+                items = [
+                    {"Id": "episode-1", "Type": "Episode", "SeriesId": "series-1", "ParentIndexNumber": 1, "IndexNumber": 1},
+                    {"Id": "episode-2", "Type": "Episode", "SeriesId": "series-1", "ParentIndexNumber": 1, "IndexNumber": 2},
+                    {"Id": "episode-3", "Type": "Episode", "SeriesId": "series-1", "ParentIndexNumber": 1, "IndexNumber": 3},
+                ]
+            page_items = items[start : start + 1]
+            return {"Items": page_items, "TotalRecordCount": len(items)}
+
+        with (
+            patch("app.services.adapters.media_emby.get_setting", return_value={"server_url": "http://emby", "api_key": "key"}),
+            patch("app.services.adapters.media_emby.module_proxy", return_value=None),
+            patch.object(adapter, "_get", side_effect=fake_get),
+        ):
+            snapshot = await adapter.library_snapshot()
+
+        self.assertEqual(len(snapshot["movies"]), 1)
+        self.assertEqual(len(snapshot["series"]), 1)
+        self.assertEqual(len(snapshot["episodes"]), 3)
+        self.assertIn(("Episode", 2), calls)
