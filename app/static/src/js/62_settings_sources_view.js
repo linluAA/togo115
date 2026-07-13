@@ -52,6 +52,7 @@ function builtinRssSourceItemHtml(source) {
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-builtin-source="${escapeHtml(source.id)}">收起</button>
+        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
       </div>
     </div>
@@ -97,6 +98,7 @@ function rssSourceItemHtml(source, index) {
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-rss-source="${escapeHtml(source.id)}">${expanded ? "收起" : "编辑"}</button>
+        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
         <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
       </div>

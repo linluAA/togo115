@@ -18,6 +18,7 @@ from app.services.types import SearchResult
 HDHIVE_DEFAULT_URL = "https://hdhive.com/"
 HDHIVE_LINK_RE = re.compile(r"/(?:movie|tv)/[A-Za-z0-9_-]+$")
 HDHIVE_RESOURCE_RE = re.compile(r"/resource/115/[A-Za-z0-9_-]+")
+_hdhive_login_browser_task: asyncio.Task | None = None
 
 
 @dataclass(frozen=True)
@@ -221,6 +222,97 @@ def _hdhive_timeout_ms(source: dict[str, Any]) -> int:
         return max(8000, min(int(float(source.get("browser_timeout") or 20000)), 60000))
     except (TypeError, ValueError):
         return 20000
+
+
+async def start_hdhive_login_browser(source: dict[str, Any]) -> dict[str, Any]:
+    """Open a headed HDHive browser session for manual login."""
+    global _hdhive_login_browser_task
+    if _hdhive_login_browser_task and not _hdhive_login_browser_task.done():
+        return {"ok": True, "running": True, "queued": False, "message": "HDHive login browser is already running"}
+
+    loop = asyncio.get_running_loop()
+    started = loop.create_future()
+    _hdhive_login_browser_task = asyncio.create_task(_run_hdhive_login_browser(source, started))
+    _hdhive_login_browser_task.add_done_callback(lambda _: _clear_hdhive_login_browser_task())
+    try:
+        return await asyncio.wait_for(asyncio.shield(started), timeout=8)
+    except asyncio.TimeoutError:
+        return {"ok": True, "running": True, "queued": True, "message": "HDHive login browser is starting"}
+
+
+def _clear_hdhive_login_browser_task() -> None:
+    global _hdhive_login_browser_task
+    _hdhive_login_browser_task = None
+
+
+async def _run_hdhive_login_browser(source: dict[str, Any], started: asyncio.Future) -> None:
+    try:
+        from playwright.async_api import async_playwright
+    except Exception as exc:
+        _resolve_hdhive_login_start(started, _hdhive_login_error(exc))
+        return
+
+    login_source = {**source, "headless": False}
+    base_url = str(login_source.get("url") or HDHIVE_DEFAULT_URL).strip() or HDHIVE_DEFAULT_URL
+    user_data_dir = _hdhive_user_data_dir(login_source)
+    executable_path = _hdhive_executable_path(login_source)
+    timeout_ms = _hdhive_timeout_ms(login_source)
+    Path(user_data_dir).mkdir(parents=True, exist_ok=True)
+
+    try:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch_persistent_context(
+                user_data_dir=user_data_dir,
+                executable_path=executable_path,
+                headless=False,
+                locale="zh-CN",
+                viewport={"width": 1365, "height": 900},
+                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+            )
+            try:
+                page = browser.pages[0] if browser.pages else await browser.new_page()
+                await page.goto(base_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                _resolve_hdhive_login_start(
+                    started,
+                    {
+                        "ok": True,
+                        "running": True,
+                        "queued": True,
+                        "url": base_url,
+                        "user_data_dir": user_data_dir,
+                        "message": "HDHive login browser opened",
+                    },
+                )
+                await _wait_for_hdhive_login_browser_close(browser)
+            finally:
+                await browser.close()
+    except Exception as exc:
+        add_log("warning", "rss", "HDHive login browser failed", {"error": str(exc), "error_type": type(exc).__name__})
+        _resolve_hdhive_login_start(started, _hdhive_login_error(exc, user_data_dir))
+
+
+async def _wait_for_hdhive_login_browser_close(browser: Any) -> None:
+    closed = asyncio.Event()
+    try:
+        browser.on("close", lambda _: closed.set())
+        await closed.wait()
+    except Exception:
+        await asyncio.sleep(1)
+
+
+def _resolve_hdhive_login_start(started: asyncio.Future, payload: dict[str, Any]) -> None:
+    if not started.done():
+        started.set_result(payload)
+
+
+def _hdhive_login_error(exc: Exception, user_data_dir: str | None = None) -> dict[str, Any]:
+    message = str(exc).strip() or type(exc).__name__
+    if "headed browser without XServer" in message or "Missing X server" in message or "DISPLAY" in message:
+        message = "当前运行环境没有图形界面，无法直接弹出影巢登录浏览器。请在桌面环境运行，或把已登录的浏览器用户目录挂载到浏览器用户目录字段。"
+    payload: dict[str, Any] = {"ok": False, "running": False, "error": message}
+    if user_data_dir:
+        payload["user_data_dir"] = user_data_dir
+    return payload
 
 
 async def _settle_page(page: Any, timeout_ms: int) -> None:

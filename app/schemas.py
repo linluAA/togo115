@@ -105,3 +105,7 @@ class ProxyTestRequest(BaseModel):
 class RssSourceTestRequest(BaseModel):
     source: dict[str, Any] = Field(default_factory=dict)
     query: str | None = None
+
+
+class HdhiveLoginBrowserRequest(BaseModel):
+    source: dict[str, Any] = Field(default_factory=dict)

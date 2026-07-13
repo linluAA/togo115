@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.db import add_log
 from app.services.adapters.pan115 import Pan115Adapter
 from app.services.adapters.telegram import TelegramClientAdapter
+from app.services.sources.rss_torznab_hdhive import start_hdhive_login_browser
 
 
 async def telegram_qr_login_start() -> dict:
@@ -84,6 +85,10 @@ async def pan115_folders(cid: str) -> dict:
 async def pan115_save_link(link: str, target_path: str | None) -> dict:
     ok = await Pan115Adapter().transfer(link, target_path)
     return {"ok": ok}
+
+
+async def hdhive_login_browser(source: dict) -> dict:
+    return await start_hdhive_login_browser(source)
 
 
 def _error_message(exc: Exception) -> str:

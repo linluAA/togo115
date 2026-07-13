@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from app.auth import current_user
 from app.schemas import (
+    HdhiveLoginBrowserRequest,
     Pan115QrRequest,
     Pan115SaveRequest,
     TelegramCodeLoginRequest,
@@ -15,6 +16,7 @@ from app.schemas import (
     TelegramWebAppAuthRequest,
 )
 from app.services.integration_actions import (
+    hdhive_login_browser as open_hdhive_login_browser,
     pan115_folders as get_pan115_folders,
     pan115_login_status,
     pan115_qr_login_start,
@@ -115,3 +117,8 @@ async def pan115_folders(cid: str = "0", user: dict = Depends(current_user)) -> 
 @router.post("/api/115/save")
 async def pan115_save(payload: Pan115SaveRequest, user: dict = Depends(current_user)) -> dict:
     return await pan115_save_link(payload.link, payload.target_path)
+
+
+@router.post("/api/hdhive/login-browser")
+async def hdhive_login_browser(payload: HdhiveLoginBrowserRequest, user: dict = Depends(current_user)) -> dict:
+    return await open_hdhive_login_browser(payload.source)

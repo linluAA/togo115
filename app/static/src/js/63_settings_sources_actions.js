@@ -80,3 +80,39 @@ async function testRssSource(event) {
     resultBox.innerHTML = `<span class="warn-text">不可用</span> · ${escapeHtml(error.message)}`;
   }
 }
+
+async function loginHdhiveSource(event) {
+  const id = event.currentTarget.dataset.loginHdhiveSource;
+  const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
+  const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
+  if (!row) return;
+  const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "site_plugin");
+  const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "hdhive", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
+  const source = {
+    ...rssSourceFromRow(row, id, {}, type, plugin),
+    enabled: true,
+  };
+  if (resultBox) {
+    resultBox.classList.remove("hidden");
+    resultBox.innerHTML = `<span class="muted">正在打开影巢登录浏览器...</span>`;
+  }
+  try {
+    const data = await api("/api/hdhive/login-browser", {
+      method: "POST",
+      timeoutMs: 12000,
+      body: JSON.stringify({ source }),
+    });
+    if (data.ok) {
+      const message = data.queued === false ? "影巢登录浏览器已在运行" : "影巢登录浏览器已打开，登录完成后关闭窗口";
+      toast(message);
+      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span><div class="rss-source-diagnostic"><span>用户目录：${escapeHtml(data.user_data_dir || "data/hdhive-browser")}</span></div>`;
+    } else {
+      const message = data.error || "打开影巢登录浏览器失败";
+      toast(message);
+      if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(message)}`;
+    }
+  } catch (error) {
+    toast(`打开影巢登录浏览器失败：${error.message}`);
+    if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(error.message)}`;
+  }
+}

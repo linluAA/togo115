@@ -1391,6 +1391,7 @@ function renderSettings() {
   document.querySelectorAll("[data-toggle-rss-source]").forEach((btn) => btn.addEventListener("click", toggleRssSource));
   document.querySelectorAll("[data-remove-rss-source]").forEach((btn) => btn.addEventListener("click", removeRssSource));
   document.querySelectorAll("[data-test-rss-source]").forEach((btn) => btn.addEventListener("click", testRssSource));
+  document.querySelectorAll("[data-login-hdhive-source]").forEach((btn) => btn.addEventListener("click", loginHdhiveSource));
   document.querySelectorAll(".rss-source-type").forEach((select) => select.addEventListener("change", syncRssSourceTypeUi));
   document.querySelectorAll(".rss-source-plugin").forEach((select) => select.addEventListener("change", syncRssSourceTypeUi));
   $("#exportBackup")?.addEventListener("click", exportBackup);
@@ -1686,6 +1687,7 @@ function builtinRssSourceItemHtml(source) {
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-builtin-source="${escapeHtml(source.id)}">收起</button>
+        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
       </div>
     </div>
@@ -1731,6 +1733,7 @@ function rssSourceItemHtml(source, index) {
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-rss-source="${escapeHtml(source.id)}">${expanded ? "收起" : "编辑"}</button>
+        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
         <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
       </div>
@@ -1962,6 +1965,42 @@ async function testRssSource(event) {
     }
   } catch (error) {
     resultBox.innerHTML = `<span class="warn-text">不可用</span> · ${escapeHtml(error.message)}`;
+  }
+}
+
+async function loginHdhiveSource(event) {
+  const id = event.currentTarget.dataset.loginHdhiveSource;
+  const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
+  const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
+  if (!row) return;
+  const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "site_plugin");
+  const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "hdhive", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
+  const source = {
+    ...rssSourceFromRow(row, id, {}, type, plugin),
+    enabled: true,
+  };
+  if (resultBox) {
+    resultBox.classList.remove("hidden");
+    resultBox.innerHTML = `<span class="muted">正在打开影巢登录浏览器...</span>`;
+  }
+  try {
+    const data = await api("/api/hdhive/login-browser", {
+      method: "POST",
+      timeoutMs: 12000,
+      body: JSON.stringify({ source }),
+    });
+    if (data.ok) {
+      const message = data.queued === false ? "影巢登录浏览器已在运行" : "影巢登录浏览器已打开，登录完成后关闭窗口";
+      toast(message);
+      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span><div class="rss-source-diagnostic"><span>用户目录：${escapeHtml(data.user_data_dir || "data/hdhive-browser")}</span></div>`;
+    } else {
+      const message = data.error || "打开影巢登录浏览器失败";
+      toast(message);
+      if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(message)}`;
+    }
+  } catch (error) {
+    toast(`打开影巢登录浏览器失败：${error.message}`);
+    if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(error.message)}`;
   }
 }
 

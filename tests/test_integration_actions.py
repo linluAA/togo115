@@ -59,6 +59,14 @@ class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
         adapter.list_folders.assert_awaited_once_with("0")
         adapter.transfer.assert_awaited_once_with("https://115.com/s/demo", "/tv")
 
+    async def test_hdhive_login_browser_delegates_to_source_helper(self) -> None:
+        source = {"plugin": "hdhive", "url": "https://hdhive.com/"}
+        with patch.object(integration_actions, "start_hdhive_login_browser", AsyncMock(return_value={"ok": True})) as login:
+            result = await integration_actions.hdhive_login_browser(source)
+
+        self.assertEqual(result, {"ok": True})
+        login.assert_awaited_once_with(source)
+
     async def test_telegram_errors_are_logged_and_reraised(self) -> None:
         adapter = Mock()
         adapter.qr_login_start = AsyncMock(side_effect=RuntimeError("boom"))
