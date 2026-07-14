@@ -14,7 +14,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.auth import current_user, serializer
 from app.config import settings
 from app.db import add_log
-from app.services.novnc import default_novnc_url, novnc_http_base, novnc_port, novnc_ws_url
+from app.services.novnc import default_novnc_url, novnc_http_base, novnc_port, novnc_ws_url, vnc_port
 
 
 router = APIRouter()
@@ -68,13 +68,15 @@ async def novnc_http_proxy(path: str, request: Request, user: dict = Depends(cur
 
 @router.get("/api/novnc/status")
 async def novnc_status(user: dict = Depends(current_user)) -> dict:
+    vnc_status = await _probe_vnc_tcp()
     http_status = await _probe_novnc_http()
     ws_status = await _probe_novnc_websocket()
     return {
-        "ok": http_status["ok"] and ws_status["ok"],
+        "ok": vnc_status["ok"] and http_status["ok"] and ws_status["ok"],
+        "vnc": vnc_status,
         "http": http_status,
         "websocket": ws_status,
-        "port": novnc_port(),
+        "ports": {"vnc": vnc_port(), "novnc": novnc_port()},
     }
 
 
@@ -85,9 +87,9 @@ async def novnc_websocket_proxy(websocket: WebSocket) -> None:
         return
 
     protocols = _websocket_protocols(websocket)
-    await websocket.accept(subprotocol=protocols[0] if protocols else None)
     try:
         async with websockets.connect(novnc_ws_url(), subprotocols=protocols or None, max_size=None) as upstream:
+            await websocket.accept(subprotocol=upstream.subprotocol)
             await _bridge_websocket(websocket, upstream)
     except Exception as exc:
         _log_novnc_websocket_error(exc)
@@ -152,6 +154,16 @@ async def _probe_novnc_http() -> dict:
         async with httpx.AsyncClient(timeout=5, follow_redirects=False) as client:
             response = await client.get(f"{novnc_http_base()}/vnc.html")
         return {"ok": response.status_code < 500, "status_code": response.status_code}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
+
+
+async def _probe_vnc_tcp() -> dict:
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", int(vnc_port())), timeout=5)
+        writer.close()
+        await writer.wait_closed()
+        return {"ok": True}
     except Exception as exc:
         return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
 
