@@ -41,6 +41,8 @@ const state = {
   builtinRssSourceExpanded: new Set(),
   panQrTimer: null,
   tgLoginTimer: null,
+  hdhiveBrowser: null,
+  hdhiveBrowserTimer: null,
   backupText: "",
   panFolder: { cid: "0", path: "/" },
   subscriptionRefreshTimer: null,

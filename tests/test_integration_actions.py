@@ -61,7 +61,7 @@ class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_hdhive_login_browser_delegates_to_source_helper(self) -> None:
         source = {"plugin": "hdhive", "url": "https://hdhive.com/"}
-        with patch.object(integration_actions, "start_hdhive_login_browser", AsyncMock(return_value={"ok": True})) as login:
+        with patch.object(integration_actions, "open_hdhive_embedded_browser", AsyncMock(return_value={"ok": True})) as login:
             result = await integration_actions.hdhive_login_browser(source)
 
         self.assertEqual(result, {"ok": True})

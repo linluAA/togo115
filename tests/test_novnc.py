@@ -66,23 +66,16 @@ def test_hdhive_profile_lock_returns_running_payload(monkeypatch) -> None:
 
 
 def test_hdhive_login_running_task_logs_brief_status(monkeypatch) -> None:
-    logs = []
+    async def fake_open(source):
+        return {"ok": True, "running": True, "url": source["url"]}
 
-    class RunningTask:
-        def done(self):
-            return False
+    monkeypatch.setattr(hdhive, "open_hdhive_embedded_browser", fake_open)
 
-    monkeypatch.setattr(hdhive, "_hdhive_login_browser_task", RunningTask())
-    monkeypatch.setattr(hdhive, "add_log", lambda *args: logs.append(args))
-    monkeypatch.setattr(hdhive, "default_novnc_url", lambda: "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token")
-    monkeypatch.delenv("TOGO115_NOVNC_URL", raising=False)
-
-    payload = asyncio.run(hdhive.start_hdhive_login_browser({"plugin": "hdhive"}))
+    payload = asyncio.run(hdhive.start_hdhive_login_browser({"plugin": "hdhive", "url": "https://hdhive.com/"}))
 
     assert payload["ok"] is True
-    assert payload["queued"] is False
-    assert payload["novnc_url"] == "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token"
-    assert logs == [("info", "rss", "HDHive login browser is already running", {})]
+    assert payload["running"] is True
+    assert payload["url"] == "https://hdhive.com/"
 
 
 def test_hdhive_clears_stale_profile_lock(tmp_path, monkeypatch) -> None:

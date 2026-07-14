@@ -109,3 +109,24 @@ class RssSourceTestRequest(BaseModel):
 
 class HdhiveLoginBrowserRequest(BaseModel):
     source: dict[str, Any] = Field(default_factory=dict)
+
+
+class HdhiveBrowserOpenRequest(BaseModel):
+    source: dict[str, Any] = Field(default_factory=dict)
+
+
+class HdhiveBrowserClickRequest(BaseModel):
+    x: float
+    y: float
+
+
+class HdhiveBrowserTypeRequest(BaseModel):
+    text: str = ""
+
+
+class HdhiveBrowserKeyRequest(BaseModel):
+    key: str = "Enter"
+
+
+class HdhiveBrowserNavigateRequest(BaseModel):
+    url: str | None = None

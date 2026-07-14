@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlparse
 
 from app.config import settings
 from app.db import add_log
+from app.services.hdhive_browser import open_hdhive_embedded_browser
 from app.services.link_downloads import extract_115_links, is_115_share_link
 from app.services.novnc import default_novnc_url, novnc_status_payload
 from app.services.types import SearchResult
@@ -226,6 +227,11 @@ def _hdhive_timeout_ms(source: dict[str, Any]) -> int:
 
 
 async def start_hdhive_login_browser(source: dict[str, Any]) -> dict[str, Any]:
+    """Open the embedded HDHive browser session for manual login."""
+    return await open_hdhive_embedded_browser(source)
+
+
+async def _start_legacy_hdhive_login_browser(source: dict[str, Any]) -> dict[str, Any]:
     """Open a headed HDHive browser session for manual login."""
     global _hdhive_login_browser_task
     if _hdhive_login_browser_task and not _hdhive_login_browser_task.done():

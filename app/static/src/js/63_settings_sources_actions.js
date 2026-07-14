@@ -86,7 +86,6 @@ async function loginHdhiveSource(event) {
   const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
   const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
   if (!row) return;
-  const vncWindow = openHdhiveNoVncWindow();
   const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "site_plugin");
   const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "hdhive", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
   const source = {
@@ -95,51 +94,150 @@ async function loginHdhiveSource(event) {
   };
   if (resultBox) {
     resultBox.classList.remove("hidden");
-    resultBox.innerHTML = `<span class="muted">正在打开影巢登录浏览器...</span>`;
+    resultBox.innerHTML = `<span class="muted">正在打开影巢内置浏览器...</span>`;
   }
   try {
-    const data = await api("/api/hdhive/login-browser", {
+    const data = await api("/api/hdhive/browser/open", {
       method: "POST",
-      timeoutMs: 12000,
+      timeoutMs: 30000,
       body: JSON.stringify({ source }),
     });
-    navigateHdhiveNoVncWindow(vncWindow, data.novnc_url);
+    showHdhiveBrowser(data);
     if (data.ok) {
-      const message = data.queued === false ? "影巢登录浏览器已在运行" : "影巢登录浏览器已打开，登录完成后关闭窗口";
+      const message = "影巢内置浏览器已打开";
       toast(message);
-      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span><div class="rss-source-diagnostic"><span>noVNC：${escapeHtml(hdhiveNoVncUrl(data.novnc_url))}</span><span>用户目录：${escapeHtml(data.user_data_dir || "data/hdhive-browser")}</span>${data.warning ? `<span>${escapeHtml(data.warning)}</span>` : ""}</div>`;
+      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span><div class="rss-source-diagnostic"><span>用户目录：${escapeHtml(data.user_data_dir || "data/hdhive-browser")}</span><span>地址：${escapeHtml(data.url || "")}</span></div>`;
     } else {
-      const message = data.error || "打开影巢登录浏览器失败";
+      const message = data.error || "打开影巢内置浏览器失败";
       toast(message);
-      if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(message)}<div class="rss-source-diagnostic"><span>noVNC：${escapeHtml(hdhiveNoVncUrl(data.novnc_url))}</span></div>`;
+      if (resultBox) resultBox.innerHTML = `<span class="warn-text">内置浏览器不可用</span> · ${escapeHtml(message)}`;
     }
   } catch (error) {
-    navigateHdhiveNoVncWindow(vncWindow);
-    toast(`打开影巢登录浏览器失败：${error.message}`);
-    if (resultBox) resultBox.innerHTML = `<span class="warn-text">登录浏览器不可用</span> · ${escapeHtml(error.message)}<div class="rss-source-diagnostic"><span>noVNC：${escapeHtml(hdhiveNoVncUrl())}</span></div>`;
+    toast(`打开影巢内置浏览器失败：${error.message}`);
+    if (resultBox) resultBox.innerHTML = `<span class="warn-text">内置浏览器不可用</span> · ${escapeHtml(error.message)}`;
   }
 }
 
-function openHdhiveNoVncWindow() {
-  const win = window.open("about:blank", "_blank");
-  if (win) {
-    win.document.title = "HDHive noVNC";
-    win.document.body.innerHTML = "正在打开 noVNC...";
+function showHdhiveBrowser(data) {
+  state.hdhiveBrowser = data;
+  renderHdhiveBrowser();
+  startHdhiveBrowserRefresh();
+}
+
+function renderHdhiveBrowser() {
+  const data = state.hdhiveBrowser;
+  let modal = document.querySelector("#hdhiveBrowserModal");
+  if (!data || !data.running) {
+    if (modal) modal.remove();
+    stopHdhiveBrowserRefresh();
+    return;
   }
-  return win;
+  const html = `
+    <div class="hdhive-browser-dialog">
+      <header class="hdhive-browser-header">
+        <div>
+          <strong>HDHive / 影巢</strong>
+          <span title="${escapeHtml(data.url || "")}">${escapeHtml(data.title || data.url || "内置浏览器")}</span>
+        </div>
+        <div class="inline-actions">
+          <button type="button" class="secondary" id="hdhiveBrowserRefresh">刷新</button>
+          <button type="button" class="secondary danger-lite" id="hdhiveBrowserClose">关闭</button>
+        </div>
+      </header>
+      <div class="hdhive-browser-nav">
+        <input id="hdhiveBrowserUrl" value="${escapeHtml(data.url || "")}" />
+        <button type="button" class="secondary" id="hdhiveBrowserGo">前往</button>
+      </div>
+      <div class="hdhive-browser-screen" style="aspect-ratio: ${escapeHtml(data.width || 1365)} / ${escapeHtml(data.height || 900)}">
+        <img id="hdhiveBrowserImage" src="${escapeHtml(data.screenshot || "")}" alt="HDHive browser" />
+      </div>
+      <div class="hdhive-browser-inputs">
+        <input id="hdhiveBrowserText" placeholder="输入文本后点击发送" />
+        <button type="button" id="hdhiveBrowserType">发送文本</button>
+        <button type="button" class="secondary" data-hdhive-key="Enter">Enter</button>
+        <button type="button" class="secondary" data-hdhive-key="Backspace">Backspace</button>
+        <button type="button" class="secondary" data-hdhive-key="Escape">Esc</button>
+      </div>
+    </div>`;
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "hdhiveBrowserModal";
+    modal.className = "modal-backdrop hdhive-browser-modal";
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = html;
+  bindHdhiveBrowserEvents();
 }
 
-function navigateHdhiveNoVncWindow(win, url) {
-  const target = hdhiveNoVncUrl(url);
-  if (win && !win.closed) win.location.href = target;
-  else window.open(target, "_blank");
+function bindHdhiveBrowserEvents() {
+  $("#hdhiveBrowserImage")?.addEventListener("click", clickHdhiveBrowser);
+  $("#hdhiveBrowserRefresh")?.addEventListener("click", refreshHdhiveBrowser);
+  $("#hdhiveBrowserClose")?.addEventListener("click", closeHdhiveBrowser);
+  $("#hdhiveBrowserGo")?.addEventListener("click", navigateHdhiveBrowser);
+  $("#hdhiveBrowserType")?.addEventListener("click", typeHdhiveBrowserText);
+  $("#hdhiveBrowserText")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") typeHdhiveBrowserText();
+  });
+  document.querySelectorAll("[data-hdhive-key]").forEach((button) => button.addEventListener("click", () => pressHdhiveBrowserKey(button.dataset.hdhiveKey)));
 }
 
-function hdhiveNoVncUrl(url) {
-  if (url) return url;
-  const target = new URL("/novnc/vnc.html", window.location.origin);
-  target.searchParams.set("autoconnect", "true");
-  target.searchParams.set("resize", "remote");
-  target.searchParams.set("path", "api/novnc/websockify");
-  return target.toString();
+async function clickHdhiveBrowser(event) {
+  const img = event.currentTarget;
+  const rect = img.getBoundingClientRect();
+  const width = state.hdhiveBrowser?.width || img.naturalWidth || rect.width;
+  const height = state.hdhiveBrowser?.height || img.naturalHeight || rect.height;
+  const x = ((event.clientX - rect.left) / rect.width) * width;
+  const y = ((event.clientY - rect.top) / rect.height) * height;
+  const data = await api("/api/hdhive/browser/click", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ x, y }) });
+  showHdhiveBrowser(data);
+}
+
+async function refreshHdhiveBrowser() {
+  const data = await api("/api/hdhive/browser/snapshot", { timeoutMs: 20000 });
+  showHdhiveBrowser(data);
+}
+
+async function navigateHdhiveBrowser() {
+  const url = $("#hdhiveBrowserUrl")?.value || "";
+  const data = await api("/api/hdhive/browser/navigate", { method: "POST", timeoutMs: 30000, body: JSON.stringify({ url }) });
+  showHdhiveBrowser(data);
+}
+
+async function typeHdhiveBrowserText() {
+  const input = $("#hdhiveBrowserText");
+  const text = input?.value || "";
+  if (!text) return;
+  const data = await api("/api/hdhive/browser/type", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ text }) });
+  if (input) input.value = "";
+  showHdhiveBrowser(data);
+}
+
+async function pressHdhiveBrowserKey(key) {
+  const data = await api("/api/hdhive/browser/key", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ key }) });
+  showHdhiveBrowser(data);
+}
+
+async function closeHdhiveBrowser() {
+  await api("/api/hdhive/browser/close", { method: "POST", timeoutMs: 12000 });
+  state.hdhiveBrowser = null;
+  renderHdhiveBrowser();
+}
+
+function startHdhiveBrowserRefresh() {
+  if (state.hdhiveBrowserTimer) return;
+  state.hdhiveBrowserTimer = setInterval(async () => {
+    if (!state.hdhiveBrowser?.running) return;
+    try {
+      const data = await api("/api/hdhive/browser/snapshot", { timeoutMs: 12000 });
+      state.hdhiveBrowser = data;
+      renderHdhiveBrowser();
+    } catch {
+      stopHdhiveBrowserRefresh();
+    }
+  }, 2500);
+}
+
+function stopHdhiveBrowserRefresh() {
+  if (state.hdhiveBrowserTimer) clearInterval(state.hdhiveBrowserTimer);
+  state.hdhiveBrowserTimer = null;
 }

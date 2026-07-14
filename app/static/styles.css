@@ -1985,6 +1985,85 @@ legend {
   color: var(--muted);
 }
 
+.hdhive-browser-modal {
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(0, 0, 0, .72);
+  z-index: 80;
+}
+
+.hdhive-browser-dialog {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  width: min(1440px, 96vw);
+  max-height: 94vh;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.hdhive-browser-header,
+.hdhive-browser-nav,
+.hdhive-browser-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hdhive-browser-header {
+  justify-content: space-between;
+}
+
+.hdhive-browser-header > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.hdhive-browser-header strong {
+  color: var(--ink);
+}
+
+.hdhive-browser-header span {
+  overflow: hidden;
+  max-width: 70vw;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hdhive-browser-nav input,
+.hdhive-browser-inputs input {
+  min-width: 0;
+  flex: 1;
+}
+
+.hdhive-browser-screen {
+  min-height: 280px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #101214;
+  overflow: hidden;
+}
+
+.hdhive-browser-screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.hdhive-browser-inputs {
+  flex-wrap: wrap;
+}
+
 .folder-row {
   width: 100%;
   color: var(--ink-soft);
