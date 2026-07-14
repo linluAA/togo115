@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import re
+import signal
 import shutil
 from pathlib import Path
 from typing import Any
@@ -33,9 +35,14 @@ class HdhiveEmbeddedBrowser:
             self._user_data_dir = _hdhive_user_data_dir(self._source)
             if self._context and self._page:
                 return await self._snapshot_locked("HDHive embedded browser is already running")
-            await self._start_locked()
-            await self._page.goto(self._base_url, wait_until="domcontentloaded", timeout=_hdhive_timeout_ms(self._source))
-            await _settle_page(self._page)
+            try:
+                await self._start_locked()
+            except Exception as exc:
+                await self._close_locked()
+                message = _hdhive_browser_error_message(exc)
+                add_log("warning", "rss", "HDHive embedded browser failed", {"error": message, "error_type": type(exc).__name__, "user_data_dir": self._user_data_dir})
+                return {"ok": False, "running": False, "error": message, "error_type": type(exc).__name__, "user_data_dir": self._user_data_dir}
+            await self._goto_start_page()
             add_log("info", "rss", "HDHive embedded browser opened", {"url": self._base_url, "user_data_dir": self._user_data_dir})
             return await self._snapshot_locked("HDHive embedded browser opened")
 
@@ -87,6 +94,7 @@ class HdhiveEmbeddedBrowser:
             add_log("warning", "rss", "HDHive browser dependency is unavailable", {"error": str(exc)})
             raise
         Path(self._user_data_dir).mkdir(parents=True, exist_ok=True)
+        _release_hdhive_profile_lock(self._user_data_dir)
         self._playwright = await async_playwright().start()
         self._context = await self._playwright.chromium.launch_persistent_context(
             user_data_dir=self._user_data_dir,
@@ -98,6 +106,14 @@ class HdhiveEmbeddedBrowser:
         )
         self._context.on("page", lambda page: setattr(self, "_page", page))
         self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
+
+    async def _goto_start_page(self) -> None:
+        page = self._require_page()
+        try:
+            await page.goto(self._base_url, wait_until="domcontentloaded", timeout=_hdhive_timeout_ms(self._source))
+            await _settle_page(page)
+        except Exception as exc:
+            add_log("warning", "rss", "HDHive embedded browser navigation failed", {"url": self._base_url, "error": _compact_hdhive_browser_error(exc), "error_type": type(exc).__name__})
 
     async def _activate_latest_page(self) -> None:
         if not self._context:
@@ -224,3 +240,89 @@ async def _settle_page(page: Any) -> None:
         await page.wait_for_load_state("networkidle", timeout=5000)
     except Exception:
         await asyncio.sleep(0.3)
+
+
+def _release_hdhive_profile_lock(user_data_dir: str) -> None:
+    lock_pid = _hdhive_profile_lock_pid(user_data_dir)
+    if lock_pid and _process_is_alive(lock_pid):
+        if _process_looks_like_browser(lock_pid):
+            _terminate_process(lock_pid)
+        if _process_is_alive(lock_pid):
+            raise RuntimeError(f"HDHive browser profile is still in use by process {lock_pid}. Close the old browser and try again.")
+    removed = False
+    for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        path = Path(user_data_dir) / name
+        try:
+            if path.exists() or path.is_symlink():
+                path.unlink()
+                removed = True
+        except OSError:
+            pass
+    if removed:
+        add_log("info", "rss", "HDHive embedded browser profile lock cleared", {"user_data_dir": user_data_dir, "pid": lock_pid})
+
+
+def _hdhive_profile_lock_pid(user_data_dir: str) -> int | None:
+    lock_path = Path(user_data_dir) / "SingletonLock"
+    try:
+        values = [os.readlink(lock_path)] if lock_path.is_symlink() else [lock_path.read_text(encoding="utf-8", errors="ignore")]
+    except OSError:
+        return None
+    for value in values:
+        match = re.search(r"(?:^|-)(\d+)$", str(value).strip())
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _process_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    proc_path = Path("/proc") / str(pid)
+    if proc_path.exists():
+        return True
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _process_looks_like_browser(pid: int) -> bool:
+    try:
+        command = (Path("/proc") / str(pid) / "cmdline").read_text(encoding="utf-8", errors="ignore").replace("\x00", " ").lower()
+    except OSError:
+        return True
+    return any(marker in command for marker in ("chromium", "chrome", "msedge"))
+
+
+def _terminate_process(pid: int) -> None:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return
+    for _ in range(30):
+        if not _process_is_alive(pid):
+            return
+        try:
+            import time
+
+            time.sleep(0.1)
+        except Exception:
+            return
+
+
+def _hdhive_browser_error_message(exc: Exception) -> str:
+    message = _compact_hdhive_browser_error(exc)
+    if "profile appears to be in use" in message.lower() or "processsingleton" in message.lower() or "locked the profile" in message.lower():
+        return "影巢浏览器用户目录仍被旧 Chromium 占用，请关闭旧登录浏览器后重试。"
+    if "no module named 'playwright'" in message.lower():
+        return "镜像内缺少 Playwright 依赖，请拉取最新 main 镜像后重建容器。"
+    if "executable" in message.lower() and "doesn't exist" in message.lower():
+        return "镜像内 Chromium 路径不可用，请清空浏览器路径或确认 TOGO115_CHROMIUM_PATH。"
+    return message
+
+
+def _compact_hdhive_browser_error(exc: Exception, limit: int = 800) -> str:
+    message = str(exc).strip() or type(exc).__name__
+    return message if len(message) <= limit else f"{message[:limit]}..."
