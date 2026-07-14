@@ -147,7 +147,13 @@ class _TelegramMessageLinkMixin:
         return {link: context_for_115_link(text, link, len(links)) for link in links}
 
     async def _collect_text_external_page_contexts(self, message_text: str, link_contexts: dict[str, str]) -> None:
-        external_pages = [(page_url, "消息外链") for page_url in self._external_resource_page_urls(message_text)]
+        # Only fetch third-party resource pages. Skip URLs that already resolved as 115 shares.
+        known_links = set(link_contexts) | set(extract_115_links(message_text))
+        external_pages = [
+            (page_url, "消息外链")
+            for page_url in self._external_resource_page_urls(message_text)
+            if page_url not in known_links and not extract_115_links(page_url)
+        ]
         if not external_pages:
             return
 

@@ -45,8 +45,6 @@ TELEGRAM_EXTERNAL_PAGE_HOSTS = {
     "www.aliyundrive.com",
     "www.123pan.com",
     "123pan.com",
-    "www.115.com",
-    "115.com",
     "telegra.ph",
 }
 

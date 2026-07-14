@@ -136,6 +136,9 @@ class _TelegramButtonLinkMixin:
         seen: set[str] = set()
         for raw_url in HTTP_URL_RE.findall(unescape(text)):
             url = _clean_download_link(raw_url)
+            # 115 share links are direct resources, not third-party pages to scrape.
+            if extract_115_links(url):
+                continue
             parsed = urlparse(url)
             host = (parsed.netloc or "").casefold().removeprefix("www.")
             if parsed.scheme.startswith("http") and host in TELEGRAM_EXTERNAL_PAGE_HOSTS and url not in seen:

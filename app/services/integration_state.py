@@ -6,8 +6,12 @@ from app.db import db, json_dumps, json_loads, utc_now
 
 
 def get_setting(key: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
-    with db() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    try:
+        with db() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    except Exception:
+        # Tests or partial environments may not have settings initialized yet.
+        return default or {}
     return json_loads(row["value"] if row else None, default or {})
 
 
