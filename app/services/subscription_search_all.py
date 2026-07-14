@@ -15,7 +15,7 @@ async def search_all_active_subscriptions() -> dict:
     add_log(
         "info",
         "subscription",
-        "\u624b\u52a8\u641c\u7d22\u5168\u90e8\u8ba2\u9605\u5f00\u59cb",
+        "搜索全部活跃订阅开始",
         {"active": len(subscriptions), "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY},
     )
     snapshot = await _library_snapshot_or_none()
@@ -27,7 +27,7 @@ async def search_all_active_subscriptions() -> dict:
     add_log(
         "info",
         "subscription",
-        "\u624b\u52a8\u641c\u7d22\u5168\u90e8\u8ba2\u9605\u5b8c\u6210",
+        "搜索全部活跃订阅完成",
         {"active": len(subscriptions), "searched": searched, "created": total, "failed": failed},
     )
     return {"ok": True, "searched": searched, "count": total, "failed": failed}

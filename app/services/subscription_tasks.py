@@ -109,7 +109,7 @@ async def _search_all_background(
         search_all_func = search_all_func or _default_search_all
         await search_all_func()
     except Exception as exc:
-        add_log("error", "subscription", "\u624b\u52a8\u641c\u7d22\u5168\u90e8\u8ba2\u9605\u540e\u53f0\u4efb\u52a1\u5931\u8d25", {"error": str(exc), "error_type": type(exc).__name__})
+        add_log("error", "subscription", "搜索全部活跃订阅后台任务失败", {"error": str(exc), "error_type": type(exc).__name__})
     finally:
         runtime.search_all_task = None
 
@@ -118,7 +118,7 @@ def schedule_search_all_active_subscriptions() -> dict:
     if runtime.search_all_task and not runtime.search_all_task.done():
         return {"ok": True, "queued": False, "running": True}
     runtime.search_all_task = asyncio.create_task(_search_all_in_worker_thread())
-    add_log("info", "subscription", "\u624b\u52a8\u641c\u7d22\u5168\u90e8\u8ba2\u9605\u5df2\u52a0\u5165\u540e\u53f0\u961f\u5217")
+    add_log("info", "subscription", "搜索全部活跃订阅已加入后台队列")
     return {"ok": True, "queued": True, "running": True}
 
 

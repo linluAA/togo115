@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     database_path: Path = Path("data/togo115.sqlite3")
     session_cookie: str = "togo115_session"
     monitor_interval_seconds: int = 60
+    # Periodic full rescan of active subscriptions (Telegram history + RSS/site fallback).
+    # Set to 0 to disable. Default 30 minutes.
+    subscription_rescan_interval_seconds: int = 1800
 
 
 settings = Settings()

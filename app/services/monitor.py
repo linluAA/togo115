@@ -8,6 +8,7 @@ from app.services.adapters.telegram import TelegramBotAdapter, TelegramClientAda
 from app.services.subscription_crud import list_subscriptions
 from app.services.subscription_library import sync_subscription_list_with_emby
 from app.services.subscription_recheck import recheck_pending_115_resources
+from app.services.subscription_tasks import schedule_search_all_active_subscriptions
 
 
 class MonitorService:
@@ -16,6 +17,7 @@ class MonitorService:
         self._stopping = asyncio.Event()
         self._last_emby_sync = 0.0
         self._last_recheck = 0.0
+        self._last_subscription_rescan = 0.0
         self._bot = TelegramBotAdapter()
 
     def start(self) -> None:
@@ -40,15 +42,45 @@ class MonitorService:
             try:
                 await telegram.ensure_monitoring()
                 await self._bot.ensure_polling()
-                if time.monotonic() - self._last_recheck > 30:
+                now = time.monotonic()
+                if now - self._last_recheck > 30:
                     await recheck_pending_115_resources()
-                    self._last_recheck = time.monotonic()
-                if time.monotonic() - self._last_emby_sync > 600:
+                    self._last_recheck = now
+                if now - self._last_emby_sync > 600:
                     await sync_subscription_list_with_emby(list_subscriptions(include_completed=True))
-                    self._last_emby_sync = time.monotonic()
+                    self._last_emby_sync = now
+                self._maybe_schedule_subscription_rescan(now)
             except Exception as exc:
                 add_log("error", "monitor", "监控循环异常，下一轮将自动重试", {"error": str(exc)})
             await asyncio.sleep(settings.monitor_interval_seconds)
+
+    def _maybe_schedule_subscription_rescan(self, now: float | None = None) -> dict | None:
+        """Queue a full active-subscription rescan when the interval has elapsed."""
+        interval = int(getattr(settings, "subscription_rescan_interval_seconds", 0) or 0)
+        if interval <= 0:
+            return None
+        current = time.monotonic() if now is None else now
+        # First tick after start: arm the timer without scanning immediately.
+        # New subscriptions already schedule their own search.
+        if self._last_subscription_rescan <= 0:
+            self._last_subscription_rescan = current
+            return None
+        if current - self._last_subscription_rescan < interval:
+            return None
+        result = schedule_search_all_active_subscriptions()
+        # Always advance the timer so a long-running search doesn't re-trigger every monitor tick.
+        self._last_subscription_rescan = current
+        add_log(
+            "info",
+            "monitor",
+            "已按计划触发全部活跃订阅重搜",
+            {
+                "interval_seconds": interval,
+                "queued": bool(result.get("queued")),
+                "running": bool(result.get("running")),
+            },
+        )
+        return result
 
 
 monitor_service = MonitorService()

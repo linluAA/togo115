@@ -647,8 +647,8 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         with db() as conn:
             rows = conn.execute("SELECT level, message FROM logs WHERE scope = 'subscription' ORDER BY id").fetchall()
         messages = [row["message"] for row in rows if row["level"] == "info"]
-        self.assertIn("\u624b\u52a8\u641c\u7d22\u5168\u90e8\u8ba2\u9605\u5f00\u59cb", messages)
-        self.assertIn("\u624b\u52a8\u641c\u7d22\u5168\u90e8\u8ba2\u9605\u5b8c\u6210", messages)
+        self.assertIn("搜索全部活跃订阅开始", messages)
+        self.assertIn("搜索全部活跃订阅完成", messages)
 
     async def test_search_all_times_out_stuck_subscription_search(self) -> None:
         self._subscription()
