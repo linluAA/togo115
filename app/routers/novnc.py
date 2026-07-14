@@ -71,10 +71,12 @@ async def novnc_status(user: dict = Depends(current_user)) -> dict:
     return await novnc_status_payload()
 
 
+@router.websocket("/api/novnc/websockify/{novnc_token}")
 @router.websocket("/api/novnc/websockify")
+@router.websocket("/novnc/websockify/{novnc_token}")
 @router.websocket("/novnc/websockify")
-async def novnc_websocket_proxy(websocket: WebSocket) -> None:
-    if not _websocket_is_authenticated(websocket):
+async def novnc_websocket_proxy(websocket: WebSocket, novnc_token: str | None = None) -> None:
+    if not _websocket_is_authenticated(websocket, novnc_token):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -89,7 +91,7 @@ async def novnc_websocket_proxy(websocket: WebSocket) -> None:
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
 
 
-def _websocket_is_authenticated(websocket: WebSocket) -> bool:
+def _websocket_is_authenticated(websocket: WebSocket, novnc_token: str | None = None) -> bool:
     token = websocket.cookies.get(settings.session_cookie)
     if token:
         try:
@@ -97,7 +99,7 @@ def _websocket_is_authenticated(websocket: WebSocket) -> bool:
             return True
         except BadSignature:
             pass
-    return verify_novnc_access_token(websocket.query_params.get("novnc_token"))
+    return verify_novnc_access_token(novnc_token or websocket.query_params.get("novnc_token"))
 
 
 def _websocket_protocols(websocket: WebSocket) -> list[str]:

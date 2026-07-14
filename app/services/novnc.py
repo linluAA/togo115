@@ -35,7 +35,7 @@ def default_novnc_url() -> str:
 
 def novnc_client_path() -> str:
     token = quote(create_novnc_access_token(), safe="")
-    return f"{_NOVNC_CLIENT_PATH}?novnc_token={token}"
+    return f"{_NOVNC_CLIENT_PATH}/{token}"
 
 
 def novnc_http_base() -> str:

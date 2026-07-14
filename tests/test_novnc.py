@@ -1,5 +1,5 @@
 import asyncio
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, urlparse
 
 from app.services import novnc as novnc_service
 from app.services.novnc import default_novnc_url
@@ -18,7 +18,7 @@ def test_default_novnc_url_uses_same_origin_proxy(monkeypatch) -> None:
     assert url.path == "/novnc/vnc.html"
     assert query["autoconnect"] == ["true"]
     assert query["resize"] == ["remote"]
-    assert query["path"] == ["api/novnc/websockify?novnc_token=signed-token"]
+    assert query["path"] == ["api/novnc/websockify/signed-token"]
 
 
 def test_default_novnc_url_includes_vnc_password(monkeypatch) -> None:
@@ -28,19 +28,18 @@ def test_default_novnc_url_includes_vnc_password(monkeypatch) -> None:
     url = urlparse(default_novnc_url())
     query = parse_qs(url.query)
 
-    assert query["path"] == ["api/novnc/websockify?novnc_token=signed%20token"]
-    assert unquote(query["path"][0]) == "api/novnc/websockify?novnc_token=signed token"
+    assert query["path"] == ["api/novnc/websockify/signed%20token"]
     assert query["password"] == ["togo 115"]
 
 
 def test_hdhive_login_uses_default_novnc_proxy(monkeypatch) -> None:
     monkeypatch.delenv("TOGO115_NOVNC_URL", raising=False)
     monkeypatch.delenv("VNC_PASSWORD", raising=False)
-    monkeypatch.setattr(hdhive, "default_novnc_url", lambda: "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%3Fnovnc_token%3Dsigned-token")
+    monkeypatch.setattr(hdhive, "default_novnc_url", lambda: "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token")
 
     payload = _with_hdhive_novnc_url({}, {"ok": True})
 
-    assert payload["novnc_url"] == "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%3Fnovnc_token%3Dsigned-token"
+    assert payload["novnc_url"] == "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token"
 
 
 def test_hdhive_login_keeps_configured_novnc_url(monkeypatch) -> None:
@@ -53,7 +52,7 @@ def test_hdhive_login_keeps_configured_novnc_url(monkeypatch) -> None:
 
 def test_hdhive_profile_lock_returns_running_payload(monkeypatch) -> None:
     monkeypatch.delenv("TOGO115_NOVNC_URL", raising=False)
-    monkeypatch.setattr(hdhive, "default_novnc_url", lambda: "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%3Fnovnc_token%3Dsigned-token")
+    monkeypatch.setattr(hdhive, "default_novnc_url", lambda: "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token")
 
     payload = hdhive._hdhive_login_error(
         RuntimeError("The profile appears to be in use by another Chromium process"),
@@ -63,7 +62,7 @@ def test_hdhive_profile_lock_returns_running_payload(monkeypatch) -> None:
     assert payload["ok"] is True
     assert payload["running"] is True
     assert payload["user_data_dir"] == "/data/hdhive-browser"
-    assert payload["novnc_url"] == "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%3Fnovnc_token%3Dsigned-token"
+    assert payload["novnc_url"] == "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token"
 
 
 def test_hdhive_login_running_task_logs_brief_status(monkeypatch) -> None:
@@ -75,14 +74,14 @@ def test_hdhive_login_running_task_logs_brief_status(monkeypatch) -> None:
 
     monkeypatch.setattr(hdhive, "_hdhive_login_browser_task", RunningTask())
     monkeypatch.setattr(hdhive, "add_log", lambda *args: logs.append(args))
-    monkeypatch.setattr(hdhive, "default_novnc_url", lambda: "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%3Fnovnc_token%3Dsigned-token")
+    monkeypatch.setattr(hdhive, "default_novnc_url", lambda: "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token")
     monkeypatch.delenv("TOGO115_NOVNC_URL", raising=False)
 
     payload = asyncio.run(hdhive.start_hdhive_login_browser({"plugin": "hdhive"}))
 
     assert payload["ok"] is True
     assert payload["queued"] is False
-    assert payload["novnc_url"] == "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%3Fnovnc_token%3Dsigned-token"
+    assert payload["novnc_url"] == "/novnc/vnc.html?path=api%2Fnovnc%2Fwebsockify%2Fsigned-token"
     assert logs == [("info", "rss", "HDHive login browser is already running", {})]
 
 
@@ -153,3 +152,17 @@ def test_novnc_websocket_accepts_signed_query_token(monkeypatch) -> None:
     monkeypatch.setattr(novnc, "verify_novnc_access_token", lambda token: token == "signed-token")
 
     assert novnc._websocket_is_authenticated(FakeWebSocket()) is True
+
+
+def test_novnc_websocket_accepts_signed_path_token(monkeypatch) -> None:
+    class FakeQueryParams:
+        def get(self, key):
+            return None
+
+    class FakeWebSocket:
+        cookies = {}
+        query_params = FakeQueryParams()
+
+    monkeypatch.setattr(novnc, "verify_novnc_access_token", lambda token: token == "signed-token")
+
+    assert novnc._websocket_is_authenticated(FakeWebSocket(), "signed-token") is True
