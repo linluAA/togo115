@@ -5,11 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-      - "6080:6080"
     environment:
       TOGO115_SECRET_KEY: "please-change-this-secret"
       TOGO115_MONITOR_INTERVAL_SECONDS: "60"
-      VNC_RESOLUTION: "1365x900x24"
-      VNC_PASSWORD: "togo115"
     volumes:
       - ./data:/data

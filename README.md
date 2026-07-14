@@ -21,15 +21,6 @@ docker compose up -d --build
 http://localhost:8000
 ```
 
-noVNC 虚拟桌面：
-
-```text
-http://localhost:6080/vnc.html
-```
-
-默认 VNC 密码是 `togo115`，可在 `docker-compose.yml` 的 `VNC_PASSWORD` 修改。
-
-
 数据会持久化到宿主机 `./data` 目录。
 
 ## 已实现模块
