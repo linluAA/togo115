@@ -259,6 +259,7 @@ async def _run_hdhive_login_browser(source: dict[str, Any], started: asyncio.Fut
     executable_path = _hdhive_executable_path(login_source)
     timeout_ms = _hdhive_timeout_ms(login_source)
     Path(user_data_dir).mkdir(parents=True, exist_ok=True)
+    _clear_stale_hdhive_profile_lock(user_data_dir)
 
     try:
         async with async_playwright() as playwright:
@@ -288,8 +289,12 @@ async def _run_hdhive_login_browser(source: dict[str, Any], started: asyncio.Fut
             finally:
                 await browser.close()
     except Exception as exc:
-        add_log("warning", "rss", "HDHive login browser failed", {"error": str(exc), "error_type": type(exc).__name__})
-        _resolve_hdhive_login_start(started, _hdhive_login_error(exc, user_data_dir))
+        payload = _hdhive_login_error(exc, user_data_dir)
+        if _hdhive_profile_is_locked(str(exc)):
+            add_log("info", "rss", "HDHive login browser profile is already in use", {"user_data_dir": user_data_dir})
+        else:
+            add_log("warning", "rss", "HDHive login browser failed", {"error": _compact_hdhive_error(exc), "error_type": type(exc).__name__})
+        _resolve_hdhive_login_start(started, payload)
 
 
 async def _wait_for_hdhive_login_browser_close(browser: Any) -> None:
@@ -330,6 +335,79 @@ def _hdhive_login_error(exc: Exception, user_data_dir: str | None = None) -> dic
 def _hdhive_profile_is_locked(message: str) -> bool:
     value = str(message or "").lower()
     return any(marker in value for marker in ("profile appears to be in use", "processsingleton", "locked the profile"))
+
+
+def _hdhive_login_error(exc: Exception, user_data_dir: str | None = None) -> dict[str, Any]:
+    message = str(exc).strip() or type(exc).__name__
+    if "headed browser without XServer" in message or "Missing X server" in message or "DISPLAY" in message:
+        message = "当前运行环境没有图形界面，无法直接打开影巢登录浏览器。请确认容器的 VNC/noVNC 图形环境已启动。"
+    if _hdhive_profile_is_locked(message):
+        payload: dict[str, Any] = {
+            "ok": True,
+            "running": True,
+            "queued": False,
+            "message": "HDHive login browser profile is already in use",
+            "warning": "影巢浏览器用户目录已被 Chromium 占用，通常表示登录浏览器已经在 noVNC 桌面里运行。",
+        }
+        if user_data_dir:
+            payload["user_data_dir"] = user_data_dir
+        return _with_hdhive_novnc_url({}, payload)
+    payload: dict[str, Any] = {"ok": False, "running": False, "error": message}
+    if user_data_dir:
+        payload["user_data_dir"] = user_data_dir
+    return _with_hdhive_novnc_url({}, payload)
+
+
+def _clear_stale_hdhive_profile_lock(user_data_dir: str) -> bool:
+    lock_pid = _hdhive_profile_lock_pid(user_data_dir)
+    if lock_pid and _process_is_alive(lock_pid):
+        return False
+
+    removed = False
+    for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        path = Path(user_data_dir) / name
+        try:
+            if path.exists() or path.is_symlink():
+                path.unlink()
+                removed = True
+        except OSError:
+            pass
+    if removed:
+        add_log("info", "rss", "HDHive stale browser profile lock cleared", {"user_data_dir": user_data_dir, "pid": lock_pid})
+    return removed
+
+
+def _hdhive_profile_lock_pid(user_data_dir: str) -> int | None:
+    lock_path = Path(user_data_dir) / "SingletonLock"
+    try:
+        values = [os.readlink(lock_path)] if lock_path.is_symlink() else [lock_path.read_text(encoding="utf-8", errors="ignore")]
+    except OSError:
+        return None
+    for value in values:
+        match = re.search(r"(?:^|-)(\d+)$", str(value).strip())
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _process_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    proc_path = Path("/proc") / str(pid)
+    if proc_path.exists():
+        return True
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _compact_hdhive_error(exc: Exception, limit: int = 800) -> str:
+    message = str(exc).strip() or type(exc).__name__
+    if len(message) <= limit:
+        return message
+    return f"{message[:limit]}..."
 
 
 def _with_hdhive_novnc_url(source: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
