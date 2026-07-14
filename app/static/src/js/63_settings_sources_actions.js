@@ -106,7 +106,7 @@ async function loginHdhiveSource(event) {
     if (data.ok) {
       const message = "影巢内置浏览器已打开";
       toast(message);
-      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span><div class="rss-source-diagnostic"><span>用户目录：${escapeHtml(data.user_data_dir || "data/hdhive-browser")}</span><span>地址：${escapeHtml(data.url || "")}</span></div>`;
+      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span>${renderHdhiveBrowserMeta(data)}`;
     } else {
       const message = data.error || "打开影巢内置浏览器失败";
       toast(message);
@@ -122,6 +122,30 @@ function showHdhiveBrowser(data) {
   state.hdhiveBrowser = data;
   renderHdhiveBrowser();
   startHdhiveBrowserRefresh();
+}
+
+function renderHdhiveBrowserMeta(data) {
+  const rows = [
+    ["状态", data.diagnostic || ""],
+    ["代理", data.proxy_enabled ? (data.proxy_server || "已启用") : "未启用"],
+    ["地址", data.url || ""],
+    ["标题", data.title || ""],
+    ["用户目录", data.user_data_dir || "data/hdhive-browser"],
+    ["页面摘要", data.page_text_excerpt || ""],
+  ].filter(([, value]) => value);
+  if (!rows.length) return "";
+  return `<div class="rss-source-diagnostic">${rows.map(([label, value]) => `<span>${escapeHtml(label)}：${escapeHtml(value)}</span>`).join("")}</div>`;
+}
+
+function renderHdhiveBrowserNotice(data) {
+  if (!data?.diagnostic && !data?.proxy_enabled && !data?.page_text_excerpt) return "";
+  const diagnosticClass = /错误|拦截|为空|失败|风控|拒绝/.test(data?.diagnostic || "") ? " warn" : "";
+  const rows = [
+    data?.diagnostic ? `<strong>${escapeHtml(data.diagnostic)}</strong>` : "",
+    `代理：${data?.proxy_enabled ? escapeHtml(data.proxy_server || "已启用") : "未启用"}`,
+    data?.page_text_excerpt ? `页面摘要：${escapeHtml(data.page_text_excerpt)}` : "",
+  ].filter(Boolean);
+  return `<div class="hdhive-browser-notice${diagnosticClass}">${rows.map((row) => `<span>${row}</span>`).join("")}</div>`;
 }
 
 function renderHdhiveBrowser() {
@@ -148,6 +172,7 @@ function renderHdhiveBrowser() {
         <input id="hdhiveBrowserUrl" value="${escapeHtml(data.url || "")}" />
         <button type="button" class="secondary" id="hdhiveBrowserGo">前往</button>
       </div>
+      ${renderHdhiveBrowserNotice(data)}
       <div class="hdhive-browser-screen" style="aspect-ratio: ${escapeHtml(data.width || 1365)} / ${escapeHtml(data.height || 900)}">
         <img id="hdhiveBrowserImage" src="${escapeHtml(data.screenshot || "")}" alt="HDHive browser" />
       </div>

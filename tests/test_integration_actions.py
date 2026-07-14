@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.services import integration_actions
-from app.services.hdhive_browser import hdhive_playwright_proxy
+from app.services.hdhive_browser import _hdhive_page_diagnostic, hdhive_playwright_proxy, hdhive_proxy_label
 
 
 class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
@@ -79,6 +79,23 @@ class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
             proxy = hdhive_playwright_proxy({"use_proxy": False})
 
         self.assertIsNone(proxy)
+
+    def test_hdhive_proxy_label_hides_credentials(self) -> None:
+        with patch("app.services.hdhive_browser.get_setting", return_value={"url": "socks5://user:pass@127.0.0.1:7890"}):
+            label = hdhive_proxy_label({"use_proxy": True})
+
+        self.assertEqual(label, "socks5://127.0.0.1:7890")
+
+    def test_hdhive_site_error_page_has_diagnostic(self) -> None:
+        diagnostic = _hdhive_page_diagnostic(
+            "https://hdhive.com/",
+            "HDHive - HDHive",
+            "出现了很多奇怪的错误\n请联系管理员处理",
+            proxy_enabled=True,
+        )
+
+        self.assertIn("影巢返回站内错误页", diagnostic)
+        self.assertIn("更换代理出口", diagnostic)
 
     async def test_telegram_errors_are_logged_and_reraised(self) -> None:
         adapter = Mock()

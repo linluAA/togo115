@@ -1995,7 +1995,7 @@ legend {
 
 .hdhive-browser-dialog {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   gap: 10px;
   width: min(1440px, 96vw);
   max-height: 94vh;
@@ -2041,6 +2041,32 @@ legend {
 .hdhive-browser-inputs input {
   min-width: 0;
   flex: 1;
+}
+
+.hdhive-browser-notice {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid rgba(45, 212, 191, .22);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  background: rgba(45, 212, 191, .07);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hdhive-browser-notice.warn {
+  border-color: rgba(244, 182, 63, .36);
+  background: rgba(244, 182, 63, .10);
+}
+
+.hdhive-browser-notice span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hdhive-browser-notice strong {
+  color: var(--brand-2);
 }
 
 .hdhive-browser-screen {
