@@ -137,10 +137,9 @@ function navigateHdhiveNoVncWindow(win, url) {
 
 function hdhiveNoVncUrl(url) {
   if (url) return url;
-  const target = new URL(window.location.href);
-  target.port = "6080";
-  target.pathname = "/vnc.html";
-  target.search = "autoconnect=true&resize=remote";
-  target.hash = "";
+  const target = new URL("/novnc/vnc.html", window.location.origin);
+  target.searchParams.set("autoconnect", "true");
+  target.searchParams.set("resize", "remote");
+  target.searchParams.set("path", "novnc/websockify");
   return target.toString();
 }

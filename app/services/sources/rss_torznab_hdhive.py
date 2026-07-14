@@ -12,6 +12,7 @@ from urllib.parse import urljoin, urlparse
 from app.config import settings
 from app.db import add_log
 from app.services.link_downloads import extract_115_links, is_115_share_link
+from app.services.novnc import default_novnc_url
 from app.services.types import SearchResult
 
 
@@ -333,7 +334,7 @@ def _hdhive_profile_is_locked(message: str) -> bool:
 
 def _with_hdhive_novnc_url(source: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     novnc_url = str(source.get("novnc_url") or os.getenv("TOGO115_NOVNC_URL") or "").strip()
-    return {**payload, **({"novnc_url": novnc_url} if novnc_url else {})}
+    return {**payload, "novnc_url": novnc_url or default_novnc_url()}
 
 
 async def _settle_page(page: Any, timeout_ms: int) -> None:
