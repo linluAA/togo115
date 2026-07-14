@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import os
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 import websockets
+
+from app.auth import create_novnc_access_token
+
+
+_NOVNC_CLIENT_PATH = "api/novnc/websockify"
 
 
 def novnc_port() -> str:
@@ -20,12 +25,17 @@ def default_novnc_url() -> str:
     params = {
         "autoconnect": "true",
         "resize": "remote",
-        "path": "api/novnc/websockify",
+        "path": novnc_client_path(),
     }
     password = str(os.getenv("VNC_PASSWORD") or "").strip()
     if password:
         params["password"] = password
     return f"/novnc/vnc.html?{urlencode(params)}"
+
+
+def novnc_client_path() -> str:
+    token = quote(create_novnc_access_token(), safe="")
+    return f"{_NOVNC_CLIENT_PATH}?novnc_token={token}"
 
 
 def novnc_http_base() -> str:
@@ -40,13 +50,15 @@ async def novnc_status_payload() -> dict:
     vnc_status = await probe_vnc_tcp()
     http_status = await probe_novnc_http()
     ws_status = await probe_novnc_websocket()
+    rfb_status = await probe_rfb_handshake()
     return {
-        "ok": vnc_status["ok"] and http_status["ok"] and ws_status["ok"],
+        "ok": vnc_status["ok"] and http_status["ok"] and ws_status["ok"] and rfb_status["ok"],
         "vnc": vnc_status,
         "http": http_status,
         "websocket": ws_status,
+        "rfb": rfb_status,
         "ports": {"vnc": vnc_port(), "novnc": novnc_port()},
-        "client_path": "api/novnc/websockify",
+        "client_path": _NOVNC_CLIENT_PATH,
     }
 
 
@@ -73,5 +85,18 @@ async def probe_novnc_websocket() -> dict:
     try:
         async with websockets.connect(novnc_ws_url(), subprotocols=["binary"], open_timeout=5, max_size=None):
             return {"ok": True}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
+
+
+async def probe_rfb_handshake() -> dict:
+    try:
+        async with websockets.connect(novnc_ws_url(), subprotocols=["binary"], open_timeout=5, max_size=None) as websocket:
+            banner = await asyncio.wait_for(websocket.recv(), timeout=5)
+            if isinstance(banner, bytes):
+                banner_text = banner.decode("ascii", "replace")
+            else:
+                banner_text = banner
+            return {"ok": banner_text.startswith("RFB "), "banner": banner_text.strip()}
     except Exception as exc:
         return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}

@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse, Response
 from itsdangerous import BadSignature
 from starlette.websockets import WebSocketDisconnect
 
-from app.auth import current_user, serializer
+from app.auth import current_user, serializer, verify_novnc_access_token
 from app.config import settings
 from app.db import add_log
 from app.services.novnc import default_novnc_url, novnc_http_base, novnc_port, novnc_status_payload, novnc_ws_url
@@ -91,13 +91,13 @@ async def novnc_websocket_proxy(websocket: WebSocket) -> None:
 
 def _websocket_is_authenticated(websocket: WebSocket) -> bool:
     token = websocket.cookies.get(settings.session_cookie)
-    if not token:
-        return False
-    try:
-        serializer.loads(token)
-    except BadSignature:
-        return False
-    return True
+    if token:
+        try:
+            serializer.loads(token)
+            return True
+        except BadSignature:
+            pass
+    return verify_novnc_access_token(websocket.query_params.get("novnc_token"))
 
 
 def _websocket_protocols(websocket: WebSocket) -> list[str]:

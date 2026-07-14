@@ -1,10 +1,11 @@
 from fastapi import HTTPException, Request, Response, status
-from itsdangerous import BadSignature, URLSafeSerializer
+from itsdangerous import BadSignature, SignatureExpired, URLSafeSerializer, URLSafeTimedSerializer
 
 from app.config import settings
 from app.db import db, hash_password, row_to_dict, utc_now, verify_password
 
 serializer = URLSafeSerializer(settings.secret_key, salt="togo115-session")
+novnc_serializer = URLSafeTimedSerializer(settings.secret_key, salt="togo115-novnc")
 
 
 def authenticate(username: str, password: str) -> bool:
@@ -43,6 +44,20 @@ def current_user(request: Request) -> dict:
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
     return row_to_dict(user) or {}
+
+
+def create_novnc_access_token() -> str:
+    return novnc_serializer.dumps({"scope": "novnc"})
+
+
+def verify_novnc_access_token(token: str | None, max_age: int = 60 * 60 * 12) -> bool:
+    if not token:
+        return False
+    try:
+        payload = novnc_serializer.loads(token, max_age=max_age)
+    except (BadSignature, SignatureExpired):
+        return False
+    return payload.get("scope") == "novnc"
 
 
 def update_credentials(username: str, password: str) -> None:
