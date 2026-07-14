@@ -4,7 +4,14 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.services import integration_actions
-from app.services.hdhive_browser import _hdhive_page_diagnostic, hdhive_playwright_proxy, hdhive_proxy_label
+from app.services.hdhive_browser import (
+    _hdhive_browser_args,
+    _hdhive_page_diagnostic,
+    _hdhive_stealth_init_script,
+    _hdhive_user_agent,
+    hdhive_playwright_proxy,
+    hdhive_proxy_label,
+)
 
 
 class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
@@ -96,6 +103,16 @@ class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("影巢返回站内错误页", diagnostic)
         self.assertIn("更换代理出口", diagnostic)
+
+    def test_hdhive_browser_uses_stealth_defaults(self) -> None:
+        args = _hdhive_browser_args()
+        script = _hdhive_stealth_init_script()
+
+        self.assertIn("--disable-blink-features=AutomationControlled", args)
+        self.assertIn("--lang=zh-CN", args)
+        self.assertIn("webdriver", script)
+        self.assertIn("Win32", script)
+        self.assertIn("Chrome/", _hdhive_user_agent({}))
 
     async def test_telegram_errors_are_logged_and_reraised(self) -> None:
         adapter = Mock()

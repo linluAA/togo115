@@ -17,6 +17,11 @@ from app.services.integration_state import get_setting
 
 HDHIVE_DEFAULT_URL = "https://hdhive.com/"
 _VIEWPORT = {"width": 1365, "height": 900}
+_DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0.0.0 Safari/537.36"
+)
 
 
 class HdhiveEmbeddedBrowser:
@@ -29,6 +34,7 @@ class HdhiveEmbeddedBrowser:
         self._base_url = HDHIVE_DEFAULT_URL
         self._user_data_dir = ""
         self._proxy: dict[str, str] | None = None
+        self._headless = True
 
     async def open(self, source: dict[str, Any]) -> dict[str, Any]:
         async with self._lock:
@@ -36,6 +42,7 @@ class HdhiveEmbeddedBrowser:
             self._base_url = _hdhive_base_url(self._source)
             self._user_data_dir = _hdhive_user_data_dir(self._source)
             self._proxy = hdhive_playwright_proxy(self._source)
+            self._headless = _hdhive_embedded_headless(self._source)
             if self._context and self._page:
                 return await self._snapshot_locked("HDHive embedded browser is already running")
             try:
@@ -60,6 +67,7 @@ class HdhiveEmbeddedBrowser:
                     "user_data_dir": self._user_data_dir,
                     "proxy_enabled": snapshot.get("proxy_enabled"),
                     "proxy_server": snapshot.get("proxy_server"),
+                    "headless": snapshot.get("headless"),
                 },
             )
             return snapshot
@@ -117,12 +125,17 @@ class HdhiveEmbeddedBrowser:
         self._context = await self._playwright.chromium.launch_persistent_context(
             user_data_dir=self._user_data_dir,
             executable_path=_hdhive_executable_path(self._source),
-            headless=_hdhive_embedded_headless(self._source),
+            headless=self._headless,
             locale="zh-CN",
             viewport=_VIEWPORT,
+            timezone_id=_hdhive_timezone(self._source),
+            user_agent=_hdhive_user_agent(self._source),
             proxy=self._proxy,
-            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+            ignore_default_args=["--enable-automation"],
+            args=_hdhive_browser_args(),
         )
+        await self._context.add_init_script(_hdhive_stealth_init_script())
+        await self._context.set_extra_http_headers({"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"})
         self._context.on("page", lambda page: setattr(self, "_page", page))
         self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
 
@@ -164,6 +177,7 @@ class HdhiveEmbeddedBrowser:
             "page_text_excerpt": _compact_text(page_text, 320),
             "proxy_enabled": bool(self._proxy),
             "proxy_server": proxy_label,
+            "headless": self._headless,
             "width": _VIEWPORT["width"],
             "height": _VIEWPORT["height"],
             "user_data_dir": self._user_data_dir,
@@ -184,6 +198,7 @@ class HdhiveEmbeddedBrowser:
         self._playwright = None
         self._page = None
         self._proxy = None
+        self._headless = True
 
 
 class _suppress_playwright_errors:
@@ -250,6 +265,56 @@ def _hdhive_executable_path(source: dict[str, Any]) -> str | None:
 def _hdhive_embedded_headless(source: dict[str, Any]) -> bool:
     value = str(source.get("embedded_headless") if "embedded_headless" in source else os.getenv("TOGO115_HDHIVE_EMBEDDED_HEADLESS", "true")).strip().lower()
     return value not in {"0", "false", "no", "off"}
+
+
+def _hdhive_user_agent(source: dict[str, Any]) -> str:
+    return str(source.get("browser_user_agent") or os.getenv("TOGO115_HDHIVE_USER_AGENT") or _DEFAULT_USER_AGENT).strip() or _DEFAULT_USER_AGENT
+
+
+def _hdhive_timezone(source: dict[str, Any]) -> str:
+    return str(source.get("browser_timezone") or os.getenv("TOGO115_HDHIVE_TIMEZONE") or "Asia/Shanghai").strip() or "Asia/Shanghai"
+
+
+def _hdhive_browser_args() -> list[str]:
+    return [
+        "--disable-blink-features=AutomationControlled",
+        "--disable-dev-shm-usage",
+        "--disable-infobars",
+        "--disable-notifications",
+        "--disable-popup-blocking",
+        "--lang=zh-CN",
+        "--no-default-browser-check",
+        "--no-first-run",
+        "--no-sandbox",
+        f"--window-size={_VIEWPORT['width']},{_VIEWPORT['height']}",
+    ]
+
+
+def _hdhive_stealth_init_script() -> str:
+    return r"""
+(() => {
+  const defineGetter = (target, name, getter) => {
+    try {
+      Object.defineProperty(target, name, { get: getter, configurable: true });
+    } catch (_) {}
+  };
+  defineGetter(Navigator.prototype, "webdriver", () => undefined);
+  defineGetter(Navigator.prototype, "languages", () => ["zh-CN", "zh", "en-US", "en"]);
+  defineGetter(Navigator.prototype, "platform", () => "Win32");
+  defineGetter(Navigator.prototype, "hardwareConcurrency", () => 8);
+  defineGetter(Navigator.prototype, "deviceMemory", () => 8);
+  window.chrome = window.chrome || {};
+  window.chrome.runtime = window.chrome.runtime || {};
+  const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
+  if (originalQuery) {
+    window.navigator.permissions.query = (parameters) => (
+      parameters && parameters.name === "notifications"
+        ? Promise.resolve({ state: Notification.permission })
+        : originalQuery.call(window.navigator.permissions, parameters)
+    );
+  }
+})();
+"""
 
 
 def hdhive_playwright_proxy(source: dict[str, Any]) -> dict[str, str] | None:

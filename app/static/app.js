@@ -2018,6 +2018,7 @@ function renderHdhiveBrowserMeta(data) {
   const rows = [
     ["状态", data.diagnostic || ""],
     ["代理", data.proxy_enabled ? (data.proxy_server || "已启用") : "未启用"],
+    ["浏览器模式", data.headless === false ? "headed" : "headless"],
     ["地址", data.url || ""],
     ["标题", data.title || ""],
     ["用户目录", data.user_data_dir || "data/hdhive-browser"],
@@ -2033,6 +2034,7 @@ function renderHdhiveBrowserNotice(data) {
   const rows = [
     data?.diagnostic ? `<strong>${escapeHtml(data.diagnostic)}</strong>` : "",
     `代理：${data?.proxy_enabled ? escapeHtml(data.proxy_server || "已启用") : "未启用"}`,
+    `浏览器模式：${data?.headless === false ? "headed" : "headless"}`,
     data?.page_text_excerpt ? `页面摘要：${escapeHtml(data.page_text_excerpt)}` : "",
   ].filter(Boolean);
   return `<div class="hdhive-browser-notice${diagnosticClass}">${rows.map((row) => `<span>${row}</span>`).join("")}</div>`;
