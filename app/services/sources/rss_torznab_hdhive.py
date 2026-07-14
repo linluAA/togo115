@@ -12,7 +12,7 @@ from urllib.parse import urljoin, urlparse
 from app.config import settings
 from app.db import add_log
 from app.services.link_downloads import extract_115_links, is_115_share_link
-from app.services.novnc import default_novnc_url
+from app.services.novnc import default_novnc_url, novnc_status_payload
 from app.services.types import SearchResult
 
 
@@ -277,6 +277,7 @@ async def _run_hdhive_login_browser(source: dict[str, Any], started: asyncio.Fut
                 page = browser.pages[0] if browser.pages else await browser.new_page()
                 await page.goto(base_url, wait_until="domcontentloaded", timeout=timeout_ms)
                 add_log("info", "rss", "HDHive login browser opened", {"url": base_url, "user_data_dir": user_data_dir})
+                add_log("info", "novnc", "noVNC status", await novnc_status_payload())
                 _resolve_hdhive_login_start(
                     started,
                     _with_hdhive_novnc_url(login_source, {

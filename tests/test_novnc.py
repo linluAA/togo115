@@ -1,5 +1,6 @@
 import asyncio
 
+from app.services import novnc as novnc_service
 from app.services.novnc import default_novnc_url
 from app.services.sources import rss_torznab_hdhive as hdhive
 from app.services.sources.rss_torznab_hdhive import _with_hdhive_novnc_url
@@ -102,9 +103,9 @@ def test_novnc_status_reports_http_and_websocket(monkeypatch) -> None:
     async def fake_websocket():
         return {"ok": False, "error": "closed", "error_type": "ConnectionClosed"}
 
-    monkeypatch.setattr(novnc, "_probe_vnc_tcp", fake_vnc)
-    monkeypatch.setattr(novnc, "_probe_novnc_http", fake_http)
-    monkeypatch.setattr(novnc, "_probe_novnc_websocket", fake_websocket)
+    monkeypatch.setattr(novnc_service, "probe_vnc_tcp", fake_vnc)
+    monkeypatch.setattr(novnc_service, "probe_novnc_http", fake_http)
+    monkeypatch.setattr(novnc_service, "probe_novnc_websocket", fake_websocket)
 
     payload = asyncio.run(novnc.novnc_status(user={"username": "admin"}))
 

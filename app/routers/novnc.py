@@ -14,7 +14,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.auth import current_user, serializer
 from app.config import settings
 from app.db import add_log
-from app.services.novnc import default_novnc_url, novnc_http_base, novnc_port, novnc_ws_url, vnc_port
+from app.services.novnc import default_novnc_url, novnc_http_base, novnc_port, novnc_status_payload, novnc_ws_url
 
 
 router = APIRouter()
@@ -68,17 +68,7 @@ async def novnc_http_proxy(path: str, request: Request, user: dict = Depends(cur
 
 @router.get("/api/novnc/status")
 async def novnc_status(user: dict = Depends(current_user)) -> dict:
-    vnc_status = await _probe_vnc_tcp()
-    http_status = await _probe_novnc_http()
-    ws_status = await _probe_novnc_websocket()
-    return {
-        "ok": vnc_status["ok"] and http_status["ok"] and ws_status["ok"],
-        "vnc": vnc_status,
-        "http": http_status,
-        "websocket": ws_status,
-        "ports": {"vnc": vnc_port(), "novnc": novnc_port()},
-        "client_path": "api/novnc/websockify",
-    }
+    return await novnc_status_payload()
 
 
 @router.websocket("/api/novnc/websockify")
@@ -149,33 +139,6 @@ async def _upstream_to_client(websocket: WebSocket, upstream) -> None:
             await websocket.send_bytes(message)
         else:
             await websocket.send_text(message)
-
-
-async def _probe_novnc_http() -> dict:
-    try:
-        async with httpx.AsyncClient(timeout=5, follow_redirects=False) as client:
-            response = await client.get(f"{novnc_http_base()}/vnc.html")
-        return {"ok": response.status_code < 500, "status_code": response.status_code}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
-
-
-async def _probe_vnc_tcp() -> dict:
-    try:
-        reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", int(vnc_port())), timeout=5)
-        writer.close()
-        await writer.wait_closed()
-        return {"ok": True}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
-
-
-async def _probe_novnc_websocket() -> dict:
-    try:
-        async with websockets.connect(novnc_ws_url(), subprotocols=["binary"], open_timeout=5, max_size=None):
-            return {"ok": True}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
 
 
 def _log_novnc_websocket_error(exc: Exception) -> None:
