@@ -4,9 +4,8 @@ External callers (routers, monitor, Telegram bot/adapters, tests that exercise
 end-to-end flows) should import from this module — or from
 ``app.services.subscription`` which re-exports the same surface.
 
-Internal implementation modules under ``app.services.subscription_*`` remain
-available for gradual migration, but new cross-package code should not reach
-into private ``_`` helpers.
+Implementation lives under ``app.services.subscription.*`` subpackages.
+Do not reach into private ``_`` helpers across package boundaries.
 """
 
 from __future__ import annotations

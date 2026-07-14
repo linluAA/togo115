@@ -15,9 +15,9 @@ from app.services.subscription import (
 Subpackages also expose focused public helpers, e.g.:
 
 ```python
-from app.services.subscription.match import result_matches_subscription
-from app.services.subscription.delivery import deliver_resource_url
-from app.services.subscription.resource import matching_results
+from app.services.subscription.match.core import result_matches_subscription
+from app.services.subscription.delivery.executor import deliver_resource_url
+from app.services.subscription.resource.matching import matching_results
 ```
 
 ## Layout
@@ -36,19 +36,15 @@ subscription/
   attach/             # realtime attach to subscriptions
 ```
 
-## Compatibility
+## Conventions
 
-Flat modules like `app.services.subscription_crud` remain as **deprecated shims**
-(re-export + `DeprecationWarning`). Prefer package paths or the public API.
-
-## Conventions (P3)
-
+- Prefer the package public API above for routers, monitor, bot, and new code.
 - Cross-subpackage helpers used outside their defining module should be
   **public names** (no leading `_`).
-- Leading `_` means package-local implementation detail.
-- Do not import private helpers from outside `app.services.subscription.*`.
+- Leading `_` means module-local implementation detail.
+- Flat `app.services.subscription_*` modules have been removed (P4).
 
 ## Next
 
-- Remove flat shims after callers migrate
 - Telegram mixin → pipeline (separate domain)
+- Optionally collapse pure re-export barrels inside `match/`
