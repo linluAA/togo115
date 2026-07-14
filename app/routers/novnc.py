@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from collections.abc import Mapping
 
 import httpx
@@ -12,6 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.auth import current_user, serializer
 from app.config import settings
+from app.db import add_log
 from app.services.novnc import default_novnc_url, novnc_http_base, novnc_port, novnc_ws_url
 
 
@@ -64,6 +66,18 @@ async def novnc_http_proxy(path: str, request: Request, user: dict = Depends(cur
     )
 
 
+@router.get("/api/novnc/status")
+async def novnc_status(user: dict = Depends(current_user)) -> dict:
+    http_status = await _probe_novnc_http()
+    ws_status = await _probe_novnc_websocket()
+    return {
+        "ok": http_status["ok"] and ws_status["ok"],
+        "http": http_status,
+        "websocket": ws_status,
+        "port": novnc_port(),
+    }
+
+
 @router.websocket("/novnc/websockify")
 async def novnc_websocket_proxy(websocket: WebSocket) -> None:
     if not _websocket_is_authenticated(websocket):
@@ -71,11 +85,12 @@ async def novnc_websocket_proxy(websocket: WebSocket) -> None:
         return
 
     protocols = _websocket_protocols(websocket)
+    await websocket.accept(subprotocol=protocols[0] if protocols else None)
     try:
         async with websockets.connect(novnc_ws_url(), subprotocols=protocols or None, max_size=None) as upstream:
-            await websocket.accept(subprotocol=upstream.subprotocol)
             await _bridge_websocket(websocket, upstream)
-    except OSError:
+    except Exception as exc:
+        _log_novnc_websocket_error(exc)
         if websocket.client_state.name != "DISCONNECTED":
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
 
@@ -102,6 +117,9 @@ async def _bridge_websocket(websocket: WebSocket, upstream) -> None:
     done, pending = await asyncio.wait({client_task, upstream_task}, return_when=asyncio.FIRST_COMPLETED)
     for task in pending:
         task.cancel()
+    for task in pending:
+        with suppress(asyncio.CancelledError):
+            await task
     for task in done:
         task.result()
 
@@ -127,3 +145,29 @@ async def _upstream_to_client(websocket: WebSocket, upstream) -> None:
             await websocket.send_bytes(message)
         else:
             await websocket.send_text(message)
+
+
+async def _probe_novnc_http() -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=5, follow_redirects=False) as client:
+            response = await client.get(f"{novnc_http_base()}/vnc.html")
+        return {"ok": response.status_code < 500, "status_code": response.status_code}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
+
+
+async def _probe_novnc_websocket() -> dict:
+    try:
+        async with websockets.connect(novnc_ws_url(), subprotocols=["binary"], open_timeout=5, max_size=None):
+            return {"ok": True}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
+
+
+def _log_novnc_websocket_error(exc: Exception) -> None:
+    add_log(
+        "warning",
+        "novnc",
+        "noVNC WebSocket proxy failed",
+        {"error": str(exc), "error_type": type(exc).__name__, "target": novnc_ws_url()},
+    )
