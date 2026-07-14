@@ -3,8 +3,13 @@ from __future__ import annotations
 
 class TelegramBotCommandMixin:
     async def _command_reply(self, text: str, chat_id: int | str) -> str:
-        from app.services.subscription_crud import delete_subscription, delete_subscription_by_title, list_subscriptions
-        from app.services.subscription_delivery import deliver_resource, retry_failed_resources
+        from app.services.subscription import (
+            delete_subscription,
+            delete_subscription_by_title,
+            deliver_resource,
+            list_subscriptions,
+            retry_failed_resources,
+        )
 
         command, args = self._parse_bot_command(text)
         command = command.split("@", 1)[0].lower()

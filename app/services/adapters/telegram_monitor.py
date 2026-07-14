@@ -105,7 +105,7 @@ class _TelegramMonitorMixin:
 
     def _build_event_handler(self, client: TelegramClient) -> Callable[[Any], Any]:
         async def handler(event) -> None:
-            from app.services.subscription_attach import attach_results_to_matching_subscriptions
+            from app.services.subscription import attach_results_to_matching_subscriptions
 
             source = str(getattr(event, "chat_id", "") or "telegram")
             message = getattr(event, "message", None)

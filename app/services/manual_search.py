@@ -4,7 +4,7 @@ from app.db import add_log
 from app.schemas import SearchRequest
 from app.services.adapters.telegram import TelegramClientAdapter
 from app.services.sources.rss_torznab import RssTorznabAdapter
-from app.services.subscription_crud import get_subscription
+from app.services.subscription import get_subscription
 from app.services.subscription_resource_ops import _best_fallback_result, _matching_results
 
 

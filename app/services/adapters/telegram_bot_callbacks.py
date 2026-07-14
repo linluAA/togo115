@@ -174,7 +174,7 @@ class TelegramBotCallbackMixin:
     async def _deliver_magnet_pick(self, url: str, target_path: str | None = None, token: str | None = None) -> tuple[bool, str]:
         resource_id = self._save_magnet_pick_as_resource(url, token)
         if resource_id:
-            from app.services.subscription_delivery import deliver_resource
+            from app.services.subscription import deliver_resource
 
             ok = await deliver_resource(resource_id)
             return ok, "" if ok else "资源投递失败"
@@ -213,7 +213,7 @@ class TelegramBotCallbackMixin:
 
     async def _create_subscription_from_detail(self, media_type: str, tmdb_id: int, detail: dict[str, Any]) -> dict:
         from app.schemas import SubscriptionCreate
-        from app.services.subscription_crud import create_subscription
+        from app.services.subscription import create_subscription
 
         title = detail.get("name") or detail.get("title") or "未命名"
         release_year_text = str(detail.get("first_air_date") or detail.get("release_date") or "")[:4]
