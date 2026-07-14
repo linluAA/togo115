@@ -37,22 +37,6 @@ async def telegram_dialogs() -> dict:
     return {"dialogs": await TelegramClientAdapter().dialogs()}
 
 
-async def telegram_webapp_auth_data(bot_username: str, webapp_url: str | None = None, start_param: str | None = None) -> dict:
-    try:
-        return await TelegramClientAdapter().webapp_auth_data(bot_username, webapp_url, start_param)
-    except Exception as exc:
-        add_log("error", "telegram", "Telegram WebApp 授权数据获取失败", {"bot": bot_username, "error": str(exc)})
-        raise
-
-
-async def telegram_url_auth_login(auth_url: str) -> dict:
-    try:
-        return await TelegramClientAdapter().url_auth_login(auth_url)
-    except Exception as exc:
-        add_log("error", "telegram", "Telegram OAuth 登录失败", {"error": _error_message(exc)})
-        raise
-
-
 async def pan115_qr_login_start(channel: str) -> dict:
     try:
         return await Pan115Adapter().qr_login_start(channel)
@@ -84,13 +68,3 @@ async def pan115_folders(cid: str) -> dict:
 async def pan115_save_link(link: str, target_path: str | None) -> dict:
     ok = await Pan115Adapter().transfer(link, target_path)
     return {"ok": ok}
-
-
-def _error_message(exc: Exception) -> str:
-    message = str(exc).strip()
-    if message:
-        return message
-    detail = getattr(exc, "message", None)
-    if detail:
-        return str(detail)
-    return repr(exc)

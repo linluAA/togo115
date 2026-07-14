@@ -5,10 +5,6 @@ from collections.abc import Iterable
 from app.services.subscription_episode_parser import _all_tmdb_episode_keys, _episode_keys_from_json, _missing_episode_keys
 
 
-def episode_key_label(key: tuple[int, int]) -> str:
-    return f"S{key[0]:02d}E{key[1]:02d}"
-
-
 def episode_range_labels(keys: Iterable[tuple[int, int]], *, limit: int = 8) -> list[str]:
     grouped: dict[int, list[int]] = {}
     for season, episode in sorted(set(keys)):

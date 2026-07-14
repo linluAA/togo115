@@ -64,11 +64,6 @@ class SearchRequest(BaseModel):
     quality_rules: dict[str, Any] = Field(default_factory=dict)
 
 
-class BotCommand(BaseModel):
-    command: str
-    args: dict[str, Any] = Field(default_factory=dict)
-
-
 class TelegramCodeRequest(BaseModel):
     phone: str
 
@@ -76,16 +71,6 @@ class TelegramCodeRequest(BaseModel):
 class TelegramCodeLoginRequest(BaseModel):
     phone: str
     code: str
-
-
-class TelegramWebAppAuthRequest(BaseModel):
-    bot_username: str
-    webapp_url: str | None = None
-    start_param: str | None = None
-
-
-class TelegramUrlAuthRequest(BaseModel):
-    auth_url: str
 
 
 class Pan115SaveRequest(BaseModel):

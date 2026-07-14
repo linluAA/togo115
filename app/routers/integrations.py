@@ -11,8 +11,6 @@ from app.schemas import (
     Pan115SaveRequest,
     TelegramCodeLoginRequest,
     TelegramCodeRequest,
-    TelegramUrlAuthRequest,
-    TelegramWebAppAuthRequest,
 )
 from app.services.integration_actions import (
     pan115_folders as get_pan115_folders,
@@ -25,8 +23,6 @@ from app.services.integration_actions import (
     telegram_qr_login_start,
     telegram_send_login_code,
     telegram_sign_in_code,
-    telegram_url_auth_login,
-    telegram_webapp_auth_data,
 )
 
 router = APIRouter()
@@ -64,22 +60,6 @@ async def telegram_status(user: dict = Depends(current_user)) -> dict:
 @router.get("/api/telegram/dialogs")
 async def telegram_dialogs(user: dict = Depends(current_user)) -> dict:
     return await get_telegram_dialogs()
-
-
-@router.post("/api/telegram/webapp-auth")
-async def telegram_webapp_auth(payload: TelegramWebAppAuthRequest, user: dict = Depends(current_user)) -> dict:
-    try:
-        return await telegram_webapp_auth_data(payload.bot_username, payload.webapp_url, payload.start_param)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@router.post("/api/telegram/url-auth-login")
-async def telegram_url_auth(payload: TelegramUrlAuthRequest, user: dict = Depends(current_user)) -> dict:
-    try:
-        return await telegram_url_auth_login(payload.auth_url)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/api/115/qr-login")

@@ -15,12 +15,6 @@ async def filter_available_115_results(results: list[SearchResult]) -> list[Sear
     return filtered
 
 
-async def filter_available_115_results_with_report(results: list[SearchResult]) -> tuple[list[SearchResult], dict[str, int]]:
-    """Return available results and validation counters for subscription decisions."""
-    filtered, _, report = await classify_115_results(results)
-    return filtered, report
-
-
 async def classify_115_results(results: list[SearchResult]) -> tuple[list[SearchResult], list[SearchResult], dict[str, int]]:
     """Split results into immediately usable results and 115 links that need recheck."""
     report = {"checked_115": 0, "expired_115": 0, "recheck_115": 0}
