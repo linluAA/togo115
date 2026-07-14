@@ -124,7 +124,7 @@ function fieldHtml(key, name, label, current, type = "text") {
   }
   if (key === "proxy" && name === "modules") {
     const selected = Array.isArray(current) ? current : String(current || "").split(",").filter(Boolean);
-    const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["emby", "Emby"]];
+    const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["emby", "Emby"], ["hdhive", "HDHive / 影巢"]];
     return `<fieldset class="check-group"><legend>${label}</legend>
       ${options.map(([value, text]) => `<label><input type="checkbox" name="modules" value="${value}" ${selected.includes(value) ? "checked" : ""} /> ${text}</label>`).join("")}
     </fieldset>`;

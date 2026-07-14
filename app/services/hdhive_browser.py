@@ -8,10 +8,11 @@ import signal
 import shutil
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin, urlparse
 
 from app.config import settings
 from app.db import add_log
+from app.services.integration_state import get_setting
 
 
 HDHIVE_DEFAULT_URL = "https://hdhive.com/"
@@ -102,6 +103,7 @@ class HdhiveEmbeddedBrowser:
             headless=_hdhive_embedded_headless(self._source),
             locale="zh-CN",
             viewport=_VIEWPORT,
+            proxy=hdhive_playwright_proxy(self._source),
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
         self._context.on("page", lambda page: setattr(self, "_page", page))
@@ -223,6 +225,26 @@ def _hdhive_embedded_headless(source: dict[str, Any]) -> bool:
     return value not in {"0", "false", "no", "off"}
 
 
+def hdhive_playwright_proxy(source: dict[str, Any]) -> dict[str, str] | None:
+    if not _truthy(source.get("use_proxy")):
+        return None
+    proxy_url = str(source.get("proxy_url") or get_setting("proxy").get("url") or "").strip()
+    if not proxy_url:
+        return None
+    parsed = urlparse(proxy_url if "://" in proxy_url else f"http://{proxy_url}")
+    if not parsed.hostname:
+        return None
+    server = f"{parsed.scheme or 'http'}://{parsed.hostname}"
+    if parsed.port:
+        server = f"{server}:{parsed.port}"
+    proxy: dict[str, str] = {"server": server}
+    if parsed.username:
+        proxy["username"] = unquote(parsed.username)
+    if parsed.password:
+        proxy["password"] = unquote(parsed.password)
+    return proxy
+
+
 def _hdhive_timeout_ms(source: dict[str, Any]) -> int:
     try:
         return max(8000, min(int(float(source.get("browser_timeout") or 20000)), 60000))
@@ -233,6 +255,14 @@ def _hdhive_timeout_ms(source: dict[str, Any]) -> int:
 def _hdhive_absolute_url(base_url: str, url: str | None) -> str:
     value = str(url or "").strip()
     return urljoin(base_url, value or base_url)
+
+
+def _truthy(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"", "0", "false", "no", "off"}
 
 
 async def _settle_page(page: Any) -> None:

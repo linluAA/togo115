@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.services import integration_actions
+from app.services.hdhive_browser import hdhive_playwright_proxy
 
 
 class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
@@ -66,6 +67,18 @@ class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"ok": True})
         login.assert_awaited_once_with(source)
+
+    def test_hdhive_browser_uses_source_proxy(self) -> None:
+        with patch("app.services.hdhive_browser.get_setting", return_value={"url": "socks5://user:pass@127.0.0.1:7890"}):
+            proxy = hdhive_playwright_proxy({"use_proxy": True})
+
+        self.assertEqual(proxy, {"server": "socks5://127.0.0.1:7890", "username": "user", "password": "pass"})
+
+    def test_hdhive_browser_ignores_proxy_when_source_disabled(self) -> None:
+        with patch("app.services.hdhive_browser.get_setting", return_value={"url": "http://127.0.0.1:7890"}):
+            proxy = hdhive_playwright_proxy({"use_proxy": False})
+
+        self.assertIsNone(proxy)
 
     async def test_telegram_errors_are_logged_and_reraised(self) -> None:
         adapter = Mock()

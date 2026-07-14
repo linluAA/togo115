@@ -11,7 +11,7 @@ from urllib.parse import urljoin, urlparse
 
 from app.config import settings
 from app.db import add_log
-from app.services.hdhive_browser import open_hdhive_embedded_browser
+from app.services.hdhive_browser import hdhive_playwright_proxy, open_hdhive_embedded_browser
 from app.services.link_downloads import extract_115_links, is_115_share_link
 from app.services.novnc import default_novnc_url, novnc_status_payload
 from app.services.types import SearchResult
@@ -106,6 +106,7 @@ class HdhiveBrowserClient:
                     headless=headless,
                     locale="zh-CN",
                     viewport={"width": 1365, "height": 900},
+                    proxy=hdhive_playwright_proxy(self.source),
                     args=["--disable-blink-features=AutomationControlled"],
                 )
                 try:
