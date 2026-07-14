@@ -7,10 +7,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.services.adapters.telegram_session_config import (
+from app.services.adapters.telegram.session.config import (
     TELEGRAM_SESSION_BUSY_TIMEOUT_MS,
     BusyTimeoutSQLiteSession,
-    _TelegramSessionConfigMixin,
+    TelegramSessionConfigMixin,
 )
 
 
@@ -30,7 +30,7 @@ class TelegramSessionConfigTest(unittest.TestCase):
         self.assertEqual(str(journal_mode).casefold(), "wal")
 
     def test_client_init_lock_does_not_shadow_method(self) -> None:
-        mixin = _TelegramSessionConfigMixin()
+        mixin = TelegramSessionConfigMixin()
         first = mixin._get_client_init_lock(object())
         second = mixin._get_client_init_lock(object())
 
@@ -39,7 +39,7 @@ class TelegramSessionConfigTest(unittest.TestCase):
         self.assertTrue(callable(mixin._get_client_init_lock))
 
     def test_classifies_initialization_errors(self) -> None:
-        mixin = _TelegramSessionConfigMixin()
+        mixin = TelegramSessionConfigMixin()
 
         cases = [
             (sqlite3.OperationalError("database is locked"), "session-locked"),
@@ -56,13 +56,13 @@ class TelegramSessionConfigTest(unittest.TestCase):
 
     def test_config_status_contains_session_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            class LocalMixin(_TelegramSessionConfigMixin):
+            class LocalMixin(TelegramSessionConfigMixin):
                 def _session_path(self) -> Path:
                     return Path(tmp) / "telegram_user"
 
             session_file = Path(tmp) / "telegram_user.session"
             session_file.write_text("session", encoding="utf-8")
-            with patch("app.services.adapters.telegram_session_config.get_setting", return_value={"api_id": "1", "api_hash": "hash"}):
+            with patch("app.services.adapters.telegram.session.config.get_setting", return_value={"api_id": "1", "api_hash": "hash"}):
                 status = LocalMixin()._telegram_config_status()
 
         self.assertEqual(status["api_id"], True)
@@ -72,7 +72,7 @@ class TelegramSessionConfigTest(unittest.TestCase):
 
     def test_quarantine_corrupt_session_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            class LocalMixin(_TelegramSessionConfigMixin):
+            class LocalMixin(TelegramSessionConfigMixin):
                 def _session_path(self) -> Path:
                     return Path(tmp) / "telegram_user"
 

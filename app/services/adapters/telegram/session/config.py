@@ -37,7 +37,7 @@ class BusyTimeoutSQLiteSession(SQLiteSession):
         return self._conn.cursor()
 
 
-class _TelegramSessionConfigMixin:
+class TelegramSessionConfigMixin:
     def _session_path(self) -> Path:
         return settings.data_dir / "telegram_user"
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.db import add_log, db, utc_now
 
 
-class _TelegramCursorMixin:
+class TelegramCursorMixin:
     def _telegram_cursor(self, source: str) -> int:
         try:
             with db() as conn:

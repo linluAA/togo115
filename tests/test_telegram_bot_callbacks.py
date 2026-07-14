@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.services.adapters.telegram_bot_callbacks import TelegramBotCallbackMixin
-from app.services.adapters.telegram_bot_messages import TelegramBotMessageMixin
+from app.services.adapters.telegram.bot.callbacks import TelegramBotCallbackMixin
+from app.services.adapters.telegram.bot.messages import TelegramBotMessageMixin
 from app.services.sources.rss_torznab import SearchResult
 from app.services.tg_bot_magnet_search import magnet_results_reply_markup
 
@@ -46,11 +46,11 @@ class TelegramBotCallbackTest(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "app.services.adapters.telegram_bot_callbacks.search_magnets_for_tmdb",
+                "app.services.adapters.telegram.bot.callbacks.search_magnets_for_tmdb",
                 return_value=({"name": "斗罗大陆"}, [{"title": "斗罗大陆 S01", "link": "magnet:?xt=urn:btih:abc"}]),
             ) as search_mock,
             patch(
-                "app.services.adapters.telegram_bot_callbacks.magnet_results_reply",
+                "app.services.adapters.telegram.bot.callbacks.magnet_results_reply",
                 return_value="搜索完成：斗罗大陆",
             ),
         ):

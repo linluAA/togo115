@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.adapters.telegram_history_config import build_history_options, server_search_queries
+from app.services.adapters.telegram.history.config import build_history_options, server_search_queries
 
 
 class TelegramHistoryConfigTest(unittest.TestCase):

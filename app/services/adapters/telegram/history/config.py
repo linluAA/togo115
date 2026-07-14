@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.services.adapters.telegram_models import _TelegramHistoryOptions
+from app.services.adapters.telegram.models import TelegramHistoryOptions
 from app.services.link_parser import (
     TELEGRAM_HISTORY_DEFAULT_FALLBACK_LIMIT,
     TELEGRAM_HISTORY_DEFAULT_MESSAGES_PER_QUERY,
@@ -23,7 +23,7 @@ TELEGRAM_FAST_QUERY_BUDGET_SECONDS = 2.0
 TELEGRAM_FAST_RECENT_BUDGET_SECONDS = 4.0
 
 
-def build_history_options(config: dict[str, Any]) -> _TelegramHistoryOptions:
+def build_history_options(config: dict[str, Any]) -> TelegramHistoryOptions:
     history_limit = _bounded_int(config.get("history_limit"), TELEGRAM_HISTORY_DEFAULT_FALLBACK_LIMIT, 1, TELEGRAM_HISTORY_MAX_FALLBACK_LIMIT)
     fallback_limit = _bounded_int(
         config.get("fallback_scan_limit"),
@@ -37,7 +37,7 @@ def build_history_options(config: dict[str, Any]) -> _TelegramHistoryOptions:
         1,
         history_limit,
     )
-    return _TelegramHistoryOptions(
+    return TelegramHistoryOptions(
         history_limit=history_limit,
         fallback_scan_limit=fallback_limit,
         messages_per_query=messages_per_query,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from typing import Any
 
-from app.services.adapters.telegram_dialogs import _TelegramDialogsMixin
+from app.services.adapters.telegram.session.dialogs import TelegramDialogsMixin
 
 
 class FakeEntity:
@@ -33,7 +33,7 @@ class FakeClient:
         raise RuntimeError("should not resolve matched dialog again")
 
 
-class DialogResolver(_TelegramDialogsMixin):
+class DialogResolver(TelegramDialogsMixin):
     def _entity_source_id(self, entity: Any, fallback: str) -> str:
         return "-1001234567890"
 

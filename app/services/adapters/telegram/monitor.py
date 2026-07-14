@@ -6,12 +6,12 @@ from typing import Any, Callable
 from telethon import TelegramClient, events
 
 from app.db import add_log
-from app.services.adapters.telegram_message_index import index_telegram_messages
-from app.services.adapters.telegram_pipeline import TelegramPipelineStats
+from app.services.adapters.telegram.scan.message_index import index_telegram_messages
+from app.services.adapters.telegram.pipeline import TelegramPipelineStats
 from app.services.link_parser import telegram_message_text
 
 
-class _TelegramMonitorMixin:
+class TelegramMonitorMixin:
     async def ensure_monitoring(self) -> None:
         if not await self.is_authorized():
             return

@@ -7,7 +7,7 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-from app.services.adapters.telegram_message_candidates import (
+from app.services.adapters.telegram.scan.message_candidates import (
     telegram_candidate_context_text,
     telegram_candidate_link_contexts,
 )
@@ -37,7 +37,7 @@ def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
-class _TelegramMessageLinkMixin:
+class TelegramMessageLinkMixin:
     def _dedupe_results(self, results: list[SearchResult]) -> list[SearchResult]:
         deduped: list[SearchResult] = []
         seen: set[tuple[str, str | None, str]] = set()

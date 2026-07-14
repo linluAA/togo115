@@ -7,9 +7,9 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-from app.services.adapters.telegram_cursor import _TelegramCursorMixin
-from app.services.adapters.telegram_models import _TelegramHistoryOptions, _TelegramSearchBudget
-from app.services.adapters.telegram_pipeline import TelegramPipelineStats, _TelegramPipelineMixin
+from app.services.adapters.telegram.history.cursor import TelegramCursorMixin
+from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget
+from app.services.adapters.telegram.pipeline import TelegramPipelineStats, TelegramPipelineMixin
 from app.services.link_parser import (
     TELEGRAM_HISTORY_MAX_RESULTS,
     _local_text_matches_query,
@@ -29,15 +29,15 @@ def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
-class _TelegramRecentScanMixin(_TelegramPipelineMixin, _TelegramCursorMixin):
+class TelegramRecentScanMixin(TelegramPipelineMixin, TelegramCursorMixin):
     async def _scan_recent_messages(
         self,
         client: TelegramClient,
         entity: Any,
         source: str,
         queries: list[str],
-        options: _TelegramHistoryOptions,
-        budget: _TelegramSearchBudget,
+        options: TelegramHistoryOptions,
+        budget: TelegramSearchBudget,
         seen_messages: set[int],
         stats: dict[str, int],
         *,
@@ -85,8 +85,8 @@ class _TelegramRecentScanMixin(_TelegramPipelineMixin, _TelegramCursorMixin):
         client: TelegramClient,
         entity: Any,
         source: str,
-        options: _TelegramHistoryOptions,
-        budget: _TelegramSearchBudget,
+        options: TelegramHistoryOptions,
+        budget: TelegramSearchBudget,
         stats: dict[str, int],
         incremental: bool,
     ) -> tuple[list[Any], int]:
@@ -155,7 +155,7 @@ class _TelegramRecentScanMixin(_TelegramPipelineMixin, _TelegramCursorMixin):
         entity: Any,
         source: str,
         queries: list[str],
-        budget: _TelegramSearchBudget,
+        budget: TelegramSearchBudget,
         seen_messages: set[int],
         stats: dict[str, int],
         recent_messages: list[Any],
@@ -200,7 +200,7 @@ class _TelegramRecentScanMixin(_TelegramPipelineMixin, _TelegramCursorMixin):
         entity: Any,
         source: str,
         queries: list[str],
-        budget: _TelegramSearchBudget,
+        budget: TelegramSearchBudget,
         seen_messages: set[int],
         stats: dict[str, int],
         recent_messages: list[Any],
@@ -278,7 +278,7 @@ class _TelegramRecentScanMixin(_TelegramPipelineMixin, _TelegramCursorMixin):
         client: TelegramClient,
         entity: Any,
         source: str,
-        budget: _TelegramSearchBudget,
+        budget: TelegramSearchBudget,
         seen_messages: set[int],
         recent_messages: list[Any],
         pipeline_stats: TelegramPipelineStats | None = None,

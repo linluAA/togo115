@@ -7,12 +7,12 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-from app.services.adapters.telegram_history_config import build_history_options, server_search_queries
-from app.services.adapters.telegram_models import _TelegramHistoryOptions, _TelegramSearchBudget
-from app.services.adapters.telegram_history_fast import _TelegramFastSearchMixin
-from app.services.adapters.telegram_message_index import index_telegram_messages, search_telegram_message_index
-from app.services.adapters.telegram_history_recent import _TelegramRecentScanMixin
-from app.services.adapters.telegram_pipeline import TelegramPipelineStats
+from app.services.adapters.telegram.history.config import build_history_options, server_search_queries
+from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget
+from app.services.adapters.telegram.history.fast import TelegramFastSearchMixin
+from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
+from app.services.adapters.telegram.history.recent import TelegramRecentScanMixin
+from app.services.adapters.telegram.pipeline import TelegramPipelineStats
 from app.services.link_parser import (
     TELEGRAM_HISTORY_MAX_RESULTS,
     _expanded_search_queries,
@@ -28,8 +28,8 @@ def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
-class _TelegramHistorySearchMixin(_TelegramFastSearchMixin, _TelegramRecentScanMixin):
-    def _history_options(self, config: dict[str, Any]) -> _TelegramHistoryOptions:
+class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixin):
+    def _history_options(self, config: dict[str, Any]) -> TelegramHistoryOptions:
         return build_history_options(config)
 
     def _server_search_queries(self, queries: list[str]) -> list[str]:
@@ -61,7 +61,7 @@ class _TelegramHistorySearchMixin(_TelegramFastSearchMixin, _TelegramRecentScanM
             return []
 
         options = self._history_options(config)
-        budget = _TelegramSearchBudget(options.total_budget)
+        budget = TelegramSearchBudget(options.total_budget)
         add_log(
             "info",
             "telegram",
@@ -105,8 +105,8 @@ class _TelegramHistorySearchMixin(_TelegramFastSearchMixin, _TelegramRecentScanM
         client: TelegramClient,
         dialogs: list[dict[str, Any]],
         queries: list[str],
-        options: _TelegramHistoryOptions,
-        budget: _TelegramSearchBudget,
+        options: TelegramHistoryOptions,
+        budget: TelegramSearchBudget,
         *,
         incremental: bool = False,
     ) -> list[SearchResult]:
@@ -175,8 +175,8 @@ class _TelegramHistorySearchMixin(_TelegramFastSearchMixin, _TelegramRecentScanM
         client: TelegramClient,
         dialog: dict[str, Any],
         queries: list[str],
-        options: _TelegramHistoryOptions,
-        budget: _TelegramSearchBudget,
+        options: TelegramHistoryOptions,
+        budget: TelegramSearchBudget,
         *,
         incremental: bool = False,
     ) -> list[SearchResult]:
@@ -230,8 +230,8 @@ class _TelegramHistorySearchMixin(_TelegramFastSearchMixin, _TelegramRecentScanM
         entity: Any,
         source: str,
         query: str,
-        options: _TelegramHistoryOptions,
-        budget: _TelegramSearchBudget,
+        options: TelegramHistoryOptions,
+        budget: TelegramSearchBudget,
         seen_messages: set[int],
         stats: dict[str, int],
     ) -> list[SearchResult]:
@@ -289,7 +289,7 @@ class _TelegramHistorySearchMixin(_TelegramFastSearchMixin, _TelegramRecentScanM
         client: TelegramClient,
         entity: Any,
         query: str,
-        options: _TelegramHistoryOptions,
+        options: TelegramHistoryOptions,
     ) -> list[Any]:
         get_messages = getattr(client, "get_messages", None)
         limit = min(options.history_limit, options.messages_per_query)

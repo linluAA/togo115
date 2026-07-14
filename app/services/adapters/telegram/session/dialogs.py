@@ -11,7 +11,7 @@ from app.db import add_log
 TELEGRAM_DIALOG_CACHE_TTL_SECONDS = 300
 
 
-class _TelegramDialogsMixin:
+class TelegramDialogsMixin:
     _dialog_entity_map_cache: dict[str, dict[str, dict[str, Any]]] = {}
     _dialog_entity_map_cache_at: dict[str, float] = {}
 

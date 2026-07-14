@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.adapters.telegram_bot_commands import TelegramBotCommandMixin
+from app.services.adapters.telegram.bot.commands import TelegramBotCommandMixin
 
 
 class BotCommandHarness(TelegramBotCommandMixin):

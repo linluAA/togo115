@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.adapters.telegram_message_candidates import telegram_candidate_link_contexts
+from app.services.adapters.telegram.scan.message_candidates import telegram_candidate_link_contexts
 
 
 class DummyMessage:

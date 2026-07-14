@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class _TelegramHistoryOptions:
+class TelegramHistoryOptions:
     history_limit: int
     fallback_scan_limit: int
     messages_per_query: int
@@ -14,7 +14,7 @@ class _TelegramHistoryOptions:
     recent_budget: float
 
 
-class _TelegramSearchBudget:
+class TelegramSearchBudget:
     def __init__(self, seconds: float) -> None:
         self.total = seconds
         self.deadline = time.monotonic() + seconds

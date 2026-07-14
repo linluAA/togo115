@@ -5,7 +5,7 @@ import unittest
 
 import httpx
 
-from app.services.adapters.telegram_bot_polling import TelegramBotPollingMixin
+from app.services.adapters.telegram.bot.polling import TelegramBotPollingMixin
 
 
 class BotPollingHarness(TelegramBotPollingMixin):

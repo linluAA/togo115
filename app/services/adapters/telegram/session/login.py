@@ -10,7 +10,7 @@ from app.db import add_log, utc_now
 from app.services.integration_state import get_flow, save_flow
 
 
-class _TelegramLoginMixin:
+class TelegramLoginMixin:
     async def qr_login_start(self) -> dict[str, Any]:
         client = await self.client()
         qr = await client.qr_login()

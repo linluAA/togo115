@@ -18,7 +18,7 @@ from app.services.link_parser import (
 )
 
 
-class _TelegramMessageContextMixin:
+class TelegramMessageContextMixin:
     async def _related_messages_for_link_scan(
         self,
         client: TelegramClient | None,

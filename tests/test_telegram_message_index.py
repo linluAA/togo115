@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.db import init_db
-from app.services.adapters.telegram_message_index import index_telegram_messages, search_telegram_message_index
+from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
 
 
 class DummyMessage:

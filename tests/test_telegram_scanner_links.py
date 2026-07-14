@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.adapters.telegram_scanner import _TelegramMessageScanner
+from app.services.adapters.telegram.scan.scanner import TelegramMessageScanner
 
 
 class Message:
@@ -17,7 +17,7 @@ class Message:
 
 class TelegramScannerLinksTest(unittest.IsolatedAsyncioTestCase):
     async def test_combined_message_text_dedupes_related_and_extra_texts(self) -> None:
-        scanner = _TelegramMessageScanner()
+        scanner = TelegramMessageScanner()
 
         text = scanner._combined_message_text(
             [
@@ -31,7 +31,7 @@ class TelegramScannerLinksTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(text, "\u5267\u96c6\u6807\u9898\n\u94fe\u63a5\uff1ahttps://115.com/s/demo?password=1234\n\u753b\u8d28\uff1a1080p")
 
     async def test_links_from_message_uses_extra_texts_without_neighbor_scan(self) -> None:
-        scanner = _TelegramMessageScanner()
+        scanner = TelegramMessageScanner()
         message = Message("\u5c06\u591c 2026", 12)
 
         results = await scanner._links_from_message(
@@ -47,7 +47,7 @@ class TelegramScannerLinksTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results[0].message_id, "12")
 
     async def test_links_from_message_uses_nearest_chinese_title_as_result_title(self) -> None:
-        scanner = _TelegramMessageScanner()
+        scanner = TelegramMessageScanner()
         text = "\n".join(
             [
                 "\u7535\u89c6\u5267\uff1a\u7231\u604b (2024)",
@@ -63,7 +63,7 @@ class TelegramScannerLinksTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.title, "\u540e\u5ba4 2026")
 
     def test_external_resource_page_urls_are_deduped_and_host_limited(self) -> None:
-        scanner = _TelegramMessageScanner()
+        scanner = TelegramMessageScanner()
 
         urls = scanner._external_resource_page_urls(
             "https://telegra.ph/resource https://telegra.ph/resource https://example.com/ignore"

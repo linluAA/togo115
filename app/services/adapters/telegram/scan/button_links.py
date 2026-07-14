@@ -39,7 +39,7 @@ def _compat_httpx():
     return getattr(module, "httpx", httpx) if module is not None else httpx
 
 
-class _TelegramButtonLinkMixin:
+class TelegramButtonLinkMixin:
     async def _click_buttons_for_links(self, message: Any, client: TelegramClient | None = None, entity: Any = None) -> list[tuple[str, str]]:
         started = time.perf_counter()
         state = {"clicked": 0, "click_ms": 0, "refresh_ms": 0, "button_count": 0}

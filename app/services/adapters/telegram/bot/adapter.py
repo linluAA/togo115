@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.adapters.telegram_bot_callbacks import TelegramBotCallbackMixin
-from app.services.adapters.telegram_bot_commands import TelegramBotCommandMixin
-from app.services.adapters.telegram_bot_messages import TelegramBotMessageMixin
-from app.services.adapters.telegram_bot_polling import TelegramBotPollingMixin
+from app.services.adapters.telegram.bot.callbacks import TelegramBotCallbackMixin
+from app.services.adapters.telegram.bot.commands import TelegramBotCommandMixin
+from app.services.adapters.telegram.bot.messages import TelegramBotMessageMixin
+from app.services.adapters.telegram.bot.polling import TelegramBotPollingMixin
 from app.services.integration_state import get_setting
 
 

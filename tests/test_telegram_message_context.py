@@ -1,4 +1,4 @@
-from app.services.adapters.telegram_message_context import _TelegramMessageContextMixin
+from app.services.adapters.telegram.scan.message_context import TelegramMessageContextMixin
 
 
 class DummyButton:
@@ -18,7 +18,7 @@ class DummyMessage:
         self.grouped_id = grouped_id
 
 
-class ContextHarness(_TelegramMessageContextMixin):
+class ContextHarness(TelegramMessageContextMixin):
     pass
 
 

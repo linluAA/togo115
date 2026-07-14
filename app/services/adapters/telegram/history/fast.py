@@ -7,9 +7,9 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-from app.services.adapters.telegram_message_index import index_telegram_messages, search_telegram_message_index
-from app.services.adapters.telegram_models import _TelegramSearchBudget
-from app.services.adapters.telegram_pipeline import TelegramPipelineStats
+from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
+from app.services.adapters.telegram.models import TelegramSearchBudget
+from app.services.adapters.telegram.pipeline import TelegramPipelineStats
 from app.services.link_parser import (
     _expanded_search_queries,
     context_for_115_link,
@@ -32,7 +32,7 @@ def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
-class _TelegramFastSearchMixin:
+class TelegramFastSearchMixin:
     async def search_history_fast(self, title: str, keywords: list[str]) -> list[SearchResult]:
         """Return the first usable Telegram hit with a hard 5s budget for interactive subscription creation."""
         started = time.perf_counter()
@@ -61,7 +61,7 @@ class _TelegramFastSearchMixin:
                 {"title": title, "count": len(indexed_results), "sources": len(dialogs), "resolve_ms": resolve_ms, "total_ms": _elapsed_ms(started)},
             )
             return indexed_results
-        budget = _TelegramSearchBudget(TELEGRAM_FAST_TOTAL_BUDGET_SECONDS)
+        budget = TelegramSearchBudget(TELEGRAM_FAST_TOTAL_BUDGET_SECONDS)
         add_log("info", "telegram", "Telegram 快速搜索开始", {**self._fast_search_start_payload(title, dialogs, queries[0]), "resolve_ms": resolve_ms})
         search_started = time.perf_counter()
         results = await self._search_dialogs_fast(client, dialogs, queries[0], budget)
@@ -89,7 +89,7 @@ class _TelegramFastSearchMixin:
         client: TelegramClient,
         dialogs: list[dict[str, Any]],
         query: str,
-        budget: _TelegramSearchBudget,
+        budget: TelegramSearchBudget,
     ) -> list[SearchResult]:
         semaphore = asyncio.Semaphore(TELEGRAM_FAST_DIALOG_SEARCH_CONCURRENCY)
         results: list[SearchResult] = []
@@ -109,7 +109,7 @@ class _TelegramFastSearchMixin:
         client: TelegramClient,
         dialog: dict[str, Any],
         query: str,
-        budget: _TelegramSearchBudget,
+        budget: TelegramSearchBudget,
         shared_results: list[SearchResult],
     ) -> list[SearchResult]:
         async with semaphore:
@@ -133,7 +133,7 @@ class _TelegramFastSearchMixin:
         client: TelegramClient,
         dialog: dict[str, Any],
         query: str,
-        budget: _TelegramSearchBudget,
+        budget: TelegramSearchBudget,
     ) -> list[SearchResult]:
         started = time.perf_counter()
         source = str(dialog["canonical"])
@@ -157,7 +157,7 @@ class _TelegramFastSearchMixin:
         source: str,
         message: Any,
         query: str,
-        budget: _TelegramSearchBudget,
+        budget: TelegramSearchBudget,
     ) -> list[SearchResult]:
         if budget.exhausted():
             return []
@@ -170,7 +170,7 @@ class _TelegramFastSearchMixin:
             add_log("debug", "telegram", "Telegram 快速搜索链接提取失败", {"dialog": source, "query": query, "error": str(exc), "error_type": type(exc).__name__})
             return []
 
-    async def _get_fast_search_messages(self, client: TelegramClient, entity: Any, query: str, budget: _TelegramSearchBudget) -> list[Any]:
+    async def _get_fast_search_messages(self, client: TelegramClient, entity: Any, query: str, budget: TelegramSearchBudget) -> list[Any]:
         get_messages = getattr(client, "get_messages", None)
         if not callable(get_messages):
             return []

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.adapters.telegram_pipeline import TelegramPipelineStats, _TelegramPipelineMixin
+from app.services.adapters.telegram.pipeline import TelegramPipelineStats, TelegramPipelineMixin
 from app.services.types import SearchResult
 
 
@@ -13,7 +13,7 @@ class Message:
         self.message = text
 
 
-class PipelineHarness(_TelegramPipelineMixin):
+class PipelineHarness(TelegramPipelineMixin):
     def __init__(self) -> None:
         self.calls = 0
 

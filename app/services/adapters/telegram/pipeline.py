@@ -47,7 +47,7 @@ class TelegramPipelineStats:
         }
 
 
-class _TelegramPipelineMixin:
+class TelegramPipelineMixin:
     def _pipeline_message_id(self, message: Any) -> int:
         return int(getattr(message, "id", 0) or 0)
 
