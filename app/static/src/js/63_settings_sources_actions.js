@@ -167,6 +167,7 @@ function renderHdhiveBrowser() {
         </div>
         <div class="inline-actions">
           <button type="button" class="secondary" id="hdhiveBrowserRefresh">刷新</button>
+          <button type="button" class="secondary danger-lite" id="hdhiveBrowserReset">重置环境</button>
           <button type="button" class="secondary danger-lite" id="hdhiveBrowserClose">关闭</button>
         </div>
       </header>
@@ -199,6 +200,7 @@ function renderHdhiveBrowser() {
 function bindHdhiveBrowserEvents() {
   $("#hdhiveBrowserImage")?.addEventListener("click", clickHdhiveBrowser);
   $("#hdhiveBrowserRefresh")?.addEventListener("click", refreshHdhiveBrowser);
+  $("#hdhiveBrowserReset")?.addEventListener("click", resetHdhiveBrowser);
   $("#hdhiveBrowserClose")?.addEventListener("click", closeHdhiveBrowser);
   $("#hdhiveBrowserGo")?.addEventListener("click", navigateHdhiveBrowser);
   $("#hdhiveBrowserType")?.addEventListener("click", typeHdhiveBrowserText);
@@ -246,6 +248,13 @@ async function pressHdhiveBrowserKey(key) {
 
 async function closeHdhiveBrowser() {
   await api("/api/hdhive/browser/close", { method: "POST", timeoutMs: 12000 });
+  state.hdhiveBrowser = null;
+  renderHdhiveBrowser();
+}
+
+async function resetHdhiveBrowser() {
+  const data = await api("/api/hdhive/browser/reset", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ source: {} }) });
+  toast(data.message || data.error || "影巢浏览器环境已重置");
   state.hdhiveBrowser = null;
   renderHdhiveBrowser();
 }

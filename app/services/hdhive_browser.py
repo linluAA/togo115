@@ -34,7 +34,7 @@ class HdhiveEmbeddedBrowser:
         self._base_url = HDHIVE_DEFAULT_URL
         self._user_data_dir = ""
         self._proxy: dict[str, str] | None = None
-        self._headless = True
+        self._headless = False
 
     async def open(self, source: dict[str, Any]) -> dict[str, Any]:
         async with self._lock:
@@ -112,6 +112,17 @@ class HdhiveEmbeddedBrowser:
             await self._close_locked()
             add_log("info", "rss", "HDHive embedded browser closed", {})
             return {"ok": True, "running": False}
+
+    async def reset(self, source: dict[str, Any]) -> dict[str, Any]:
+        async with self._lock:
+            await self._close_locked()
+            user_data_dir = _hdhive_user_data_dir(dict(source or {}))
+            reset_result = _reset_hdhive_user_data_dir(user_data_dir)
+            if reset_result["ok"]:
+                add_log("info", "rss", "HDHive embedded browser profile reset", {"user_data_dir": user_data_dir})
+            else:
+                add_log("warning", "rss", "HDHive embedded browser profile reset skipped", reset_result)
+            return reset_result
 
     async def _start_locked(self) -> None:
         try:
@@ -198,7 +209,7 @@ class HdhiveEmbeddedBrowser:
         self._playwright = None
         self._page = None
         self._proxy = None
-        self._headless = True
+        self._headless = False
 
 
 class _suppress_playwright_errors:
@@ -240,6 +251,10 @@ async def hdhive_browser_close() -> dict[str, Any]:
     return await hdhive_embedded_browser.close()
 
 
+async def hdhive_browser_reset(source: dict[str, Any]) -> dict[str, Any]:
+    return await hdhive_embedded_browser.reset(source)
+
+
 def _hdhive_base_url(source: dict[str, Any]) -> str:
     return (str(source.get("url") or HDHIVE_DEFAULT_URL).strip() or HDHIVE_DEFAULT_URL).rstrip("/") + "/"
 
@@ -263,7 +278,7 @@ def _hdhive_executable_path(source: dict[str, Any]) -> str | None:
 
 
 def _hdhive_embedded_headless(source: dict[str, Any]) -> bool:
-    value = str(source.get("embedded_headless") if "embedded_headless" in source else os.getenv("TOGO115_HDHIVE_EMBEDDED_HEADLESS", "true")).strip().lower()
+    value = str(source.get("embedded_headless") if "embedded_headless" in source else os.getenv("TOGO115_HDHIVE_EMBEDDED_HEADLESS", "false")).strip().lower()
     return value not in {"0", "false", "no", "off"}
 
 
@@ -388,6 +403,25 @@ def _hdhive_page_diagnostic(url: str, title: str, page_text: str, proxy_enabled:
 def _compact_text(text: str, limit: int) -> str:
     value = re.sub(r"\s+", " ", str(text or "")).strip()
     return value if len(value) <= limit else f"{value[:limit]}..."
+
+
+def _reset_hdhive_user_data_dir(user_data_dir: str) -> dict[str, Any]:
+    target = Path(user_data_dir).expanduser().resolve()
+    data_root = settings.data_dir.expanduser().resolve()
+    default_target = (data_root / "hdhive-browser").resolve()
+    if target != default_target:
+        return {
+            "ok": False,
+            "running": False,
+            "error": "仅支持重置默认影巢浏览器用户目录。自定义目录请手动清理，避免误删外部数据。",
+            "user_data_dir": str(target),
+        }
+    if target == data_root or data_root not in target.parents:
+        return {"ok": False, "running": False, "error": "影巢浏览器用户目录不在数据目录内，已拒绝清理。", "user_data_dir": str(target)}
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True, exist_ok=True)
+    return {"ok": True, "running": False, "message": "影巢浏览器环境已重置，请重新打开并登录。", "user_data_dir": str(target)}
 
 
 async def _settle_page(page: Any) -> None:

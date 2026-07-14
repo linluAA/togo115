@@ -8,6 +8,7 @@ from app.services.hdhive_browser import (
     hdhive_browser_close,
     hdhive_browser_key,
     hdhive_browser_navigate,
+    hdhive_browser_reset,
     hdhive_browser_snapshot,
     hdhive_browser_type,
     open_hdhive_embedded_browser,
@@ -125,6 +126,10 @@ async def hdhive_browser_go(url: str | None) -> dict:
 
 async def hdhive_browser_stop() -> dict:
     return await hdhive_browser_close()
+
+
+async def hdhive_browser_reset_profile(source: dict) -> dict:
+    return await hdhive_browser_reset(source)
 
 
 def _error_message(exc: Exception) -> str:

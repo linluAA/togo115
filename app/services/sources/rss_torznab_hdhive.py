@@ -11,7 +11,14 @@ from urllib.parse import urljoin, urlparse
 
 from app.config import settings
 from app.db import add_log
-from app.services.hdhive_browser import hdhive_playwright_proxy, open_hdhive_embedded_browser
+from app.services.hdhive_browser import (
+    _hdhive_browser_args,
+    _hdhive_stealth_init_script,
+    _hdhive_timezone,
+    _hdhive_user_agent,
+    hdhive_playwright_proxy,
+    open_hdhive_embedded_browser,
+)
 from app.services.link_downloads import extract_115_links, is_115_share_link
 from app.services.novnc import default_novnc_url, novnc_status_payload
 from app.services.types import SearchResult
@@ -105,10 +112,15 @@ class HdhiveBrowserClient:
                     executable_path=executable_path,
                     headless=headless,
                     locale="zh-CN",
+                    timezone_id=_hdhive_timezone(self.source),
+                    user_agent=_hdhive_user_agent(self.source),
                     viewport={"width": 1365, "height": 900},
                     proxy=hdhive_playwright_proxy(self.source),
-                    args=["--disable-blink-features=AutomationControlled"],
+                    ignore_default_args=["--enable-automation"],
+                    args=_hdhive_browser_args(),
                 )
+                await browser.add_init_script(_hdhive_stealth_init_script())
+                await browser.set_extra_http_headers({"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"})
                 try:
                     page = browser.pages[0] if browser.pages else await browser.new_page()
                     return await self._read_page(page, detail_url, title, media_type, tmdb_id, timeout_ms)
@@ -216,7 +228,7 @@ def _hdhive_executable_path(source: dict[str, Any]) -> str | None:
 
 
 def _hdhive_headless(source: dict[str, Any]) -> bool:
-    value = str(source.get("headless") if "headless" in source else os.getenv("TOGO115_HDHIVE_HEADLESS", "true")).strip().lower()
+    value = str(source.get("headless") if "headless" in source else os.getenv("TOGO115_HDHIVE_HEADLESS", "false")).strip().lower()
     return value not in {"0", "false", "no", "off"}
 
 
@@ -277,9 +289,14 @@ async def _run_hdhive_login_browser(source: dict[str, Any], started: asyncio.Fut
                 executable_path=executable_path,
                 headless=False,
                 locale="zh-CN",
+                timezone_id=_hdhive_timezone(login_source),
+                user_agent=_hdhive_user_agent(login_source),
                 viewport={"width": 1365, "height": 900},
-                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                ignore_default_args=["--enable-automation"],
+                args=_hdhive_browser_args(),
             )
+            await browser.add_init_script(_hdhive_stealth_init_script())
+            await browser.set_extra_http_headers({"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"})
             try:
                 page = browser.pages[0] if browser.pages else await browser.new_page()
                 await page.goto(base_url, wait_until="domcontentloaded", timeout=timeout_ms)

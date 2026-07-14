@@ -9,7 +9,7 @@ import httpx
 from app.config import settings
 from app.db import init_db
 from app.services.integrations import RssTorznabAdapter, SearchResult, TelegramClientAdapter, TmdbAdapter, context_for_115_link, extract_download_links, telegram_message_text
-from app.services.sources.rss_torznab_hdhive import extract_hdhive_resource_candidates, order_hdhive_candidates
+from app.services.sources.rss_torznab_hdhive import _hdhive_headless, extract_hdhive_resource_candidates, order_hdhive_candidates
 from app.services.subscription_matching import result_matches_subscription
 
 
@@ -1289,6 +1289,10 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results[0].url, "https://115cdn.com/s/test?password=1234")
         self.assertEqual(captured["media_type"], "tv")
         self.assertEqual(captured["tmdb_id"], 86344)
+
+    def test_hdhive_browser_defaults_to_headed(self) -> None:
+        self.assertFalse(_hdhive_headless({}))
+        self.assertTrue(_hdhive_headless({"headless": True}))
 
 
 if __name__ == "__main__":

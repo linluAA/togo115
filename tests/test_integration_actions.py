@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock, Mock, patch
 from app.services import integration_actions
 from app.services.hdhive_browser import (
     _hdhive_browser_args,
+    _hdhive_embedded_headless,
     _hdhive_page_diagnostic,
     _hdhive_stealth_init_script,
     _hdhive_user_agent,
+    hdhive_browser_reset,
     hdhive_playwright_proxy,
     hdhive_proxy_label,
 )
@@ -113,6 +115,13 @@ class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("webdriver", script)
         self.assertIn("Win32", script)
         self.assertIn("Chrome/", _hdhive_user_agent({}))
+        self.assertFalse(_hdhive_embedded_headless({}))
+
+    async def test_hdhive_browser_reset_rejects_custom_directory(self) -> None:
+        result = await hdhive_browser_reset({"browser_user_data_dir": "/tmp/not-togo115-hdhive"})
+
+        self.assertFalse(result["ok"])
+        self.assertIn("自定义目录", result["error"])
 
     async def test_telegram_errors_are_logged_and_reraised(self) -> None:
         adapter = Mock()

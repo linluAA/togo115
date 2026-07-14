@@ -38,6 +38,7 @@ from app.services.integration_actions import (
     hdhive_browser_go,
     hdhive_browser_open,
     hdhive_browser_press_key,
+    hdhive_browser_reset_profile,
     hdhive_browser_screen,
     hdhive_browser_stop,
     hdhive_browser_type_text,
@@ -169,3 +170,8 @@ async def hdhive_embedded_browser_navigate(payload: HdhiveBrowserNavigateRequest
 @router.post("/api/hdhive/browser/close")
 async def hdhive_embedded_browser_close(user: dict = Depends(current_user)) -> dict:
     return await hdhive_browser_stop()
+
+
+@router.post("/api/hdhive/browser/reset")
+async def hdhive_embedded_browser_reset(payload: HdhiveBrowserOpenRequest, user: dict = Depends(current_user)) -> dict:
+    return await hdhive_browser_reset_profile(payload.source)
