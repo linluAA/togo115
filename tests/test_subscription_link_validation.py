@@ -5,7 +5,7 @@ import time
 import unittest
 
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription_link_validation import classify_115_results
+from app.services.subscription.delivery.link_validation import classify_115_results
 
 
 class LinkValidationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
@@ -25,7 +25,7 @@ class LinkValidationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             SearchResult(title="C", url="https://115.com/s/c?password=3333", source="tg"),
         ]
 
-        import app.services.subscription_link_validation as module
+        import app.services.subscription.delivery.link_validation as module
 
         old_adapter = module.Pan115Adapter
         module.Pan115Adapter = FakePan115
@@ -49,7 +49,7 @@ class LinkValidationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
 
         results = [SearchResult(title="A", url="https://115.com/s/a?password=1111", source="tg")]
 
-        import app.services.subscription_link_validation as module
+        import app.services.subscription.delivery.link_validation as module
 
         old_adapter = module.Pan115Adapter
         module.Pan115Adapter = FakePan115

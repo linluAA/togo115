@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, patch
 from app.config import settings
 from app.db import db, init_db, utc_now
 from app.services.integrations import SearchResult, TelegramClientAdapter
-from app.services import subscription_library_snapshot as snapshot_module
-from app.services import subscription_runtime as runtime_module
-from app.services import subscription_tasks
-from app.services.subscription_search import search_and_attach_resources
-from app.services.subscription_search_all import search_all_active_subscriptions
-from app.services.subscription_matching import result_matches_subscription
+from app.services.subscription.library import snapshot as snapshot_module
+import app.services.subscription.runtime as runtime_module
+from app.services.subscription.search import tasks as subscription_tasks
+from app.services.subscription.search.service import search_and_attach_resources
+from app.services.subscription.search.all import search_all_active_subscriptions
+from app.services.subscription.match.matching import result_matches_subscription
 
 
 class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
@@ -84,10 +84,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             context="资源链接：https://115.com/s/backrooms?password=8888",
         )
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter") as pan_cls, patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter") as pan_cls, patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             pan_cls.return_value.share_availability = AsyncMock(return_value="available")
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
@@ -111,9 +111,9 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             context="电影：后室 2026\n链接：https://115.com/s/backrooms?password=8888",
         )
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)) as deliver:
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
 
@@ -135,7 +135,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         )
         rss = AsyncMock(return_value=[])
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch("app.services.subscription_discovery.RssTorznabAdapter") as rss_cls:
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch("app.services.subscription.search.discovery.RssTorznabAdapter") as rss_cls:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
             rss_cls.return_value.search_history_by_priority_until_match = rss
 
@@ -153,9 +153,9 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             context="Drama 1080p\nhttps://115.com/s/dramacode?password=8888",
         )
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)) as deliver:
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
 
@@ -187,10 +187,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             context="野狗骨头.2026.S01E01.第1集.2160p.WEB-DL.H.265.AAC.mp4\nhttps://115.com/s/wilddog01?password=8888",
         )
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter") as pan_cls, patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter") as pan_cls, patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             pan_cls.return_value.share_availability = AsyncMock(return_value="available")
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
@@ -205,7 +205,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(count, 0)
 
     async def test_delivery_skips_stale_resource_for_owned_episode(self) -> None:
-        from app.services.subscription_delivery import deliver_resource
+        from app.services.subscription.delivery.service import deliver_resource
 
         subscription_id = self._drama_subscription()
         now = utc_now()
@@ -219,7 +219,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             )
             resource_id = int(cursor.lastrowid)
 
-        with patch("app.services.subscription_delivery._deliver_resource_url", AsyncMock(return_value=(True, ""))) as deliver_url:
+        with patch("app.services.subscription.delivery.service._deliver_resource_url", AsyncMock(return_value=(True, ""))) as deliver_url:
             ok = await deliver_resource(resource_id)
 
         self.assertFalse(ok)
@@ -245,9 +245,9 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             await allow_finish.wait()
             return True
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_search.deliver_resource", AsyncMock(side_effect=slow_deliver)):
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.search.service.deliver_resource", AsyncMock(side_effect=slow_deliver)):
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
 
@@ -281,10 +281,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         pan = AsyncMock()
         pan.share_availability = AsyncMock(side_effect=["unavailable", "available"])
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter", return_value=pan), patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[expired, valid])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
@@ -320,10 +320,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         pan = AsyncMock()
         pan.share_availability = AsyncMock(return_value="available")
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter", return_value=pan), patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[lower, better])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
@@ -359,10 +359,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         pan = AsyncMock()
         pan.share_availability = AsyncMock(return_value="available")
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter", return_value=pan), patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
@@ -387,10 +387,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         pan = AsyncMock()
         pan.share_availability = AsyncMock(return_value="unknown")
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter", return_value=pan), patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[recheck])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
@@ -433,10 +433,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             }
         ]
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter", return_value=pan), patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(return_value=True)
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[expired])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=fallback_groups)
@@ -478,10 +478,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         pan = AsyncMock()
         pan.share_availability = AsyncMock(return_value="available")
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_link_validation.Pan115Adapter", return_value=pan), patch(
-            "app.services.subscription_search.deliver_resource", AsyncMock(side_effect=[False, True])
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(side_effect=[False, True])
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=fallback_groups)
@@ -519,9 +519,9 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             }
         ]
 
-        with patch("app.services.subscription_discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription_discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription_search.deliver_resource", AsyncMock(side_effect=[False, True])) as deliver:
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.search.service.deliver_resource", AsyncMock(side_effect=[False, True])) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[])
             rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=fallback_groups)
 
@@ -584,7 +584,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(result_matches_subscription(subscription, result))
-        from app.services.subscription_library_match import result_matches_missing_episodes
+        from app.services.subscription.library.match import result_matches_missing_episodes
 
         self.assertFalse(result_matches_missing_episodes(subscription, result))
 
@@ -606,7 +606,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(result_matches_subscription(subscription, result))
-        from app.services.subscription_library_match import result_matches_missing_episodes
+        from app.services.subscription.library.match import result_matches_missing_episodes
 
         self.assertTrue(result_matches_missing_episodes(subscription, result))
 
@@ -622,7 +622,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         snapshot_module.reset_library_snapshot_cache()
         snapshot = {"movies": [], "series": [], "episodes": []}
 
-        with patch("app.services.subscription_library_snapshot._emby_configured", return_value=True), patch("app.services.subscription_library_snapshot.EmbyAdapter") as emby_cls:
+        with patch("app.services.subscription.library.snapshot._emby_configured", return_value=True), patch("app.services.subscription.library.snapshot.EmbyAdapter") as emby_cls:
             emby_cls.return_value.library_snapshot = AsyncMock(return_value=snapshot)
             first = await snapshot_module._library_snapshot_or_none()
             second = await snapshot_module._library_snapshot_or_none()
@@ -635,8 +635,8 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         self._subscription()
 
         search_mock = AsyncMock(return_value=[])
-        with patch("app.services.subscription_search_all._library_snapshot_or_none", AsyncMock(return_value=None)), patch(
-            "app.services.subscription_search_all._search_and_attach_resources_guarded", search_mock
+        with patch("app.services.subscription.search.all._library_snapshot_or_none", AsyncMock(return_value=None)), patch(
+            "app.services.subscription.search.all._search_and_attach_resources_guarded", search_mock
         ):
             result = await search_all_active_subscriptions()
 
@@ -656,8 +656,8 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         async def stuck_search(*args, **kwargs):
             await asyncio.sleep(0.2)
 
-        with patch("app.services.subscription_search_all._library_snapshot_or_none", AsyncMock(return_value=None)), patch(
-            "app.services.subscription_search_all._search_and_attach_resources_guarded", AsyncMock(side_effect=stuck_search)
+        with patch("app.services.subscription.search.all._library_snapshot_or_none", AsyncMock(return_value=None)), patch(
+            "app.services.subscription.search.all._search_and_attach_resources_guarded", AsyncMock(side_effect=stuck_search)
         ), patch.object(runtime_module, "SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS", 0.01):
             result = await search_all_active_subscriptions()
 
@@ -682,7 +682,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             active -= 1
             return []
 
-        with patch("app.services.subscription_tasks._default_search", AsyncMock(side_effect=tracked_search)):
+        with patch("app.services.subscription.search.tasks._default_search", AsyncMock(side_effect=tracked_search)):
             await asyncio.gather(
                 subscription_tasks._search_subscription_background(first_id, search_func=subscription_tasks._default_search),
                 subscription_tasks._search_subscription_background(second_id, search_func=subscription_tasks._default_search),
@@ -727,7 +727,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         runtime_module.search_all_task = None
         try:
             with patch.object(runtime_module, "SEARCH_ALL_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription_tasks._default_search_all",
+                "app.services.subscription.search.tasks._default_search_all",
                 nonblocking_search_all,
             ):
                 started = time.perf_counter()
@@ -753,7 +753,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         old_task = runtime_module.subscription_search_tasks.get(subscription_id)
         runtime_module.subscription_search_tasks.pop(subscription_id, None)
         try:
-            with patch("app.services.subscription_tasks._default_search", AsyncMock(side_effect=blocking_search)):
+            with patch("app.services.subscription.search.tasks._default_search", AsyncMock(side_effect=blocking_search)):
                 started = time.perf_counter()
                 result = subscription_tasks.schedule_subscription_search(subscription_id)
                 await asyncio.sleep(0.01)
@@ -777,7 +777,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         runtime_module.search_all_task = None
         try:
             with patch.object(runtime_module, "SEARCH_ALL_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription_tasks._default_search_all",
+                "app.services.subscription.search.tasks._default_search_all",
                 blocking_search_all,
             ):
                 started = time.perf_counter()
@@ -802,7 +802,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         runtime_module.emby_sync_task = None
         try:
             with patch.object(runtime_module, "EMBY_SYNC_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription_tasks._default_emby_sync",
+                "app.services.subscription.search.tasks._default_emby_sync",
                 blocking_emby_sync,
             ):
                 started = time.perf_counter()
@@ -831,7 +831,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         runtime_module.emby_sync_task = None
         try:
             with patch.object(runtime_module, "EMBY_SYNC_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription_tasks._default_emby_sync",
+                "app.services.subscription.search.tasks._default_emby_sync",
                 slow_emby_sync,
             ):
                 first = subscription_tasks.schedule_emby_subscription_sync()

@@ -15,12 +15,12 @@ from typing import Any
 
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription_attach import (
+from app.services.subscription.attach.service import (
     attach_results_to_matching_subscriptions,
     refresh_rss_sources,
 )
-from app.services.subscription_create import create_subscription
-from app.services.subscription_crud import (
+from app.services.subscription.crud.create import create_subscription
+from app.services.subscription.crud.service import (
     _active_subscriptions,
     _duplicate_subscription,
     _mark_subscription_checked,
@@ -31,21 +31,21 @@ from app.services.subscription_crud import (
     list_subscriptions,
     update_subscription,
 )
-from app.services.subscription_crud_rows import normalize_subscription
-from app.services.subscription_delivery import (
+from app.services.subscription.crud.rows import normalize_subscription
+from app.services.subscription.delivery.service import (
     deliver_resource,
     list_failed_resources,
     retry_failed_resources as _retry_failed_resources_impl,
 )
-from app.services.subscription_library import sync_subscription_list_with_emby
-from app.services.subscription_library_snapshot import _library_snapshot_or_none
-from app.services.subscription_recheck import (
+from app.services.subscription.library.service import sync_subscription_list_with_emby
+from app.services.subscription.library.snapshot import _library_snapshot_or_none
+from app.services.subscription.delivery.recheck import (
     list_due_recheck_resources,
     recheck_pending_115_resources,
 )
-from app.services.subscription_search import search_and_attach_resources
-from app.services.subscription_search_all import search_all_active_subscriptions
-from app.services.subscription_tasks import (
+from app.services.subscription.search.service import search_and_attach_resources
+from app.services.subscription.search.all import search_all_active_subscriptions
+from app.services.subscription.search.tasks import (
     _search_all_background,
     _search_and_attach_resources_guarded,
     _search_semaphore,

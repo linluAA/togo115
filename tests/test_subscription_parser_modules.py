@@ -1,9 +1,9 @@
-from app.services.subscription_episode_parser import (
+from app.services.subscription.episode.parser import (
     _episode_keys_from_text_for_subscription,
     _missing_episode_keys,
     episodes_from_text,
 )
-from app.services.subscription_text_utils import _title_without_year, _years_from_text
+from app.services.subscription.match.text_utils import _title_without_year, _years_from_text
 
 
 def test_episode_parser_extracts_explicit_season_range() -> None:

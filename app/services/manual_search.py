@@ -5,7 +5,7 @@ from app.schemas import SearchRequest
 from app.services.adapters.telegram import TelegramClientAdapter
 from app.services.sources.rss_torznab import RssTorznabAdapter
 from app.services.subscription import get_subscription
-from app.services.subscription_resource_ops import _best_fallback_result, _matching_results
+from app.services.subscription.resource.ops import _best_fallback_result, _matching_results
 
 
 def subscription_like_from_payload(payload: SearchRequest) -> dict:

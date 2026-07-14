@@ -12,20 +12,29 @@ from app.services.subscription import (
 )
 ```
 
-`app.services.subscription.api` is the stable surface.  
-`app.services.subscription` (this package) re-exports it.
+## Layout (P2)
+
+```text
+subscription/
+  api.py              # stable public API
+  runtime.py
+  crud/               # create/list/update/delete
+  episode/            # episode parsing
+  match/              # title/year/quality matching
+  resource/           # resource rows, dedupe, guards
+  library/            # Emby sync / completion
+  delivery/           # deliver + 115 recheck
+  search/             # TG/RSS search orchestration + tasks
+  attach/             # realtime attach to subscriptions
+```
 
 ## Compatibility
 
-- Legacy module path `app.services.subscription` **as a single file** is gone;
-  imports of `app.services.subscription` now resolve to this package.
-- Old flat modules (`subscription_crud.py`, `subscription_tasks.py`, …) still
-  exist and hold implementation. Internal code may keep using them until later
-  phases move files into subpackages.
-- Prefer the public API above for routers, monitor, Telegram bot, and new code.
+Flat modules like ``app.services.subscription_crud`` remain as **shims** that
+re-export the new locations. Prefer the package paths or the public API.
 
-## Next phases (not done yet)
+## Next
 
-1. Move match / search / delivery files into subpackages under this directory.
-2. Stop cross-module imports of `_private` helpers.
-3. Replace Telegram mixin chains with an explicit pipeline.
+- Stop using private ``_`` imports across packages
+- Collapse pure re-export barrels
+- Telegram mixin → pipeline (separate domain)

@@ -12,9 +12,9 @@ from app.services.adapters.media import TmdbAdapter
 from app.services.integration_state import get_flow, save_flow
 from app.services.link_downloads import _download_link_key, is_valid_download_link
 from app.services.sources.rss_torznab import RssTorznabAdapter, SearchResult
-from app.services.subscription_matching import result_matches_subscription
-from app.services.subscription_result_utils import _result_text
-from app.services.subscription_text_utils import _compact_match_text, _years_from_text
+from app.services.subscription.match.matching import result_matches_subscription
+from app.services.subscription.match.result_utils import _result_text
+from app.services.subscription.match.text_utils import _compact_match_text, _years_from_text
 
 
 TG_BOT_MAGNET_LIMIT = 5

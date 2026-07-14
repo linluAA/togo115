@@ -2,12 +2,12 @@ import unittest
 import sqlite3
 
 from app.services.integrations import SearchResult
-from app.services.subscription_resources import canonical_115_url as _canonical_115_url, resource_dedupe_key as _resource_dedupe_key
-from app.services.subscription_resource_ops import _fallback_blocked_by_primary_resource, _resource_already_exists
-from app.services.subscription_library_match import result_matches_missing_episodes
-from app.services.subscription_matching import result_matches_subscription
-from app.services.subscription_resource_matching import _matching_results
-from app.services.subscription_episode_parser import episodes_from_text
+from app.services.subscription.resource.resources import canonical_115_url as _canonical_115_url, resource_dedupe_key as _resource_dedupe_key
+from app.services.subscription.resource.ops import _fallback_blocked_by_primary_resource, _resource_already_exists
+from app.services.subscription.library.match import result_matches_missing_episodes
+from app.services.subscription.match.matching import result_matches_subscription
+from app.services.subscription.resource.matching import _matching_results
+from app.services.subscription.episode.parser import episodes_from_text
 
 
 def result(text: str) -> SearchResult:
@@ -412,7 +412,7 @@ class SubscriptionMatchingTest(unittest.TestCase):
             conn.close()
 
     def test_magnet_fallback_not_blocked_by_existing_115_resource(self) -> None:
-        from app.services.subscription_resource_fallback import _fallback_blocked_by_primary_resource
+        from app.services.subscription.resource.fallback import _fallback_blocked_by_primary_resource
 
         subscription = {"id": 1, "title": "后室", "media_type": "movie"}
         result = SearchResult(

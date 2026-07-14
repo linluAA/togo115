@@ -9,7 +9,7 @@ import httpx
 from app.config import settings
 from app.db import init_db
 from app.services.integrations import RssTorznabAdapter, SearchResult, TelegramClientAdapter, TmdbAdapter, context_for_115_link, extract_download_links, telegram_message_text
-from app.services.subscription_matching import result_matches_subscription
+from app.services.subscription.match.matching import result_matches_subscription
 
 
 class RssTorznabTest(unittest.IsolatedAsyncioTestCase):

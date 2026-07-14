@@ -8,7 +8,7 @@ from app.db import add_log, db, utc_now
 from app.services.adapters.media import TmdbAdapter
 from app.services.adapters.pan115 import Pan115Adapter
 from app.services.integration_state import get_setting
-from app.services.subscription_delivery_executor import _deliver_resource_url
+from app.services.subscription.delivery.executor import _deliver_resource_url
 from app.services.tg_bot_magnet_search import (
     magnet_results_reply,
     magnet_results_reply_markup,

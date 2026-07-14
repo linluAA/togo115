@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.services.subscription_chinese_numbers import CHINESE_DIGITS, _chinese_number_to_int
+from app.services.subscription.episode.chinese_numbers import CHINESE_DIGITS, _chinese_number_to_int
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,9 +36,9 @@ MOJIBAKE_MARKERS = (
 )
 
 CRITICAL_PARSER_FILES = (
-    Path("app/services/subscription_chinese_numbers.py"),
-    Path("app/services/subscription_episode_explicit.py"),
-    Path("app/services/subscription_episode_patterns.py"),
+    Path("app/services/subscription/episode/chinese_numbers.py"),
+    Path("app/services/subscription/episode/explicit.py"),
+    Path("app/services/subscription/episode/patterns.py"),
 )
 
 

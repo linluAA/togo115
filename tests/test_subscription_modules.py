@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, Mock, patch
 from app.config import settings
 from app.db import db, init_db, json_dumps, utc_now
 from app.schemas import SubscriptionCreate
-from app.services import subscription_crud, subscription_delivery, subscription_tasks
+from app.services.subscription.crud import service as subscription_crud
+from app.services.subscription.delivery import service as subscription_delivery
+from app.services.subscription.search import tasks as subscription_tasks
 
 
 class SplitSubscriptionModuleTest(unittest.IsolatedAsyncioTestCase):
@@ -27,7 +29,7 @@ class SplitSubscriptionModuleTest(unittest.IsolatedAsyncioTestCase):
         payload = SubscriptionCreate(title="Drama", media_type="tv", keywords=["Drama"], target_path="/tv/Drama")
 
         with patch.object(subscription_tasks, "schedule_subscription_search", Mock(return_value={"ok": True})) as schedule, patch(
-            "app.services.subscription_create.sync_subscription_list_with_emby", AsyncMock(return_value={"ok": True, "updated": 0})
+            "app.services.subscription.crud.create.sync_subscription_list_with_emby", AsyncMock(return_value={"ok": True, "updated": 0})
         ) as sync_emby:
             created = await subscription_crud.create_subscription(payload)
             duplicate = await subscription_crud.create_subscription(payload)
@@ -50,7 +52,7 @@ class SplitSubscriptionModuleTest(unittest.IsolatedAsyncioTestCase):
             return {"ok": True, "updated": 1}
 
         with patch.object(subscription_tasks, "schedule_subscription_search", Mock(return_value={"ok": True})), patch(
-            "app.services.subscription_create.sync_subscription_list_with_emby", AsyncMock(side_effect=sync_created)
+            "app.services.subscription.crud.create.sync_subscription_list_with_emby", AsyncMock(side_effect=sync_created)
         ):
             created = await subscription_crud.create_subscription(payload)
 

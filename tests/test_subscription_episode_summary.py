@@ -1,5 +1,5 @@
 
-from app.services.subscription_episode_summary import episode_range_labels, subscription_episode_snapshot
+from app.services.subscription.episode.summary import episode_range_labels, subscription_episode_snapshot
 
 
 def test_episode_range_labels_compact_ranges() -> None:

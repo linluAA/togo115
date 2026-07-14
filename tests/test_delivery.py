@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from app.config import settings
 from app.db import db, init_db, json_dumps, utc_now
 from app.services.integrations import Pan115Adapter
-from app.services.subscription_delivery import deliver_resource
+from app.services.subscription.delivery.service import deliver_resource
 
 
 class FakeResponse:
@@ -102,7 +102,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
         bot = Mock()
         bot.forward_to_bot = AsyncMock(return_value=True)
 
-        with patch("app.services.subscription_delivery.Pan115Adapter", return_value=pan), patch("app.services.subscription_delivery.TelegramBotAdapter", return_value=bot):
+        with patch("app.services.subscription.delivery.service.Pan115Adapter", return_value=pan), patch("app.services.subscription.delivery.service.TelegramBotAdapter", return_value=bot):
             ok = await deliver_resource(resource_id)
 
         self.assertTrue(ok)
@@ -117,7 +117,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
         bot = Mock()
         bot.forward_to_bot = AsyncMock(return_value=True)
 
-        with patch("app.services.subscription_delivery.Pan115Adapter", return_value=pan), patch("app.services.subscription_delivery.TelegramBotAdapter", return_value=bot):
+        with patch("app.services.subscription.delivery.service.Pan115Adapter", return_value=pan), patch("app.services.subscription.delivery.service.TelegramBotAdapter", return_value=bot):
             ok = await deliver_resource(resource_id)
 
         self.assertTrue(ok)
@@ -132,7 +132,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
         bot = Mock()
         bot.forward_to_bot = AsyncMock(return_value=True)
 
-        with patch("app.services.subscription_delivery.Pan115Adapter", return_value=pan), patch("app.services.subscription_delivery.TelegramBotAdapter", return_value=bot):
+        with patch("app.services.subscription.delivery.service.Pan115Adapter", return_value=pan), patch("app.services.subscription.delivery.service.TelegramBotAdapter", return_value=bot):
             ok = await deliver_resource(resource_id)
 
         self.assertFalse(ok)
@@ -149,7 +149,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
         bot = Mock()
         bot.forward_to_bot = AsyncMock(return_value=True)
 
-        with patch("app.services.subscription_delivery.Pan115Adapter", return_value=pan), patch("app.services.subscription_delivery.TelegramBotAdapter", return_value=bot):
+        with patch("app.services.subscription.delivery.service.Pan115Adapter", return_value=pan), patch("app.services.subscription.delivery.service.TelegramBotAdapter", return_value=bot):
             ok = await deliver_resource(resource_id)
 
         self.assertTrue(ok)
@@ -163,7 +163,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
 
 
     def test_delivery_failed_status_classifier(self) -> None:
-        from app.services.subscription_delivery_state import _delivery_failed_status
+        from app.services.subscription.delivery.state import _delivery_failed_status
 
         self.assertEqual(_delivery_failed_status("115 \u5206\u4eab\u6709\u6548\u6027\u5f85\u590d\u68c0\uff0c\u7b49\u5f85\u91cd\u8bd5"), "pending_recheck")
         self.assertEqual(_delivery_failed_status("115 \u5206\u4eab\u94fe\u63a5\u5df2\u5931\u6548"), "link_invalid")
@@ -176,7 +176,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
         bot = Mock()
         bot.forward_to_bot = AsyncMock(return_value=True)
 
-        with patch("app.services.subscription_delivery.TelegramBotAdapter", return_value=bot):
+        with patch("app.services.subscription.delivery.service.TelegramBotAdapter", return_value=bot):
             first_ok = await deliver_resource(first_id)
             second_ok = await deliver_resource(second_id)
 

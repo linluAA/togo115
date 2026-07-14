@@ -1,7 +1,7 @@
 
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription_candidate_decision import decide_resource_candidate
-from app.services.subscription_resource_fallback import _fallback_result_candidates
+from app.services.subscription.match.candidate_decision import decide_resource_candidate
+from app.services.subscription.resource.fallback import _fallback_result_candidates
 
 
 def magnet(title: str, url_hash: str, priority: int = 0) -> SearchResult:

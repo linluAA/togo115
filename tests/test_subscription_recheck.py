@@ -8,7 +8,7 @@ from pathlib import Path
 from app.config import settings
 from app.db import db, init_db
 from app.services.adapters.pan115 import SHARE_AVAILABLE, SHARE_UNAVAILABLE, SHARE_UNKNOWN
-from app.services.subscription_recheck import list_due_recheck_resources, recheck_pending_115_resources
+from app.services.subscription.delivery.recheck import list_due_recheck_resources, recheck_pending_115_resources
 
 
 class FakePan115Adapter:
