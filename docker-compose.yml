@@ -1,6 +1,6 @@
 services:
   togo115:
-    image: ghcr.io/linluaa/togo115-app:master
+    image: ghcr.io/linluaa/togo115-app:main
     container_name: togo115
     restart: unless-stopped
     ports:
