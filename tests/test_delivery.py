@@ -163,12 +163,12 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
 
 
     def test_delivery_failed_status_classifier(self) -> None:
-        from app.services.subscription.delivery.state import _delivery_failed_status
+        from app.services.subscription.delivery.state import delivery_failed_status
 
-        self.assertEqual(_delivery_failed_status("115 \u5206\u4eab\u6709\u6548\u6027\u5f85\u590d\u68c0\uff0c\u7b49\u5f85\u91cd\u8bd5"), "pending_recheck")
-        self.assertEqual(_delivery_failed_status("115 \u5206\u4eab\u94fe\u63a5\u5df2\u5931\u6548"), "link_invalid")
-        self.assertEqual(_delivery_failed_status("network timeout"), "delivery_failed_retryable")
-        self.assertEqual(_delivery_failed_status("bot rejected"), "delivery_failed_final")
+        self.assertEqual(delivery_failed_status("115 \u5206\u4eab\u6709\u6548\u6027\u5f85\u590d\u68c0\uff0c\u7b49\u5f85\u91cd\u8bd5"), "pending_recheck")
+        self.assertEqual(delivery_failed_status("115 \u5206\u4eab\u94fe\u63a5\u5df2\u5931\u6548"), "link_invalid")
+        self.assertEqual(delivery_failed_status("network timeout"), "delivery_failed_retryable")
+        self.assertEqual(delivery_failed_status("bot rejected"), "delivery_failed_final")
 
     async def test_duplicate_delivery_link_is_not_forwarded_twice(self) -> None:
         first_id = self._resource("https://115cdn.com/s/swssxf43nbi?password=8888", "telegram_bot")

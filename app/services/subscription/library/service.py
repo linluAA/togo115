@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from app.db import add_log, db, json_dumps, utc_now
 from app.services.adapters.media import EmbyAdapter, TmdbAdapter
-from app.services.subscription.library.health import _enrich_subscriptions_with_health
+from app.services.subscription.library.health import enrich_subscriptions_with_health
 from app.services.subscription.library.match import (
     _emby_configured,
     _emby_item_matches,
     _episodes_for_subscription,
-    _mark_completed_subscription,
-    _subscription_should_hide,
+    mark_completed_subscription,
+    subscription_should_hide,
     result_matches_missing_episodes,
 )
-from app.services.subscription.library.snapshot import EMBY_SNAPSHOT_FAILED, EMBY_SYNC_TIMEOUT_SECONDS, _library_snapshot_or_none
+from app.services.subscription.library.snapshot import EMBY_SNAPSHOT_FAILED, EMBY_SYNC_TIMEOUT_SECONDS, library_snapshot_or_none
 from app.services.subscription.library.sync import sync_subscription_list_with_emby, sync_subscriptions_with_emby_snapshot
-from app.services.subscription.match.matching import _json_episode_key, _subscription_release_year, _tmdb_seasons_from_detail
+from app.services.subscription.match.matching import json_episode_key, subscription_release_year, tmdb_seasons_from_detail
 
 
 async def enrich_subscription_with_library(subscription: dict, snapshot: dict[str, list[dict]] | None = None) -> dict:
@@ -44,7 +44,7 @@ async def _enrich_subscription_with_tmdb(subscription: dict) -> dict:
         return subscription
 
     total = int(detail.get("number_of_episodes") or 0)
-    tmdb_seasons = _tmdb_seasons_from_detail(detail) if subscription.get("media_type") == "tv" else []
+    tmdb_seasons = tmdb_seasons_from_detail(detail) if subscription.get("media_type") == "tv" else []
     release_year = _release_year_from_detail(detail, subscription)
     if not (total or tmdb_seasons or release_year):
         return subscription
@@ -63,14 +63,14 @@ def _needs_tmdb_enrichment(subscription: dict) -> bool:
         and (
             not int(subscription.get("tmdb_total_count") or 0)
             or (subscription.get("media_type") == "tv" and not subscription.get("tmdb_seasons"))
-            or not _subscription_release_year(subscription)
+            or not subscription_release_year(subscription)
         )
     )
 
 
 def _release_year_from_detail(detail: dict, subscription: dict) -> int | None:
     release_year_text = str(detail.get("first_air_date") or detail.get("release_date") or "")[:4]
-    return int(release_year_text) if release_year_text.isdigit() else _subscription_release_year(subscription)
+    return int(release_year_text) if release_year_text.isdigit() else subscription_release_year(subscription)
 
 
 def _enrich_tv_subscription_with_library(subscription: dict, snapshot: dict[str, list[dict]]) -> dict:
@@ -79,7 +79,7 @@ def _enrich_tv_subscription_with_library(subscription: dict, snapshot: dict[str,
     match = next((item for item in series if _emby_item_matches(subscription, item)), None)
     series_id = str(match.get("Id") or "") if match else ""
     owned_episodes = _episodes_for_subscription(subscription, episodes, series_id)
-    enriched = {**subscription, "emby_episodes": owned_episodes, "emby_episode_keys": [_json_episode_key(key) for key in sorted(owned_episodes)]}
+    enriched = {**subscription, "emby_episodes": owned_episodes, "emby_episode_keys": [json_episode_key(key) for key in sorted(owned_episodes)]}
     if owned_episodes and len(owned_episodes) != int(subscription.get("emby_count") or 0):
         enriched["emby_count"] = len(owned_episodes)
     return enriched

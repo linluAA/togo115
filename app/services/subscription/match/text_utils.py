@@ -7,7 +7,7 @@ from typing import Any
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 
-def _compact_match_text(value: str | None) -> str:
+def compact_match_text(value: str | None) -> str:
     return MATCH_DROP_RE.sub("", str(value or "").casefold())
 
 
@@ -25,7 +25,7 @@ def _split_rule_words(value: Any) -> list[str]:
     return [part.strip() for part in re.split(r"[,?\n\r]+", str(value or "")) if part.strip()]
 
 
-def _normalize_quality_rules(value: Any) -> dict[str, Any]:
+def normalize_quality_rules(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         value = {}
     accept_mode = str(value.get("accept_mode") or "all").strip().lower()
@@ -39,14 +39,14 @@ def _normalize_quality_rules(value: Any) -> dict[str, Any]:
     }
 
 
-def _title_without_year(value: str | None) -> str:
+def title_without_year(value: str | None) -> str:
     text = str(value or "")
     text = re.sub(r"[\(（\[\【]\s*(?:19|20)\d{2}\s*[\)）\]\】]", " ", text)
     text = YEAR_RE.sub(" ", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _years_from_text(text: str | None) -> set[int]:
+def years_from_text(text: str | None) -> set[int]:
     years: set[int] = set()
     value = text or ""
     for match in YEAR_RE.finditer(value):

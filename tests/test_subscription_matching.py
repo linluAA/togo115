@@ -3,10 +3,10 @@ import sqlite3
 
 from app.services.integrations import SearchResult
 from app.services.subscription.resource.resources import canonical_115_url as _canonical_115_url, resource_dedupe_key as _resource_dedupe_key
-from app.services.subscription.resource.ops import _fallback_blocked_by_primary_resource, _resource_already_exists
+from app.services.subscription.resource.ops import fallback_blocked_by_primary_resource, resource_already_exists
 from app.services.subscription.library.match import result_matches_missing_episodes
 from app.services.subscription.match.matching import result_matches_subscription
-from app.services.subscription.resource.matching import _matching_results
+from app.services.subscription.resource.matching import matching_results
 from app.services.subscription.episode.parser import episodes_from_text
 
 
@@ -323,7 +323,7 @@ class SubscriptionMatchingTest(unittest.TestCase):
         conn.execute("CREATE TABLE resources (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription_id INTEGER, title TEXT, url TEXT, status TEXT)")
         try:
             conn.execute("INSERT INTO resources (subscription_id, title, url, status) VALUES (1, '南部档案 第 01-20 集', 'https://115.com/s/old?password=aaaa', 'delivered')")
-            self.assertIsNone(_resource_already_exists(conn, 1, result("南部档案 第 01-30 集")))
+            self.assertIsNone(resource_already_exists(conn, 1, result("南部档案 第 01-30 集")))
         finally:
             conn.close()
 
@@ -341,8 +341,8 @@ class SubscriptionMatchingTest(unittest.TestCase):
         }
         try:
             conn.execute("INSERT INTO resources (subscription_id, title, url, status) VALUES (1, '南部档案 第 01-30 集', 'https://115.com/s/failed?password=aaaa', 'failed')")
-            self.assertIsNone(_resource_already_exists(conn, 1, result("南部档案 第 21 集"), subscription))
-            self.assertIsNone(_resource_already_exists(conn, 1, SearchResult(title="南部档案 第 21 集", url="magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", source="site_plugin:test"), subscription))
+            self.assertIsNone(resource_already_exists(conn, 1, result("南部档案 第 21 集"), subscription))
+            self.assertIsNone(resource_already_exists(conn, 1, SearchResult(title="南部档案 第 21 集", url="magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", source="site_plugin:test"), subscription))
         finally:
             conn.close()
 
@@ -364,7 +364,7 @@ class SubscriptionMatchingTest(unittest.TestCase):
             context="灿如繁星 (2026) S01E01-E08\nTMDB ID: 285143",
         )
 
-        self.assertEqual(_matching_results(subscription, [invalid]), [])
+        self.assertEqual(matching_results(subscription, [invalid]), [])
 
     def test_failed_same_url_can_be_retried(self) -> None:
         conn = sqlite3.connect(":memory:")
@@ -383,7 +383,7 @@ class SubscriptionMatchingTest(unittest.TestCase):
                 "INSERT INTO resources (subscription_id, title, url, status) VALUES (1, '灿如繁星 S01E01-E08', ?, 'failed')",
                 (candidate.url,),
             )
-            self.assertIsNone(_resource_already_exists(conn, 1, candidate, subscription))
+            self.assertIsNone(resource_already_exists(conn, 1, candidate, subscription))
         finally:
             conn.close()
 
@@ -403,16 +403,16 @@ class SubscriptionMatchingTest(unittest.TestCase):
         fallback = SearchResult(title="南部档案 第 21 集", url="magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", source="site_plugin:test")
         try:
             conn.execute("INSERT INTO resources (subscription_id, title, url, status) VALUES (1, '南部档案 第 21 集', 'https://115.com/s/failed?password=aaaa', 'failed')")
-            self.assertFalse(_fallback_blocked_by_primary_resource(conn, subscription, fallback))
+            self.assertFalse(fallback_blocked_by_primary_resource(conn, subscription, fallback))
             conn.execute("INSERT INTO resources (subscription_id, title, url, status) VALUES (1, '南部档案 第 21 集', 'https://115.com/s/delivered?password=aaaa', 'delivered')")
-            self.assertFalse(_fallback_blocked_by_primary_resource(conn, subscription, fallback))
+            self.assertFalse(fallback_blocked_by_primary_resource(conn, subscription, fallback))
             fallback_115 = SearchResult(title="南部档案 第 21 集", url="https://115.com/s/new115?password=bbbb", source="rss:test")
-            self.assertTrue(_fallback_blocked_by_primary_resource(conn, subscription, fallback_115))
+            self.assertTrue(fallback_blocked_by_primary_resource(conn, subscription, fallback_115))
         finally:
             conn.close()
 
     def test_magnet_fallback_not_blocked_by_existing_115_resource(self) -> None:
-        from app.services.subscription.resource.fallback import _fallback_blocked_by_primary_resource
+        from app.services.subscription.resource.fallback import fallback_blocked_by_primary_resource
 
         subscription = {"id": 1, "title": "后室", "media_type": "movie"}
         result = SearchResult(
@@ -421,7 +421,7 @@ class SubscriptionMatchingTest(unittest.TestCase):
             source="site_plugin:BT1207",
         )
 
-        blocked = _fallback_blocked_by_primary_resource(None, subscription, result, [{"title": "后室", "url": "https://115.com/s/abc", "status": "pending"}])
+        blocked = fallback_blocked_by_primary_resource(None, subscription, result, [{"title": "后室", "url": "https://115.com/s/abc", "status": "pending"}])
 
         self.assertFalse(blocked)
 

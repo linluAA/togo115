@@ -5,14 +5,14 @@ from importlib import import_module
 
 from app.db import add_log, db, json_dumps, utc_now
 from app.schemas import SubscriptionCreate
-from app.services.subscription.crud.duplicates import _duplicate_subscription
+from app.services.subscription.crud.duplicates import duplicate_subscription
 from app.services.subscription.crud.rows import get_subscription
 from app.services.subscription.library.sync import sync_subscription_list_with_emby
-from app.services.subscription.match.matching import _normalize_quality_rules, _subscription_release_year
+from app.services.subscription.match.matching import normalize_quality_rules, subscription_release_year
 
 
 async def create_subscription(payload: SubscriptionCreate) -> dict:
-    existing = _duplicate_subscription(payload)
+    existing = duplicate_subscription(payload)
     if existing:
         add_log("info", "subscription", "订阅已存在，跳过重复创建", {"id": existing.get("id"), "title": existing.get("title")})
         return existing
@@ -39,7 +39,7 @@ def _insert_subscription_payload(payload: SubscriptionCreate) -> int:
                 values,
             )
         except sqlite3.IntegrityError:
-            existing = _duplicate_subscription(payload)
+            existing = duplicate_subscription(payload)
             if existing:
                 return int(existing["id"])
             raise
@@ -48,7 +48,7 @@ def _insert_subscription_payload(payload: SubscriptionCreate) -> int:
 
 def _create_subscription_values(payload: SubscriptionCreate, now: str) -> tuple:
     keywords = payload.keywords or [payload.title]
-    release_year = payload.release_year or _subscription_release_year({"title": payload.title})
+    release_year = payload.release_year or subscription_release_year({"title": payload.title})
     return (
         payload.title,
         payload.media_type,
@@ -57,7 +57,7 @@ def _create_subscription_values(payload: SubscriptionCreate, now: str) -> tuple:
         payload.overview,
         release_year,
         json_dumps(keywords),
-        json_dumps(_normalize_quality_rules(payload.quality_rules)),
+        json_dumps(normalize_quality_rules(payload.quality_rules)),
         payload.delivery_mode,
         payload.target_path,
         int(payload.tmdb_total_count or 0),

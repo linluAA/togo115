@@ -4,8 +4,8 @@ from typing import Any
 
 from app.db import add_log
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription.match.matching import _result_debug_payload, _result_skip_reason, _skip_reason_summary
-from app.services.subscription.resource.ops import _unmatched_results
+from app.services.subscription.match.matching import result_debug_payload, result_skip_reason, skip_reason_summary
+from app.services.subscription.resource.ops import unmatched_results
 
 
 def log_unmatched_results(
@@ -20,8 +20,8 @@ def log_unmatched_results(
     skipped = len(results) - len(matched)
     if skipped <= 0:
         return
-    skipped_results = _unmatched_results(results, matched)
-    reason_summary = _skip_reason_summary(subscription, skipped_results)
+    skipped_results = unmatched_results(results, matched)
+    reason_summary = skip_reason_summary(subscription, skipped_results)
     add_log(
         level_when_no_match if not matched else "debug",
         "subscription",
@@ -47,9 +47,9 @@ def log_unmatched_fallback_groups(
     skipped_results = [
         result
         for _, group_results, matched_results in group_matches
-        for result in _unmatched_results(group_results, matched_results)
+        for result in unmatched_results(group_results, matched_results)
     ]
-    reason_summary = _skip_reason_summary(subscription, skipped_results)
+    reason_summary = skip_reason_summary(subscription, skipped_results)
     add_log("debug", "subscription", _unmatched_message("订阅源/磁力", reason_summary), {"id": int(subscription["id"]), "skipped": skipped})
 
 
@@ -60,6 +60,6 @@ def _unmatched_message(source_label: str, reason_summary: str) -> str:
 
 
 def _unmatched_sample(subscription: dict, result: SearchResult) -> dict[str, Any]:
-    payload = _result_debug_payload(result)
-    payload["reason"] = _result_skip_reason(subscription, result)
+    payload = result_debug_payload(result)
+    payload["reason"] = result_skip_reason(subscription, result)
     return payload

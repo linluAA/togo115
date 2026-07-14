@@ -7,13 +7,13 @@ from app.services.subscription.episode.parser import (
     _all_tmdb_episode_keys,
     _episode_key_from_item,
     _episode_keys_from_json,
-    _episode_keys_from_text_for_subscription,
-    _missing_episode_keys,
+    episode_keys_from_text_for_subscription,
+    missing_episode_keys,
 )
 from app.services.subscription.match.matching import (
-    _compact_match_text,
+    compact_match_text,
     _result_is_primary_115_resource,
-    _result_text,
+    result_text,
 )
 
 
@@ -36,11 +36,11 @@ def _emby_item_matches(subscription: dict, item: dict) -> bool:
     item_tmdb_id = _emby_provider_tmdb_id(item)
     if subscription_tmdb_id and item_tmdb_id and subscription_tmdb_id == item_tmdb_id:
         return True
-    subscription_title = _compact_match_text(subscription.get("title"))
+    subscription_title = compact_match_text(subscription.get("title"))
     if not subscription_title:
         return False
     for name in _emby_names(item):
-        item_title = _compact_match_text(name)
+        item_title = compact_match_text(name)
         if item_title == subscription_title:
             return True
         if len(subscription_title) >= 4 and subscription_title in item_title:
@@ -81,11 +81,11 @@ def _subscription_is_complete(subscription: dict, in_library: bool | None = None
     return bool(total and count >= total)
 
 
-def _subscription_should_hide(subscription: dict) -> bool:
+def subscription_should_hide(subscription: dict) -> bool:
     return subscription.get("status") == "completed" or _subscription_is_complete(subscription)
 
 
-def _mark_completed_subscription(subscription: dict) -> None:
+def mark_completed_subscription(subscription: dict) -> None:
     if subscription.get("status") == "completed":
         return
     with db() as conn:
@@ -109,15 +109,15 @@ def result_matches_missing_episodes(subscription: dict, result: SearchResult, *e
         return not bool(subscription.get("in_library"))
     if subscription.get("emby_snapshot_failed"):
         return False
-    text = _result_text(result, *extra_texts)
-    episodes = _episode_keys_from_text_for_subscription(subscription, text)
+    text = result_text(result, *extra_texts)
+    episodes = episode_keys_from_text_for_subscription(subscription, text)
     owned = _owned_episode_keys(subscription)
     if episodes and owned and episodes.issubset(owned):
         return False
     expected = _all_tmdb_episode_keys(subscription)
     if not expected:
         return not bool(episodes and owned)
-    missing = _missing_episode_keys(subscription)
+    missing = missing_episode_keys(subscription)
     if not missing:
         return False
     if episodes:

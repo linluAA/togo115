@@ -22,7 +22,7 @@ def reset_library_snapshot_cache() -> None:
     _emby_snapshot_cache = None
 
 
-async def _library_snapshot_or_none(force: bool = False) -> dict[str, list[dict[str, Any]]] | None:
+async def library_snapshot_or_none(force: bool = False) -> dict[str, list[dict[str, Any]]] | None:
     global _emby_snapshot_cache
     if not _emby_configured():
         return None

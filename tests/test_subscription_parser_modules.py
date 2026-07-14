@@ -1,9 +1,9 @@
 from app.services.subscription.episode.parser import (
-    _episode_keys_from_text_for_subscription,
-    _missing_episode_keys,
+    episode_keys_from_text_for_subscription,
+    missing_episode_keys,
     episodes_from_text,
 )
-from app.services.subscription.match.text_utils import _title_without_year, _years_from_text
+from app.services.subscription.match.text_utils import title_without_year, years_from_text
 
 
 def test_episode_parser_extracts_explicit_season_range() -> None:
@@ -17,8 +17,8 @@ def test_episode_parser_maps_full_pack_to_missing_episode_range() -> None:
         "emby_episode_keys": ["1x1", "1x2", "1x3", "1x4", "1x5"],
     }
 
-    assert _missing_episode_keys(subscription) == {(1, 6), (1, 7), (1, 8), (1, 9), (1, 10)}
-    assert _episode_keys_from_text_for_subscription(subscription, "Drama 10 episodes complete 1080p") == {
+    assert missing_episode_keys(subscription) == {(1, 6), (1, 7), (1, 8), (1, 9), (1, 10)}
+    assert episode_keys_from_text_for_subscription(subscription, "Drama 10 episodes complete 1080p") == {
         (1, 1),
         (1, 2),
         (1, 3),
@@ -58,11 +58,11 @@ def test_episode_parser_handles_native_chinese_season_context() -> None:
         "emby_episode_keys": [f"1x{episode}" for episode in range(1, 11)],
     }
 
-    assert _episode_keys_from_text_for_subscription(subscription, "\u7b2c\u4e8c\u5b63 \u7b2c\u4e03\u96c6") == {(2, 7)}
-    assert _episode_keys_from_text_for_subscription(subscription, "\u7b2c2\u5b63\u516812\u96c6 1080p") == {
+    assert episode_keys_from_text_for_subscription(subscription, "\u7b2c\u4e8c\u5b63 \u7b2c\u4e03\u96c6") == {(2, 7)}
+    assert episode_keys_from_text_for_subscription(subscription, "\u7b2c2\u5b63\u516812\u96c6 1080p") == {
         (2, episode) for episode in range(1, 13)
     }
-    assert _episode_keys_from_text_for_subscription(subscription, "\u7b2c2\u5b63 \u66f4\u65b0\u81f3\u7b2c8\u96c6") == {
+    assert episode_keys_from_text_for_subscription(subscription, "\u7b2c2\u5b63 \u66f4\u65b0\u81f3\u7b2c8\u96c6") == {
         (2, episode) for episode in range(1, 9)
     }
 
@@ -82,11 +82,11 @@ def test_episode_parser_handles_real_world_title_variants() -> None:
     assert episodes_from_text("\u5c06\u591c 2026 \u7b2c01\u81f308\u96c6 1080p") == {
         (1, episode) for episode in range(1, 9)
     }
-    assert _episode_keys_from_text_for_subscription(subscription, "\u5c06\u591c \u7b2c\u4e8c\u5b63 01-12 1080p") == {
+    assert episode_keys_from_text_for_subscription(subscription, "\u5c06\u591c \u7b2c\u4e8c\u5b63 01-12 1080p") == {
         (2, episode) for episode in range(1, 13)
     }
 
 
 def test_text_utils_extracts_and_removes_year() -> None:
-    assert _years_from_text("Drama (2026) 1080p") == {2026}
-    assert _title_without_year("Drama (2026)") == "Drama"
+    assert years_from_text("Drama (2026) 1080p") == {2026}
+    assert title_without_year("Drama (2026)") == "Drama"

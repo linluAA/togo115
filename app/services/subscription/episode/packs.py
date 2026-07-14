@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.services.subscription.episode.explicit import _episode_counts_from_pack_text, _season_numbers_from_text, episodes_from_text
-from app.services.subscription.episode.keys import _all_tmdb_episode_keys, _expand_episode_range, _missing_episode_keys
+from app.services.subscription.episode.keys import _all_tmdb_episode_keys, _expand_episode_range, missing_episode_keys
 from app.services.subscription.episode.patterns import FULL_SERIES_PACK_RE, FULL_SERIES_WIDE_PACK_RE, PLAIN_EPISODE_RANGE_RE, SEASON_PACK_WORD_RE
 
 
@@ -59,7 +59,7 @@ def _pack_episode_keys_from_text(subscription: dict, text: str | None) -> set[tu
         return set()
     if FULL_SERIES_WIDE_PACK_RE.search(value) or FULL_SERIES_PACK_RE.search(value):
         return set(expected)
-    return _season_keys_for_counts(subscription, _episode_counts_from_pack_text(value), _missing_episode_keys(subscription)) & expected
+    return _season_keys_for_counts(subscription, _episode_counts_from_pack_text(value), missing_episode_keys(subscription)) & expected
 
 
 def _pack_keys_with_season_context(
@@ -101,7 +101,7 @@ def _season_count_keys(text: str, season: int, expected_by_season: dict[int, set
     return _expand_episode_range(season, 1, max(counts))
 
 
-def _episode_keys_from_text_for_subscription(subscription: dict | None, text: str | None) -> set[tuple[int, int]]:
+def episode_keys_from_text_for_subscription(subscription: dict | None, text: str | None) -> set[tuple[int, int]]:
     episodes = episodes_from_text(text or "")
     if subscription:
         seasons = _season_numbers_from_text(text)

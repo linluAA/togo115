@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
 
-from app.services.link_parser import _years_from_text
+from app.services.link_parser import years_from_text
 
 
 class RssTorznabUrlBuilderMixin:
@@ -20,7 +20,7 @@ class RssTorznabUrlBuilderMixin:
         return url
 
     def _query_release_year(self, query: str | None) -> int | None:
-        years = _years_from_text(query)
+        years = years_from_text(query)
         return min(years) if years else None
 
     def _templated_source_url(self, url: str, query: str | None) -> str | None:

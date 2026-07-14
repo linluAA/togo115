@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.services.subscription.episode.chinese_numbers import CHINESE_DIGITS, _chinese_number_to_int
+from app.services.subscription.episode.chinese_numbers import CHINESE_DIGITS, chinese_number_to_int
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,5 +78,5 @@ def test_chinese_number_table_uses_native_literals() -> None:
     assert CHINESE_DIGITS["\u4e00"] == 1
     assert CHINESE_DIGITS["\u4e24"] == 2
     assert CHINESE_DIGITS["\u516b"] == 8
-    assert _chinese_number_to_int("\u5341\u4e8c") == 12
-    assert _chinese_number_to_int("\u4e8c\u5341\u516d") == 26
+    assert chinese_number_to_int("\u5341\u4e8c") == 12
+    assert chinese_number_to_int("\u4e8c\u5341\u516d") == 26

@@ -219,7 +219,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             )
             resource_id = int(cursor.lastrowid)
 
-        with patch("app.services.subscription.delivery.service._deliver_resource_url", AsyncMock(return_value=(True, ""))) as deliver_url:
+        with patch("app.services.subscription.delivery.service.deliver_resource_url", AsyncMock(return_value=(True, ""))) as deliver_url:
             ok = await deliver_resource(resource_id)
 
         self.assertFalse(ok)
@@ -624,8 +624,8 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.library.snapshot._emby_configured", return_value=True), patch("app.services.subscription.library.snapshot.EmbyAdapter") as emby_cls:
             emby_cls.return_value.library_snapshot = AsyncMock(return_value=snapshot)
-            first = await snapshot_module._library_snapshot_or_none()
-            second = await snapshot_module._library_snapshot_or_none()
+            first = await snapshot_module.library_snapshot_or_none()
+            second = await snapshot_module.library_snapshot_or_none()
 
         self.assertIs(first, snapshot)
         self.assertIs(second, snapshot)
@@ -635,7 +635,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         self._subscription()
 
         search_mock = AsyncMock(return_value=[])
-        with patch("app.services.subscription.search.all._library_snapshot_or_none", AsyncMock(return_value=None)), patch(
+        with patch("app.services.subscription.search.all.library_snapshot_or_none", AsyncMock(return_value=None)), patch(
             "app.services.subscription.search.all._search_and_attach_resources_guarded", search_mock
         ):
             result = await search_all_active_subscriptions()
@@ -656,7 +656,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         async def stuck_search(*args, **kwargs):
             await asyncio.sleep(0.2)
 
-        with patch("app.services.subscription.search.all._library_snapshot_or_none", AsyncMock(return_value=None)), patch(
+        with patch("app.services.subscription.search.all.library_snapshot_or_none", AsyncMock(return_value=None)), patch(
             "app.services.subscription.search.all._search_and_attach_resources_guarded", AsyncMock(side_effect=stuck_search)
         ), patch.object(runtime_module, "SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS", 0.01):
             result = await search_all_active_subscriptions()

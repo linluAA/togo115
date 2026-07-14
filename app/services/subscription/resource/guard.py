@@ -3,9 +3,9 @@ from __future__ import annotations
 from app.db import add_log
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.match.candidate_decision import decide_resource_candidate
-from app.services.subscription.episode.parser import _episode_keys_from_text_for_subscription, _missing_episode_keys
-from app.services.subscription.match.matching import _result_debug_payload
-from app.services.subscription.match.result_utils import _result_text
+from app.services.subscription.episode.parser import episode_keys_from_text_for_subscription, missing_episode_keys
+from app.services.subscription.match.matching import result_debug_payload
+from app.services.subscription.match.result_utils import result_text
 
 SKIP_REASONS = {"episodes_already_in_library", "episodes_not_needed", "movie_already_in_library"}
 
@@ -27,7 +27,7 @@ def resource_allowed_for_subscription(
             "warning",
             "subscription",
             "资源缺集守卫判断异常，已跳过该资源",
-            {"id": subscription.get("id"), **_result_debug_payload(result), "scope": scope, "error": str(exc)},
+            {"id": subscription.get("id"), **result_debug_payload(result), "scope": scope, "error": str(exc)},
         )
         return False
     if decision.accepted:
@@ -43,7 +43,7 @@ def resource_allowed_for_subscription(
         "资源不在订阅缺失范围内，已跳过",
         {
             "id": subscription.get("id"),
-            **_result_debug_payload(result),
+            **result_debug_payload(result),
             "scope": scope,
             "reason": reason,
             "episodes": [f"{season}x{episode}" for season, episode in sorted(decision.episodes)],
@@ -56,10 +56,10 @@ def resource_allowed_for_subscription(
 def _episode_skip_reason(subscription: dict, result: SearchResult) -> str:
     if subscription.get("media_type") != "tv":
         return "movie_already_in_library" if subscription.get("in_library") else ""
-    episodes = _episode_keys_from_text_for_subscription(subscription, _result_text(result))
+    episodes = episode_keys_from_text_for_subscription(subscription, result_text(result))
     if not episodes:
         return ""
-    missing = _missing_episode_keys(subscription)
+    missing = missing_episode_keys(subscription)
     if missing and not episodes.intersection(missing):
         return "episodes_already_in_library"
     if not missing and _has_episode_scope(subscription):

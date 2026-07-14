@@ -11,7 +11,7 @@ from app.services.link_parser import (
     MAGNET_WEB_DETAIL_LIMIT,
     _html_container_fragment,
     _strip_html,
-    _years_from_text,
+    years_from_text,
 )
 
 
@@ -70,7 +70,7 @@ class RssTorznabDetailCandidateMixin:
             href = unescape((href_match.group("href") or href_match.group("bare") or "").strip())
             label = _strip_html(anchor.group("label") or "")
             nearby = self._nearby_text_for_anchor(html_text or "", anchor.start(), anchor.end())
-            candidates.append((href, label, nearby, _years_from_text("\n".join([label, nearby]))))
+            candidates.append((href, label, nearby, years_from_text("\n".join([label, nearby]))))
         return candidates
 
     def _score_magnet_web_detail_path(self, path: str) -> int:

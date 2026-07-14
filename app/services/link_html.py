@@ -4,7 +4,7 @@ import re
 from html import unescape
 
 from app.services.link_downloads import BTIH_HASH_RE
-from app.services.link_search_utils import _years_from_text
+from app.services.link_search_utils import years_from_text
 
 HTML_ANCHOR_RE = re.compile(r"<a\b(?P<attrs>[^>]*)>(?P<label>.*?)</a>", re.I | re.S)
 HTML_HREF_RE = re.compile(r"\bhref\s*=\s*([\"'])(?P<href>.*?)\1|\bhref\s*=\s*(?P<bare>[^\s>]+)", re.I | re.S)
@@ -84,7 +84,7 @@ def _title_from_link_context(context: str, fallback: str) -> str:
             score += 8
         if re.search(r"(?i)(s\d{1,2}e\d{1,3}|ep?\d{1,3}|第\s*\d{1,3}\s*[集话話])", line):
             score += 5
-        if _years_from_text(line):
+        if years_from_text(line):
             score += 3
         if len(line) >= 8:
             score += 2

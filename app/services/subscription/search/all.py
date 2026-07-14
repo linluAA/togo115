@@ -5,20 +5,20 @@ from importlib import import_module
 
 from app.db import add_log
 import app.services.subscription.runtime as runtime
-from app.services.subscription.crud.service import _active_subscriptions, _mark_subscription_checked, get_subscription
+from app.services.subscription.crud.service import active_subscriptions, mark_subscription_checked, get_subscription
 from app.services.subscription.library.service import EMBY_SYNC_TIMEOUT_SECONDS, sync_subscriptions_with_emby_snapshot
-from app.services.subscription.library.snapshot import _library_snapshot_or_none
+from app.services.subscription.library.snapshot import library_snapshot_or_none
 
 
 async def search_all_active_subscriptions() -> dict:
-    subscriptions = _active_subscriptions()
+    subscriptions = active_subscriptions()
     add_log(
         "info",
         "subscription",
         "搜索全部活跃订阅开始",
         {"active": len(subscriptions), "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY},
     )
-    snapshot = await _library_snapshot_or_none()
+    snapshot = await library_snapshot_or_none()
     subscriptions = await _sync_emby_before_search(subscriptions, snapshot)
     outcomes = await asyncio.gather(*(_search_one(subscription, snapshot) for subscription in subscriptions))
     searched = sum(item[0] for item in outcomes)
@@ -39,7 +39,7 @@ async def _sync_emby_before_search(subscriptions: list[dict], snapshot) -> list[
     try:
         add_log("debug", "subscription", "\u641c\u7d22\u524d\u5f00\u59cb\u540c\u6b65 Emby \u5165\u5e93\u72b6\u6001", {"active": len(subscriptions)})
         await asyncio.wait_for(sync_subscriptions_with_emby_snapshot(subscriptions, snapshot), timeout=EMBY_SYNC_TIMEOUT_SECONDS)
-        subscriptions = _active_subscriptions()
+        subscriptions = active_subscriptions()
         add_log("debug", "subscription", "\u641c\u7d22\u524d Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5b8c\u6210", {"active": len(subscriptions)})
     except asyncio.TimeoutError:
         add_log("warning", "subscription", "\u641c\u7d22\u524d Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u8d85\u65f6\uff0c\u8df3\u8fc7\u540c\u6b65\u7ee7\u7eed\u641c\u7d22", {"timeout": EMBY_SYNC_TIMEOUT_SECONDS})
@@ -60,7 +60,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
             timeout=runtime.SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        _mark_subscription_checked(int(subscription["id"]))
+        mark_subscription_checked(int(subscription["id"]))
         add_log(
             "error",
             "subscription",
@@ -69,7 +69,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
         )
         return (1, 0, 1)
     except Exception as exc:
-        _mark_subscription_checked(int(subscription["id"]))
+        mark_subscription_checked(int(subscription["id"]))
         add_log(
             "error",
             "subscription",

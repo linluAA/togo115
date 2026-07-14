@@ -5,13 +5,13 @@ from typing import Any
 from app.db import add_log, db, json_dumps, utc_now
 from app.services.adapters.media import TmdbAdapter
 from app.services.subscription.library.match import _emby_configured
-from app.services.subscription.library.snapshot import _library_snapshot_or_none
+from app.services.subscription.library.snapshot import library_snapshot_or_none
 from app.services.subscription.library.state import (
     _library_state,
     _series_episode_count,
     _series_episode_count_by_name,
 )
-from app.services.subscription.match.matching import _compact_match_text, _json_episode_key
+from app.services.subscription.match.matching import compact_match_text, json_episode_key
 
 
 async def sync_subscription_list_with_emby(subscriptions: list[dict], force: bool = False) -> dict:
@@ -20,7 +20,7 @@ async def sync_subscription_list_with_emby(subscriptions: list[dict], force: boo
     if not _emby_configured():
         return {"ok": True, "updated": 0, "matched": 0, "skipped": "emby_not_configured"}
     try:
-        snapshot = await _library_snapshot_or_none(force=force)
+        snapshot = await library_snapshot_or_none(force=force)
         if snapshot is None or "__failed__" in snapshot:
             return {"ok": False, "updated": 0, "matched": 0, "error": "emby_snapshot_failed"}
     except Exception as exc:
@@ -61,7 +61,7 @@ def _episode_counts(episodes: list[dict[str, Any]]) -> dict[str, dict[str, int]]
         series_id = str(episode.get("SeriesId") or episode.get("ParentId") or "")
         if series_id:
             by_series_id[series_id] = by_series_id.get(series_id, 0) + 1
-        series_name = _compact_match_text(episode.get("SeriesName"))
+        series_name = compact_match_text(episode.get("SeriesName"))
         if series_name:
             by_series_name[series_name] = by_series_name.get(series_name, 0) + 1
     return {"by_series_id": by_series_id, "by_series_name": by_series_name}
@@ -86,7 +86,7 @@ def _needs_tmdb_detail(subscription: dict) -> bool:
 
 
 def _subscription_state_unchanged(subscription: dict, state: dict[str, Any]) -> bool:
-    episode_keys = [_json_episode_key(key) for key in sorted(state["owned_episodes"])]
+    episode_keys = [json_episode_key(key) for key in sorted(state["owned_episodes"])]
     return (
         subscription.get("in_library") == bool(state["in_library"])
         and int(subscription.get("emby_count") or 0) == state["emby_count"]
@@ -111,7 +111,7 @@ def _update_subscription_state(conn, subscription_id: int, state: dict[str, Any]
             state["emby_count"],
             state["tmdb_total_count"],
             json_dumps(state["tmdb_seasons"]),
-            json_dumps([_json_episode_key(key) for key in sorted(state["owned_episodes"])]),
+            json_dumps([json_episode_key(key) for key in sorted(state["owned_episodes"])]),
             state["status"],
             state["completed_at"],
             now,

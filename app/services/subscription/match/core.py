@@ -10,7 +10,7 @@ from app.services.subscription.match.identity import (
     _tmdb_ids_from_text,
 )
 from app.services.subscription.match.quality import result_matches_quality_rules
-from app.services.subscription.match.text_utils import _compact_match_text
+from app.services.subscription.match.text_utils import compact_match_text
 from app.services.types import SearchResult
 
 
@@ -19,7 +19,7 @@ def result_matches_subscription(subscription: dict, result: SearchResult, *extra
     if not text:
         return False
     raw_haystack = text.casefold()
-    compact_haystack = _compact_match_text(text)
+    compact_haystack = compact_match_text(text)
     title_term, keyword_terms = _subscription_required_terms(subscription)
     if _result_title_identity_conflicts(subscription, result):
         return False

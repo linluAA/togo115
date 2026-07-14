@@ -6,19 +6,19 @@ from typing import Any
 
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.match.matching import (
-    _compact_match_text,
-    _episode_keys_from_text_for_subscription,
-    _result_text,
-    _title_without_year,
+    compact_match_text,
+    episode_keys_from_text_for_subscription,
+    result_text,
+    title_without_year,
 )
 from app.services.subscription.resource.resources import (
-    existing_resource_rows as _existing_resource_rows,
+    existing_resource_rows as existing_resource_rows,
     resource_dedupe_key as _resource_dedupe_key,
     resource_status_is_effective as _resource_status_is_effective,
 )
 
 
-def _resource_already_exists(
+def resource_already_exists(
     conn: sqlite3.Connection,
     subscription_id: int,
     result: SearchResult,
@@ -26,9 +26,9 @@ def _resource_already_exists(
     existing_rows: list[dict[str, Any]] | None = None,
 ) -> str | None:
     candidate_key = _resource_dedupe_key(result.url)
-    result_episodes = _episode_keys_from_text_for_subscription(subscription, _result_text(result))
-    result_title_key = _compact_match_text(_title_without_year(getattr(result, "title", "")) or getattr(result, "title", ""))
-    rows = existing_rows if existing_rows is not None else _existing_resource_rows(conn, subscription_id)
+    result_episodes = episode_keys_from_text_for_subscription(subscription, result_text(result))
+    result_title_key = compact_match_text(title_without_year(getattr(result, "title", "")) or getattr(result, "title", ""))
+    rows = existing_rows if existing_rows is not None else existing_resource_rows(conn, subscription_id)
     for row in rows:
         reason = _duplicate_reason_for_row(subscription, result_episodes, result_title_key, candidate_key, row)
         if reason:
@@ -49,7 +49,7 @@ def _duplicate_reason_for_row(
         return f"same_{candidate_key[0]}" if existing_effective else None
     if not existing_effective:
         return None
-    existing_episodes = _episode_keys_from_text_for_subscription(subscription, str(row.get("title") or ""))
+    existing_episodes = episode_keys_from_text_for_subscription(subscription, str(row.get("title") or ""))
     if result_episodes and existing_episodes and result_episodes.issubset(existing_episodes):
         return "covered_episodes"
     return _similar_title_reason(result_title_key, row, result_episodes, existing_episodes)
@@ -61,7 +61,7 @@ def _similar_title_reason(
     result_episodes: set[tuple[int, int]],
     existing_episodes: set[tuple[int, int]],
 ) -> str | None:
-    existing_title_key = _compact_match_text(_title_without_year(row.get("title")) or row.get("title"))
+    existing_title_key = compact_match_text(title_without_year(row.get("title")) or row.get("title"))
     if not result_title_key or not existing_title_key:
         return None
     similarity = SequenceMatcher(None, result_title_key, existing_title_key).ratio()

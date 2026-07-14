@@ -5,7 +5,7 @@ from app.schemas import SearchRequest
 from app.services.adapters.telegram import TelegramClientAdapter
 from app.services.sources.rss_torznab import RssTorznabAdapter
 from app.services.subscription import get_subscription
-from app.services.subscription.resource.ops import _best_fallback_result, _matching_results
+from app.services.subscription.resource.ops import best_fallback_result, matching_results
 
 
 def subscription_like_from_payload(payload: SearchRequest) -> dict:
@@ -47,21 +47,21 @@ async def _manual_search_resources(payload: SearchRequest) -> dict:
     except Exception as exc:
         telegram_results = []
         add_log("warning", "search", "手动搜索 Telegram 历史失败，继续尝试订阅源/磁力", {"title": payload.title, "error": str(exc)})
-    matched = _matching_results(subscription_like, telegram_results)
+    matched = matching_results(subscription_like, telegram_results)
     if not matched:
         try:
             source_groups = await RssTorznabAdapter().search_history_by_priority_until_match(
                 search_title,
                 payload.keywords,
-                lambda result: bool(_matching_results(subscription_like, [result])),
+                lambda result: bool(matching_results(subscription_like, [result])),
                 query_context=subscription_like,
             )
         except Exception as exc:
             source_groups = []
             add_log("warning", "search", "手动搜索订阅源/磁力失败", {"title": payload.title, "error": str(exc)})
         for group in source_groups:
-            fallback_matches = _matching_results(subscription_like, list(group["results"]))
-            best_result = _best_fallback_result(fallback_matches, subscription_like)
+            fallback_matches = matching_results(subscription_like, list(group["results"]))
+            best_result = best_fallback_result(fallback_matches, subscription_like)
             if best_result:
                 matched = [best_result]
                 break

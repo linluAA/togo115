@@ -12,11 +12,19 @@ from app.services.subscription import (
 )
 ```
 
-## Layout (P2)
+Subpackages also expose focused public helpers, e.g.:
+
+```python
+from app.services.subscription.match import result_matches_subscription
+from app.services.subscription.delivery import deliver_resource_url
+from app.services.subscription.resource import matching_results
+```
+
+## Layout
 
 ```text
 subscription/
-  api.py              # stable public API
+  api.py              # stable public API (lazy via package __init__)
   runtime.py
   crud/               # create/list/update/delete
   episode/            # episode parsing
@@ -30,11 +38,17 @@ subscription/
 
 ## Compatibility
 
-Flat modules like ``app.services.subscription_crud`` remain as **shims** that
-re-export the new locations. Prefer the package paths or the public API.
+Flat modules like `app.services.subscription_crud` remain as **deprecated shims**
+(re-export + `DeprecationWarning`). Prefer package paths or the public API.
+
+## Conventions (P3)
+
+- Cross-subpackage helpers used outside their defining module should be
+  **public names** (no leading `_`).
+- Leading `_` means package-local implementation detail.
+- Do not import private helpers from outside `app.services.subscription.*`.
 
 ## Next
 
-- Stop using private ``_`` imports across packages
-- Collapse pure re-export barrels
+- Remove flat shims after callers migrate
 - Telegram mixin → pipeline (separate domain)

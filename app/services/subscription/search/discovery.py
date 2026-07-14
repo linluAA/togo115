@@ -8,13 +8,13 @@ import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram import TelegramClientAdapter
 from app.services.link_downloads import is_valid_download_link
 from app.services.sources.rss_torznab import RssTorznabAdapter, SearchResult
-from app.services.subscription.match.matching import _extra_search_keywords, _result_debug_payload
+from app.services.subscription.match.matching import extra_search_keywords, result_debug_payload
 from app.services.subscription.resource.ops import (
-    _existing_resource_rows,
-    _fallback_blocked_by_primary_resource,
-    _matching_results,
-    _resource_already_exists,
-    _subscription_115_resources,
+    existing_resource_rows,
+    fallback_blocked_by_primary_resource,
+    matching_results,
+    resource_already_exists,
+    subscription_115_resources,
 )
 
 
@@ -63,7 +63,7 @@ async def search_telegram_history(
 
 def _telegram_search_call(subscription: dict, search_title: str, *, incremental: bool, fast: bool):
     adapter = TelegramClientAdapter()
-    keywords = _extra_search_keywords(subscription)
+    keywords = extra_search_keywords(subscription)
     if fast and not incremental:
         return adapter.search_history_fast(search_title, keywords)
     return adapter.search_history(search_title, keywords, incremental=incremental)
@@ -80,22 +80,22 @@ def fallback_usable_checker(facade: Any, subscription: dict) -> Callable[[Search
         try:
             if not is_valid_download_link(getattr(result, "url", "")):
                 return False
-            if not _matching_results(subscription, [result]):
+            if not matching_results(subscription, [result]):
                 return False
             with db() as conn:
                 if existing_rows is None:
-                    existing_rows = _existing_resource_rows(conn, subscription_id)
+                    existing_rows = existing_resource_rows(conn, subscription_id)
                 if existing_115 is None:
-                    existing_115 = _subscription_115_resources(conn, subscription_id)
-                if _fallback_blocked_by_primary_resource(conn, subscription, result, existing_115):
+                    existing_115 = subscription_115_resources(conn, subscription_id)
+                if fallback_blocked_by_primary_resource(conn, subscription, result, existing_115):
                     return False
-                return _resource_already_exists(conn, subscription_id, result, subscription, existing_rows) is None
+                return resource_already_exists(conn, subscription_id, result, subscription, existing_rows) is None
         except Exception as exc:
             add_log(
                 "warning",
                 "subscription",
                 "订阅源/磁力结果可用性判断异常，已跳过单条结果",
-                {"id": subscription_id, **_result_debug_payload(result), "error": str(exc)},
+                {"id": subscription_id, **result_debug_payload(result), "error": str(exc)},
             )
             return False
 
@@ -113,7 +113,7 @@ async def search_fallback_sources(
         return await asyncio.wait_for(
             RssTorznabAdapter().search_history_by_priority_until_match(
                 search_title,
-                _extra_search_keywords(subscription),
+                extra_search_keywords(subscription),
                 fallback_usable_checker(facade, subscription),
                 query_context=_rss_query_context(subscription),
             ),

@@ -7,18 +7,18 @@ from app.services.subscription.episode.parser import (
     _episode_counts_from_pack_text,
     episodes_from_text,
 )
-from app.services.subscription.match.result_utils import _result_text
+from app.services.subscription.match.result_utils import result_text
 from app.services.subscription.match.text_utils import (
-    _compact_match_text,
-    _normalize_quality_rules,
+    compact_match_text,
+    normalize_quality_rules,
 )
 from app.services.types import SearchResult
 
 
 def _text_contains_any(text: str, words: list[str]) -> bool:
     raw = text.casefold()
-    compact = _compact_match_text(text)
-    return any(word.casefold() in raw or _compact_match_text(word) in compact for word in words if word)
+    compact = compact_match_text(text)
+    return any(word.casefold() in raw or compact_match_text(word) in compact for word in words if word)
 
 
 def _is_pack_result_text(text: str) -> bool:
@@ -31,8 +31,8 @@ def _is_pack_result_text(text: str) -> bool:
 
 
 def _quality_rule_skip_reason(subscription: dict, result: SearchResult, *extra_texts: str) -> str:
-    rules = _normalize_quality_rules(subscription.get("quality_rules"))
-    text = _result_text(result, *extra_texts)
+    rules = normalize_quality_rules(subscription.get("quality_rules"))
+    text = result_text(result, *extra_texts)
     exclude_words = rules.get("exclude_keywords") or []
     if exclude_words and _text_contains_any(text, exclude_words):
         return "命中排除词"

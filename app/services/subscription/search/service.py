@@ -7,7 +7,7 @@ from app.db import add_log, db, utc_now
 from app.services.subscription.crud.service import get_subscription
 from app.services.subscription.delivery.service import deliver_resource
 from app.services.subscription.episode.summary import subscription_episode_snapshot
-from app.services.subscription.library.service import _mark_completed_subscription, _subscription_should_hide, enrich_subscription_with_library
+from app.services.subscription.library.service import mark_completed_subscription, subscription_should_hide, enrich_subscription_with_library
 from app.services.subscription.search.flow import _search_fallback_when_needed, _search_telegram_first, _telegram_should_skip_fallback
 
 
@@ -23,8 +23,8 @@ async def search_and_attach_resources(
 
     subscription = await enrich_subscription_with_library(subscription, snapshot)
     _log_subscription_episode_snapshot(subscription)
-    if _subscription_should_hide(subscription):
-        _mark_completed_subscription(subscription)
+    if subscription_should_hide(subscription):
+        mark_completed_subscription(subscription)
         add_log(
             "info",
             "subscription",

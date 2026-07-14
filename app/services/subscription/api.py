@@ -21,9 +21,9 @@ from app.services.subscription.attach.service import (
 )
 from app.services.subscription.crud.create import create_subscription
 from app.services.subscription.crud.service import (
-    _active_subscriptions,
-    _duplicate_subscription,
-    _mark_subscription_checked,
+    active_subscriptions,
+    duplicate_subscription,
+    mark_subscription_checked,
     delete_subscription,
     delete_subscription_by_title,
     delete_subscriptions,
@@ -38,7 +38,7 @@ from app.services.subscription.delivery.service import (
     retry_failed_resources as _retry_failed_resources_impl,
 )
 from app.services.subscription.library.service import sync_subscription_list_with_emby
-from app.services.subscription.library.snapshot import _library_snapshot_or_none
+from app.services.subscription.library.snapshot import library_snapshot_or_none
 from app.services.subscription.delivery.recheck import (
     list_due_recheck_resources,
     recheck_pending_115_resources,
@@ -97,10 +97,10 @@ __all__ = [
     "sync_subscriptions_with_emby",
     "update_subscription",
     # Compatibility helpers (prefer not to use from new code)
-    "_active_subscriptions",
-    "_duplicate_subscription",
-    "_library_snapshot_or_none",
-    "_mark_subscription_checked",
+    "active_subscriptions",
+    "duplicate_subscription",
+    "library_snapshot_or_none",
+    "mark_subscription_checked",
     "_search_all_background",
     "_search_and_attach_resources_guarded",
     "_search_semaphore",

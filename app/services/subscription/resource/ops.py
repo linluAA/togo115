@@ -6,21 +6,21 @@ from typing import Any
 from app.db import add_log, utc_now
 from app.services.sources.rss_torznab import SearchResult
 from app.services.link_downloads import is_valid_download_link
-from app.services.subscription.resource.duplicate import _resource_already_exists
+from app.services.subscription.resource.duplicate import resource_already_exists
 from app.services.subscription.resource.fallback import (
-    _best_fallback_result,
-    _fallback_blocked_by_primary_resource,
-    _fallback_result_candidates,
-    _results_may_match_subscription,
-    _subscription_115_resources,
+    best_fallback_result,
+    fallback_blocked_by_primary_resource,
+    fallback_result_candidates,
+    results_may_match_subscription,
+    subscription_115_resources,
 )
-from app.services.subscription.resource.matching import _matching_results, _unmatched_results
+from app.services.subscription.resource.matching import matching_results, unmatched_results
 from app.services.subscription.match.matching import (
-    _result_debug_payload,
+    result_debug_payload,
 )
 from app.services.subscription.resource.resources import (
     canonical_115_url as _canonical_115_url,
-    existing_resource_rows as _existing_resource_rows,
+    existing_resource_rows as existing_resource_rows,
 )
 from app.services.subscription.resource.guard import resource_allowed_for_subscription
 
@@ -45,7 +45,7 @@ def _insert_resource(
         return None
     if not resource_allowed_for_subscription(subscription, result, scope="save"):
         return None
-    duplicate_reason = _resource_already_exists(conn, subscription_id, result, subscription, existing_rows)
+    duplicate_reason = resource_already_exists(conn, subscription_id, result, subscription, existing_rows)
     if duplicate_reason:
         add_log(
             "debug",
@@ -100,7 +100,7 @@ def _insert_resource_automatic(
     if item:
         _record_source_match_with_conn(conn, result.source)
     return item
-def _insert_resource_safely(
+def insert_resource_safely(
     conn: sqlite3.Connection,
     subscription: dict,
     result: SearchResult,
@@ -113,7 +113,7 @@ def _insert_resource_safely(
             "warning",
             "subscription",
             "资源保存失败，已跳过单条结果",
-            {"id": subscription.get("id"), **_result_debug_payload(result), "error": str(exc)},
+            {"id": subscription.get("id"), **result_debug_payload(result), "error": str(exc)},
         )
         return None
 

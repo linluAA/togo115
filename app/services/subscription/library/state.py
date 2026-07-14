@@ -9,7 +9,7 @@ from app.services.subscription.library.match import (
     _episodes_for_subscription,
     _subscription_is_complete,
 )
-from app.services.subscription.match.matching import _compact_match_text, _tmdb_seasons_from_detail
+from app.services.subscription.match.matching import compact_match_text, tmdb_seasons_from_detail
 
 
 def _library_state(
@@ -49,7 +49,7 @@ def _tmdb_metadata(subscription: dict, tmdb_detail: dict[str, Any] | None) -> tu
     tmdb_seasons = subscription.get("tmdb_seasons") or []
     if tmdb_detail:
         tmdb_total_count = tmdb_total_count or int(tmdb_detail.get("number_of_episodes") or 0)
-        tmdb_seasons = _tmdb_seasons_from_detail(tmdb_detail)
+        tmdb_seasons = tmdb_seasons_from_detail(tmdb_detail)
     return tmdb_total_count, tmdb_seasons
 
 
@@ -89,7 +89,7 @@ def _series_episode_count(
     count = len(owned_episodes) or counts["by_series_id"].get(series_id, 0)
     if match and not count:
         for name in _emby_names(match):
-            count = counts["by_series_name"].get(_compact_match_text(name), 0)
+            count = counts["by_series_name"].get(compact_match_text(name), 0)
             if count:
                 return count
     if not match and not count:
@@ -98,7 +98,7 @@ def _series_episode_count(
 
 
 def _series_episode_count_by_name(subscription: dict, episode_count_by_series_name: dict[str, int]) -> int:
-    subscription_title = _compact_match_text(subscription.get("title"))
+    subscription_title = compact_match_text(subscription.get("title"))
     for series_name, count in episode_count_by_series_name.items():
         if series_name == subscription_title:
             return count

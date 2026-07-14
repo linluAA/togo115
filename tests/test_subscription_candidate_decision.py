@@ -1,7 +1,7 @@
 
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.match.candidate_decision import decide_resource_candidate
-from app.services.subscription.resource.fallback import _fallback_result_candidates
+from app.services.subscription.resource.fallback import fallback_result_candidates
 
 
 def magnet(title: str, url_hash: str, priority: int = 0) -> SearchResult:
@@ -52,7 +52,7 @@ def test_fallback_candidates_prefer_missing_episode_coverage_over_source_priorit
     high_priority_but_owned = magnet("\u91ce\u72d7\u9aa8\u5934\uff082026\uff09\u66f4\u65b0\u81f306\u96c6", "d", priority=50)
     exact_missing = magnet("\u91ce\u72d7\u9aa8\u5934 S01E09-E10 1080p", "e", priority=5)
 
-    candidates = _fallback_result_candidates([high_priority_but_owned, low_priority_but_useful, exact_missing], subscription())
+    candidates = fallback_result_candidates([high_priority_but_owned, low_priority_but_useful, exact_missing], subscription())
 
     assert candidates[0] is low_priority_but_useful
     assert candidates[-1] is high_priority_but_owned

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.db import db
-from app.services.subscription.episode.keys import _missing_episode_keys
+from app.services.subscription.episode.keys import missing_episode_keys
 from app.services.subscription.library.match import _subscription_is_complete
 
 
@@ -30,7 +30,7 @@ def _episode_range_summary(keys: set[tuple[int, int]], limit: int = 4) -> str:
 
 
 def _subscription_health_from_stats(subscription: dict, stats: dict[str, Any]) -> dict[str, Any]:
-    missing = _missing_episode_keys(subscription)
+    missing = missing_episode_keys(subscription)
     latest_status = stats.get("latest_resource_status") or ""
     failed_count = int(stats.get("failed_resources") or 0)
     if subscription.get("status") == "completed" or _subscription_is_complete(subscription):
@@ -65,7 +65,7 @@ def _subscription_health_from_stats(subscription: dict, stats: dict[str, Any]) -
     }
 
 
-def _enrich_subscriptions_with_health(subscriptions: list[dict]) -> list[dict]:
+def enrich_subscriptions_with_health(subscriptions: list[dict]) -> list[dict]:
     if not subscriptions:
         return subscriptions
     ids = [int(item["id"]) for item in subscriptions if item.get("id")]

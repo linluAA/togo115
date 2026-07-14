@@ -6,7 +6,7 @@ from app.services.subscription.match.text_utils import _safe_text
 from app.services.types import SearchResult
 
 
-def _result_text(result: SearchResult, *extra_texts: str) -> str:
+def result_text(result: SearchResult, *extra_texts: str) -> str:
     return "\n".join(
         part
         for part in [_safe_text(getattr(result, "context", "")), _safe_text(getattr(result, "title", "")), *(_safe_text(part) for part in extra_texts)]
@@ -14,7 +14,7 @@ def _result_text(result: SearchResult, *extra_texts: str) -> str:
     )
 
 
-def _result_debug_payload(result: SearchResult) -> dict[str, Any]:
+def result_debug_payload(result: SearchResult) -> dict[str, Any]:
     return {
         "title": _safe_text(getattr(result, "title", ""))[:120],
         "source": _safe_text(getattr(result, "source", ""))[:120],

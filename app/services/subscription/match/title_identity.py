@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from app.services.subscription.match.text_utils import _compact_match_text
+from app.services.subscription.match.text_utils import compact_match_text
 
 
 CJK_RE = re.compile(r"[\u3400-\u9fff]")
@@ -53,7 +53,7 @@ def _title_term_in_text(term: tuple[str, str], text: str) -> bool:
     compact_title = term[1]
     if not compact_title:
         return False
-    compact_text = _compact_match_text(text)
+    compact_text = compact_match_text(text)
     title_has_cjk = bool(CJK_RE.search(compact_title))
     start = 0
     while True:
@@ -72,4 +72,4 @@ def _title_fragment_in_text(term: tuple[str, str] | None, text: str) -> bool:
         return False
     if len(term[1]) < 3:
         return _title_term_in_text(term, text)
-    return term[1] in _compact_match_text(text)
+    return term[1] in compact_match_text(text)

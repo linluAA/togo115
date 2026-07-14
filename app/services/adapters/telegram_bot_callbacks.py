@@ -8,7 +8,7 @@ from app.db import add_log, db, utc_now
 from app.services.adapters.media import TmdbAdapter
 from app.services.adapters.pan115 import Pan115Adapter
 from app.services.integration_state import get_setting
-from app.services.subscription.delivery.executor import _deliver_resource_url
+from app.services.subscription.delivery.executor import deliver_resource_url
 from app.services.tg_bot_magnet_search import (
     magnet_results_reply,
     magnet_results_reply_markup,
@@ -181,7 +181,7 @@ class TelegramBotCallbackMixin:
         delivery = get_setting("delivery", {"mode": "115"})
         delivery_mode = str(delivery.get("mode") or "115")
         resource = {"url": url, "target_path": target_path}
-        return await _deliver_resource_url(resource, delivery_mode, Pan115Adapter, self.__class__)
+        return await deliver_resource_url(resource, delivery_mode, Pan115Adapter, self.__class__)
 
     def _save_magnet_pick_as_resource(self, url: str, token: str | None) -> int | None:
         detail = pending_magnet_detail(token or "")

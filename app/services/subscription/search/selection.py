@@ -6,11 +6,11 @@ from app.db import add_log, db, utc_now
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.delivery.link_validation import classify_115_results
 from app.services.subscription.resource.ops import (
-    _existing_resource_rows,
-    _fallback_result_candidates,
-    _insert_resource_safely,
-    _matching_results,
-    _resource_already_exists,
+    existing_resource_rows,
+    fallback_result_candidates,
+    insert_resource_safely,
+    matching_results,
+    resource_already_exists,
 )
 from app.services.subscription.search.selection_fallback import (
     attach_fallback_results_until_delivered,
@@ -29,7 +29,7 @@ async def attach_telegram_results(
     results: list[SearchResult],
 ) -> tuple[list[dict], list[SearchResult], dict[str, Any]]:
     subscription_id = int(subscription["id"])
-    raw_matched = _matching_results(subscription, results)
+    raw_matched = matching_results(subscription, results)
     if not raw_matched and results:
         add_log(
             "info",
@@ -43,8 +43,8 @@ async def attach_telegram_results(
     save_failed_count = 0
     recheck_saved_count = 0
     with db() as conn:
-        existing_rows = _existing_resource_rows(conn, subscription_id)
-        for result in _fallback_result_candidates(matched, subscription):
+        existing_rows = existing_resource_rows(conn, subscription_id)
+        for result in fallback_result_candidates(matched, subscription):
             outcome = _save_telegram_result(conn, subscription, result, existing_rows, mark_recheck=False)
             if outcome == "created":
                 created.append(getattr(result, "_saved_item"))
@@ -54,7 +54,7 @@ async def attach_telegram_results(
             else:
                 save_failed_count += 1
         if not created:
-            for result in _fallback_result_candidates(recheck_results, subscription):
+            for result in fallback_result_candidates(recheck_results, subscription):
                 outcome = _save_telegram_result(conn, subscription, result, existing_rows, mark_recheck=True)
                 if outcome == "created":
                     recheck_saved_count += 1
@@ -84,7 +84,7 @@ async def attach_telegram_results(
 
 def _save_telegram_result(conn, subscription: dict, result: SearchResult, existing_rows: list[dict[str, Any]], *, mark_recheck: bool) -> str:
     subscription_id = int(subscription["id"])
-    duplicate_reason = _resource_already_exists(conn, subscription_id, result, subscription, existing_rows)
+    duplicate_reason = resource_already_exists(conn, subscription_id, result, subscription, existing_rows)
     if duplicate_reason:
         add_log(
             "debug",
@@ -93,7 +93,7 @@ def _save_telegram_result(conn, subscription: dict, result: SearchResult, existi
             {"id": subscription_id, "url": result.url, "title": result.title, "reason": duplicate_reason},
         )
         return "duplicate"
-    item = _insert_resource_safely(conn, subscription, result, existing_rows)
+    item = insert_resource_safely(conn, subscription, result, existing_rows)
     if not item:
         return "failed"
     setattr(result, "_saved_item", item)

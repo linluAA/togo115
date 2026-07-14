@@ -13,8 +13,8 @@ from app.services.integration_state import get_flow, save_flow
 from app.services.link_downloads import _download_link_key, is_valid_download_link
 from app.services.sources.rss_torznab import RssTorznabAdapter, SearchResult
 from app.services.subscription.match.matching import result_matches_subscription
-from app.services.subscription.match.result_utils import _result_text
-from app.services.subscription.match.text_utils import _compact_match_text, _years_from_text
+from app.services.subscription.match.result_utils import result_text
+from app.services.subscription.match.text_utils import compact_match_text, years_from_text
 
 
 TG_BOT_MAGNET_LIMIT = 5
@@ -651,11 +651,11 @@ def _rank_magnet_results(subscription: dict[str, Any], results: list[SearchResul
 
 
 def _result_score(subscription: dict[str, Any], result: SearchResult) -> int:
-    text = _result_text(result)
+    text = result_text(result)
     if not _bot_title_or_alias_matches(subscription, text):
         return 0
     year = subscription.get("release_year")
-    years = _years_from_text(text)
+    years = years_from_text(text)
     if year and years and int(year) not in years:
         return 0
     try:
@@ -669,11 +669,11 @@ def _result_score(subscription: dict[str, Any], result: SearchResult) -> int:
 
 def _bot_title_or_alias_matches(subscription: dict[str, Any], text: str) -> bool:
     raw_text = str(text or "")
-    compact_text = _compact_match_text(raw_text)
+    compact_text = compact_match_text(raw_text)
     candidates = [subscription.get("title"), *(subscription.get("search_aliases") or [])]
     for item in candidates:
         term = _query_without_year(str(item or "")).strip()
-        compact = _compact_match_text(term)
+        compact = compact_match_text(term)
         if not compact:
             continue
         if _contains_cjk(term):

@@ -43,7 +43,7 @@ from app.services.link_search_utils import (
     _search_title_variants,
     _split_filter_words,
     _truthy,
-    _years_from_text,
+    years_from_text,
 )
 from app.services.link_telegram import (
     HTTP_URL_RE,

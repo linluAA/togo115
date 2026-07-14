@@ -12,7 +12,7 @@ def _split_filter_words(value: Any) -> list[str]:
     return [part.strip() for part in re.split(r"[,?\n\r]+", str(value or "")) if part.strip()]
 
 
-def _years_from_text(text: str | None) -> set[int]:
+def years_from_text(text: str | None) -> set[int]:
     years: set[int] = set()
     value = text or ""
     for match in YEAR_RE.finditer(value):
@@ -70,7 +70,7 @@ def _search_title_variants(title: str | None) -> list[str]:
     raw = re.sub(r"\s+", " ", str(title or "").strip())
     if not raw:
         return []
-    years = sorted(_years_from_text(raw))
+    years = sorted(years_from_text(raw))
     base = _query_without_year(raw)
     variants: list[str] = []
 

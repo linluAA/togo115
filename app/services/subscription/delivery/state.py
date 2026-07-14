@@ -63,7 +63,7 @@ def _mark_resource_duplicate_delivered(resource_id: int, existing: dict[str, Any
 
 
 def _update_resource_delivery_status(resource_id: int, ok: bool, error_message: str) -> None:
-    failed_status = _delivery_failed_status(error_message)
+    failed_status = delivery_failed_status(error_message)
     with db() as conn:
         conn.execute(
             """
@@ -78,7 +78,7 @@ def _update_resource_delivery_status(resource_id: int, ok: bool, error_message: 
         )
 
 
-def _delivery_failed_status(error_message: str) -> str:
+def delivery_failed_status(error_message: str) -> str:
     text = str(error_message or "").casefold()
     if any(word in text for word in ("\u5f85\u590d\u68c0", "\u5f85\u8907\u6aa2", "recheck", "unknown")):
         return "pending_recheck"

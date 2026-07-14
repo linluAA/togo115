@@ -5,7 +5,7 @@ from typing import Any, Awaitable, Callable
 
 from app.db import add_log
 import app.services.subscription.runtime as runtime
-from app.services.subscription.crud.service import _mark_subscription_checked
+from app.services.subscription.crud.service import mark_subscription_checked
 
 SearchCallable = Callable[[int, dict[str, list[dict[str, Any]]] | None], Awaitable[list[dict]]]
 
@@ -68,7 +68,7 @@ async def _search_subscription_background(
     try:
         await _search_and_attach_resources_guarded(subscription_id, search_func=search_func)
     except Exception as exc:
-        _mark_subscription_checked(subscription_id)
+        mark_subscription_checked(subscription_id)
         add_log("error", "subscription", "\u8ba2\u9605\u540e\u53f0\u641c\u7d22\u5931\u8d25", {"id": subscription_id, "error": str(exc)})
 
 

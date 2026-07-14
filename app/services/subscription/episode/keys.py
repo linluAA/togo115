@@ -32,7 +32,7 @@ def _expand_episode_range(season: int | None, start: int, end: int | None = None
     return {((season or 1), episode) for episode in range(start, end + 1)}
 
 
-def _json_episode_key(key: tuple[int, int]) -> str:
+def json_episode_key(key: tuple[int, int]) -> str:
     return f"{key[0]}x{key[1]}"
 
 
@@ -58,7 +58,7 @@ def _episode_keys_from_json(value: Any) -> set[tuple[int, int]]:
     return {key for key in keys if key}
 
 
-def _tmdb_seasons_from_detail(detail: dict) -> list[dict[str, int]]:
+def tmdb_seasons_from_detail(detail: dict) -> list[dict[str, int]]:
     seasons: list[dict[str, int]] = []
     for season in detail.get("seasons") or []:
         try:
@@ -95,7 +95,7 @@ def _all_tmdb_episode_keys(subscription: dict) -> set[tuple[int, int]]:
     return {(1, episode) for episode in range(1, total + 1)} if total > 0 else set()
 
 
-def _missing_episode_keys(subscription: dict) -> set[tuple[int, int]]:
+def missing_episode_keys(subscription: dict) -> set[tuple[int, int]]:
     if subscription.get("media_type") != "tv":
         return set()
     expected = _all_tmdb_episode_keys(subscription)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from app.services.subscription.episode.parser import _all_tmdb_episode_keys, _episode_keys_from_json, _missing_episode_keys
+from app.services.subscription.episode.parser import _all_tmdb_episode_keys, _episode_keys_from_json, missing_episode_keys
 
 
 def episode_range_labels(keys: Iterable[tuple[int, int]], *, limit: int = 8) -> list[str]:
@@ -32,7 +32,7 @@ def subscription_episode_snapshot(subscription: dict) -> dict:
     if subscription.get("media_type") != "tv":
         return {}
     expected = _all_tmdb_episode_keys(subscription)
-    missing = _missing_episode_keys(subscription)
+    missing = missing_episode_keys(subscription)
     owned = subscription.get("emby_episodes")
     if not isinstance(owned, set):
         owned = _episode_keys_from_json(subscription.get("emby_episode_keys"))

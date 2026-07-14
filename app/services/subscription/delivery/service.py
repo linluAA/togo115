@@ -8,7 +8,7 @@ from app.services.adapters.telegram import TelegramBotAdapter
 from app.services.integration_state import get_setting
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.crud.service import get_subscription
-from app.services.subscription.delivery.executor import _deliver_resource_url
+from app.services.subscription.delivery.executor import deliver_resource_url
 from app.services.subscription.delivery.state import (
     _delivery_lock,
     _existing_effective_delivery,
@@ -170,7 +170,7 @@ async def _perform_delivery(
     telegram_bot_adapter_cls: type,
 ) -> tuple[bool, str]:
     try:
-        return await _deliver_resource_url(resource, delivery_mode, pan115_adapter_cls, telegram_bot_adapter_cls)
+        return await deliver_resource_url(resource, delivery_mode, pan115_adapter_cls, telegram_bot_adapter_cls)
     except Exception as exc:
         add_log(
             "error",

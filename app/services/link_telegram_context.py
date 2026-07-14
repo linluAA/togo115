@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from app.services.link_search_utils import _years_from_text
+from app.services.link_search_utils import years_from_text
 from app.services.link_telegram_context_segments import (
     _line_matches_link,
     _next_link_end,
@@ -19,9 +19,9 @@ def _resource_title_line_score(line: str | None) -> int:
     if not label_match:
         return 0
     if re.search(r"(标签|简介|主演|评分|类型|分类|大小|质量|TMDB\s*ID)", value, re.I):
-        return 1 if _years_from_text(value) else 0
+        return 1 if years_from_text(value) else 0
     score = 2
-    if _years_from_text(value):
+    if years_from_text(value):
         score += 3
     if re.search(r"(S\d{1,2}E\d{1,3}|第\s*\d{1,3}\s*[集话話]|1080|2160|4K|REMUX|BluRay|WEB)", value, re.I):
         score += 1

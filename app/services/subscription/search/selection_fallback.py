@@ -5,14 +5,14 @@ from typing import Any
 
 from app.db import add_log, db, utc_now
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription.match.matching import _result_debug_payload
+from app.services.subscription.match.matching import result_debug_payload
 from app.services.subscription.resource.ops import (
-    _existing_resource_rows,
-    _fallback_blocked_by_primary_resource,
-    _fallback_result_candidates,
-    _insert_resource_safely,
-    _matching_results,
-    _subscription_115_resources,
+    existing_resource_rows,
+    fallback_blocked_by_primary_resource,
+    fallback_result_candidates,
+    insert_resource_safely,
+    matching_results,
+    subscription_115_resources,
 )
 
 
@@ -26,7 +26,7 @@ def match_fallback_groups(
     for group in groups:
         group_results = list(group.get("results") or [])
         total += len(group_results)
-        matched_groups.append((group, group_results, _matching_results(subscription, group_results)))
+        matched_groups.append((group, group_results, matching_results(subscription, group_results)))
     return total, matched_groups
 
 
@@ -133,14 +133,14 @@ def _attach_first_from_group(
     subscription_id = int(subscription["id"])
     excluded = excluded_urls or set()
     with db() as conn:
-        existing_rows = _existing_resource_rows(conn, subscription_id)
-        existing_115 = _subscription_115_resources(conn, subscription_id)
-        for candidate in _fallback_result_candidates(matched_results, subscription):
+        existing_rows = existing_resource_rows(conn, subscription_id)
+        existing_115 = subscription_115_resources(conn, subscription_id)
+        for candidate in fallback_result_candidates(matched_results, subscription):
             if str(candidate.url or "") in excluded:
                 continue
             if _fallback_candidate_blocked(conn, subscription, candidate, existing_115):
                 continue
-            item = _insert_resource_safely(conn, subscription, candidate, existing_rows)
+            item = insert_resource_safely(conn, subscription, candidate, existing_rows)
             if not item:
                 continue
             conn.execute(
@@ -154,13 +154,13 @@ def _attach_first_from_group(
 def _fallback_candidate_blocked(conn, subscription: dict, candidate: SearchResult, existing_115: list[dict[str, Any]]) -> bool:
     subscription_id = int(subscription["id"])
     try:
-        fallback_blocked = _fallback_blocked_by_primary_resource(conn, subscription, candidate, existing_115)
+        fallback_blocked = fallback_blocked_by_primary_resource(conn, subscription, candidate, existing_115)
     except Exception as exc:
         add_log(
             "warning",
             "subscription",
             "订阅源/磁力阻断判断异常，已跳过单条结果",
-            {"id": subscription_id, **_result_debug_payload(candidate), "error": str(exc)},
+            {"id": subscription_id, **result_debug_payload(candidate), "error": str(exc)},
         )
         return True
     if fallback_blocked:
@@ -195,6 +195,6 @@ def _log_unattached_fallback(subscription_id: int, group: dict[str, Any], matche
             "source": source.get("name"),
             "priority": group.get("priority"),
             "matches": len(matched_results),
-            "samples": [_result_debug_payload(result) for result in matched_results[:3]],
+            "samples": [result_debug_payload(result) for result in matched_results[:3]],
         },
     )

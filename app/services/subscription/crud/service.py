@@ -3,17 +3,17 @@ from __future__ import annotations
 from app.db import add_log, db, json_dumps, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
 from app.services.subscription.crud.create import create_subscription
-from app.services.subscription.crud.duplicates import _duplicate_subscription
+from app.services.subscription.crud.duplicates import duplicate_subscription
 from app.services.subscription.crud.rows import (
-    _active_subscriptions,
-    _mark_subscription_checked,
+    active_subscriptions,
+    mark_subscription_checked,
     get_subscription,
     list_subscriptions,
     normalize_subscription,
 )
 from app.services.subscription.match.matching import (
-    _compact_match_text,
-    _normalize_quality_rules,
+    compact_match_text,
+    normalize_quality_rules,
 )
 
 def update_subscription(subscription_id: int, payload: SubscriptionUpdate) -> dict:
@@ -24,7 +24,7 @@ def update_subscription(subscription_id: int, payload: SubscriptionUpdate) -> di
     if "keywords" in data:
         data["keywords"] = json_dumps(data["keywords"])
     if "quality_rules" in data:
-        normalized_rules = _normalize_quality_rules(data["quality_rules"])
+        normalized_rules = normalize_quality_rules(data["quality_rules"])
         data["quality_rules"] = json_dumps(normalized_rules)
     if data.get("status") in ("active", "paused"):
         data["completed_at"] = None
@@ -54,12 +54,12 @@ def delete_subscriptions(subscription_ids: list[int]) -> int:
     return deleted
 
 def delete_subscription_by_title(title: str) -> int:
-    needle = _compact_match_text(title)
+    needle = compact_match_text(title)
     if not needle:
         return 0
     matched_ids: list[int] = []
     for item in list_subscriptions():
-        item_title = _compact_match_text(item.get("title"))
+        item_title = compact_match_text(item.get("title"))
         if item_title == needle or needle in item_title or item_title in needle:
             matched_ids.append(int(item["id"]))
     return delete_subscriptions(matched_ids)

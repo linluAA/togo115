@@ -28,7 +28,7 @@ CHINESE_DIGITS = {
 }
 
 
-def _chinese_number_to_int(text: str) -> int | None:
+def chinese_number_to_int(text: str) -> int | None:
     normalized = text.strip().replace("\u62fe", "\u5341")
     if normalized == "\u5341":
         return 10

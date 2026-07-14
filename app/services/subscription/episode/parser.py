@@ -8,14 +8,14 @@ from app.services.subscription.episode.keys import (
     _episode_key_from_json,
     _episode_keys_from_json,
     _expand_episode_range,
-    _json_episode_key,
-    _missing_episode_keys,
-    _tmdb_seasons_from_detail,
+    json_episode_key,
+    missing_episode_keys,
+    tmdb_seasons_from_detail,
 )
 from app.services.subscription.episode.numbers import _number_token_to_int
 from app.services.subscription.episode.packs import (
     _episode_keys_by_season,
-    _episode_keys_from_text_for_subscription,
+    episode_keys_from_text_for_subscription,
     _pack_episode_keys_from_text,
     _season_keys_for_counts,
 )

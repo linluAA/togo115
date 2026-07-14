@@ -5,8 +5,8 @@ from collections import Counter
 from app.db import add_log
 from app.services.subscription.episode.parser import (
     _all_tmdb_episode_keys,
-    _episode_keys_from_text_for_subscription,
-    _missing_episode_keys,
+    episode_keys_from_text_for_subscription,
+    missing_episode_keys,
 )
 from app.services.subscription.match.identity import (
     _release_year_matches,
@@ -18,17 +18,17 @@ from app.services.subscription.match.identity import (
     _tmdb_ids_from_text,
 )
 from app.services.subscription.match.quality import _quality_rule_skip_reason
-from app.services.subscription.match.result_utils import _result_debug_payload, _result_text
-from app.services.subscription.match.text_utils import _compact_match_text
+from app.services.subscription.match.result_utils import result_debug_payload, result_text
+from app.services.subscription.match.text_utils import compact_match_text
 from app.services.types import SearchResult
 
 
-def _result_skip_reason(subscription: dict, result: SearchResult, *extra_texts: str) -> str:
+def result_skip_reason(subscription: dict, result: SearchResult, *extra_texts: str) -> str:
     text = _subscription_match_text(result, *extra_texts)
     if not text:
         return "文本为空"
     raw_haystack = text.casefold()
-    compact_haystack = _compact_match_text(text)
+    compact_haystack = compact_match_text(text)
     title_term, keyword_terms = _subscription_required_terms(subscription)
     if _result_title_identity_conflicts(subscription, result):
         return "资源标题不匹配"
@@ -66,10 +66,10 @@ def _episode_skip_reason(subscription: dict, result: SearchResult, *extra_texts:
     expected = _all_tmdb_episode_keys(subscription)
     if not expected:
         return "已匹配"
-    missing = _missing_episode_keys(subscription)
+    missing = missing_episode_keys(subscription)
     if not missing:
         return "订阅已完整入库"
-    episodes = _episode_keys_from_text_for_subscription(subscription, _result_text(result, *extra_texts))
+    episodes = episode_keys_from_text_for_subscription(subscription, result_text(result, *extra_texts))
     if not episodes:
         return "未识别到集数"
     if not (episodes & missing):
@@ -77,18 +77,18 @@ def _episode_skip_reason(subscription: dict, result: SearchResult, *extra_texts:
     return "已匹配"
 
 
-def _skip_reason_summary(subscription: dict, results: list[SearchResult], *extra_texts: str) -> str:
+def skip_reason_summary(subscription: dict, results: list[SearchResult], *extra_texts: str) -> str:
     counter: Counter[str] = Counter()
     for result in results:
         try:
-            counter[_result_skip_reason(subscription, result, *extra_texts)] += 1
+            counter[result_skip_reason(subscription, result, *extra_texts)] += 1
         except Exception as exc:
             counter["原因统计失败"] += 1
             add_log(
                 "warning",
                 "subscription",
                 "资源跳过原因统计异常，已忽略单条结果",
-                {**_result_debug_payload(result), "error": str(exc)},
+                {**result_debug_payload(result), "error": str(exc)},
             )
     if not counter:
         return ""

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import re
 
-from app.services.subscription.match.result_utils import _result_text
-from app.services.subscription.match.search_terms import _subscription_release_year, _subscription_required_terms
+from app.services.subscription.match.result_utils import result_text
+from app.services.subscription.match.search_terms import subscription_release_year, _subscription_required_terms
 from app.services.subscription.match.source_identity import _result_is_primary_115_resource
-from app.services.subscription.match.text_utils import _years_from_text
+from app.services.subscription.match.text_utils import years_from_text
 from app.services.subscription.match.title_identity import _title_fragment_in_text
 from app.services.types import SearchResult
 
@@ -47,17 +47,17 @@ def _result_has_subscription_tmdb_id(subscription: dict, text: str, *extra_texts
 
 
 def _release_year_matches(subscription: dict, result: SearchResult, text: str, *extra_texts: str) -> bool:
-    release_year = _subscription_release_year(subscription)
+    release_year = subscription_release_year(subscription)
     if not release_year:
         return True
     if _result_has_subscription_tmdb_id(subscription, text, *extra_texts):
         return True
-    text_years = _years_from_text(text)
+    text_years = years_from_text(text)
     if text_years and release_year not in text_years:
         return False
     title_term, _ = _subscription_required_terms(subscription)
     for candidate in _year_guard_texts(result, *extra_texts):
-        years = _years_from_text(candidate)
+        years = years_from_text(candidate)
         if not years or release_year in years:
             continue
         if _title_fragment_in_text(title_term, candidate):
@@ -66,19 +66,19 @@ def _release_year_matches(subscription: dict, result: SearchResult, text: str, *
 
 
 def _result_title_identity_conflicts(subscription: dict, result: SearchResult) -> bool:
-    full_text = _result_text(result)
+    full_text = result_text(result)
     if _result_has_subscription_tmdb_id(subscription, full_text):
         return False
     title = str(getattr(result, "title", "") or "").strip()
-    if not title or not _years_from_text(title):
+    if not title or not years_from_text(title):
         return False
     title_term, _ = _subscription_required_terms(subscription)
     if not _title_fragment_in_text(title_term, title):
-        release_year = _subscription_release_year(subscription)
-        full_years = _years_from_text(full_text)
+        release_year = subscription_release_year(subscription)
+        full_years = years_from_text(full_text)
         if _result_is_primary_115_resource(result) and _title_fragment_in_text(title_term, full_text) and (not release_year or not full_years or release_year in full_years):
             return False
         return True
-    release_year = _subscription_release_year(subscription)
-    title_years = _years_from_text(title)
+    release_year = subscription_release_year(subscription)
+    title_years = years_from_text(title)
     return bool(release_year and title_years and release_year not in title_years)

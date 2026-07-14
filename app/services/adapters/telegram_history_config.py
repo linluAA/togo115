@@ -14,7 +14,7 @@ from app.services.link_parser import (
     _bounded_float,
     _bounded_int,
     _compact_search_text,
-    _years_from_text,
+    years_from_text,
 )
 
 
@@ -51,7 +51,7 @@ def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
     candidates = sorted(
         queries,
         key=lambda item: (
-            0 if _years_from_text(item) else 1,
+            0 if years_from_text(item) else 1,
             0 if re.search(r"\s", item.strip()) else 1,
             -len(_compact_search_text(item)),
         ),

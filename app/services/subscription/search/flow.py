@@ -4,7 +4,7 @@ from typing import Any
 
 from app.db import add_log
 from app.services.subscription.search.discovery import search_fallback_sources, search_telegram_history
-from app.services.subscription.match.matching import _subscription_search_title
+from app.services.subscription.match.matching import subscription_search_title
 from app.services.subscription.search.selection import (
     attach_fallback_results_until_delivered,
     attach_first_fallback_result,
@@ -15,7 +15,7 @@ from app.services.subscription.search.selection import (
 
 
 async def _search_telegram_first(subscription: dict, incremental_telegram: bool) -> tuple[list[dict], list, dict[str, Any]]:
-    search_title = _subscription_search_title(subscription)
+    search_title = subscription_search_title(subscription)
     if not incremental_telegram:
         created, matches, summary = await _run_telegram_search_stage(subscription, search_title, fast=True)
         if created:
@@ -85,7 +85,7 @@ def _telegram_should_skip_fallback(summary: dict[str, Any]) -> bool:
 
 
 async def _search_fallback_when_needed(subscription: dict, deliver_func=None) -> list[dict]:
-    search_title = _subscription_search_title(subscription)
+    search_title = subscription_search_title(subscription)
     fallback_groups = await search_fallback_sources(None, subscription, search_title)
     fallback_total, fallback_matches = match_fallback_groups(None, subscription, fallback_groups)
     if deliver_func is None:
