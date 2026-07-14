@@ -42,8 +42,6 @@ class RssTorznabUrlBuilderMixin:
     def _site_plugin_source_url(self, source: dict[str, Any], url: str, query: str) -> str:
         parsed = urlparse(url)
         plugin_id = self._site_plugin_id(source)
-        if plugin_id == "hdhive" or self._is_hdhive_url(url):
-            return url
         if plugin_id == "qmp4" or self._is_qmp4_url(url):
             return urlunparse(parsed._replace(path="/index.php/ajax/suggest", query=urlencode({"mid": 1, "wd": query})))
         if (plugin_id == "bt1207" or self._is_bt1207_url(url)) and parsed.path.rstrip("/") in ("", "/search"):

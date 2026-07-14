@@ -41,14 +41,12 @@ class RssTorznabCacheMixin:
             return []
         async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True) as client:
             for query in source_queries:
-                cacheable = self._site_plugin_id(source) != "hdhive"
-                cached = self._cached_source_results(source, query) if cacheable else None
+                cached = self._cached_source_results(source, query)
                 if cached is not None:
                     results.extend(cached)
                     continue
                 fetched = await self._fetch_source(source, query, client, query_context) if query_context else await self._fetch_source(source, query, client)
-                if cacheable:
-                    self._store_source_results_cache(source, query, fetched)
+                self._store_source_results_cache(source, query, fetched)
                 results.extend(fetched)
         return self._dedupe_results(results)
 

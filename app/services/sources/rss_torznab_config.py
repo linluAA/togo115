@@ -34,8 +34,6 @@ class RssTorznabConfigMixin:
         url = str(source.get("url") or "")
         if self._is_qmp4_url(url):
             return "qmp4"
-        if self._is_hdhive_url(url):
-            return "hdhive"
         if self._is_bt1207_url(url):
             return "bt1207"
         source_type = str(source.get("type") or "").strip().lower()
@@ -56,7 +54,7 @@ class RssTorznabConfigMixin:
         source_type = self._source_type(source)
         if source_type == "site_plugin":
             plugin_id = self._site_plugin_id(source)
-            if plugin_id in ("bt1207", "qmp4", "hdhive"):
+            if plugin_id in ("bt1207", "qmp4"):
                 return f"site_plugin:{plugin_id}"
         url = str(source.get("url") or "").strip().rstrip("/")
         return f"{source_type}:{url or self._source_identity(source)}"
@@ -83,11 +81,7 @@ class RssTorznabConfigMixin:
                         "refresh_interval",
                         "keywords",
                         "quality",
-                    "test_query",
-                    "points_threshold",
-                    "browser_path",
-                    "browser_user_data_dir",
-                    "headless",
+                        "test_query",
                     )
                     if key in override
                 },

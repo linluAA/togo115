@@ -4,11 +4,10 @@
 const VIEW_KEYS = ["tmdb", "emby", "subscriptions", "logs", "settings"];
 const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "tg_bot", "emby", "backup"];
 const TMDB_MORE_MIN_PAGE_SIZE = 40;
-const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4", "hdhive"]);
+const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4"]);
 const BUILTIN_RSS_SOURCES = [
   { id: "builtin_bt1207", name: "BT1207", type: "site_plugin", plugin: "bt1207", url: "https://bt1207to.cc/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
   { id: "builtin_qmp4", name: "QMP4 / 七味", type: "site_plugin", plugin: "qmp4", url: "https://www.qmp4.com/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
-  { id: "builtin_hdhive", name: "HDHive / 影巢", type: "site_plugin", plugin: "hdhive", url: "https://hdhive.com/", enabled: false, use_proxy: false, priority: -40, refresh_interval: 30, test_query: "tv:86344", points_threshold: 0, browser_path: "", browser_user_data_dir: "" },
 ];
 
 const state = {
@@ -44,8 +43,6 @@ const state = {
   builtinRssSourceExpanded: new Set(),
   panQrTimer: null,
   tgLoginTimer: null,
-  hdhiveBrowser: null,
-  hdhiveBrowserTimer: null,
   backupText: "",
   panFolder: { cid: "0", path: "/" },
   subscriptionRefreshTimer: null,
@@ -1393,7 +1390,6 @@ function renderSettings() {
   document.querySelectorAll("[data-toggle-rss-source]").forEach((btn) => btn.addEventListener("click", toggleRssSource));
   document.querySelectorAll("[data-remove-rss-source]").forEach((btn) => btn.addEventListener("click", removeRssSource));
   document.querySelectorAll("[data-test-rss-source]").forEach((btn) => btn.addEventListener("click", testRssSource));
-  document.querySelectorAll("[data-login-hdhive-source]").forEach((btn) => btn.addEventListener("click", loginHdhiveSource));
   document.querySelectorAll(".rss-source-type").forEach((select) => select.addEventListener("change", syncRssSourceTypeUi));
   document.querySelectorAll(".rss-source-plugin").forEach((select) => select.addEventListener("change", syncRssSourceTypeUi));
   $("#exportBackup")?.addEventListener("click", exportBackup);
@@ -1451,7 +1447,7 @@ function fieldHtml(key, name, label, current, type = "text") {
   }
   if (key === "proxy" && name === "modules") {
     const selected = Array.isArray(current) ? current : String(current || "").split(",").filter(Boolean);
-    const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["emby", "Emby"], ["hdhive", "HDHive / 影巢"]];
+    const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["emby", "Emby"]];
     return `<fieldset class="check-group"><legend>${label}</legend>
       ${options.map(([value, text]) => `<label><input type="checkbox" name="modules" value="${value}" ${selected.includes(value) ? "checked" : ""} /> ${text}</label>`).join("")}
     </fieldset>`;
@@ -1517,9 +1513,6 @@ function builtinRssOverrideFromSource(source) {
     keywords: source.keywords || "",
     quality: source.quality || "",
     test_query: source.test_query || "",
-    points_threshold: Number.parseInt(source.points_threshold, 10) || 0,
-    browser_path: source.browser_path || "",
-    browser_user_data_dir: source.browser_user_data_dir || "",
     priority: Number.isFinite(priority) ? priority : -50,
     refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
   };
@@ -1537,9 +1530,6 @@ function normalizeRssSource(source) {
     test_query: source.test_query || "",
     keywords: source.keywords || "",
     quality: source.quality || "",
-    points_threshold: Number.parseInt(source.points_threshold, 10) || 0,
-    browser_path: source.browser_path || "",
-    browser_user_data_dir: source.browser_user_data_dir || "",
   };
 }
 
@@ -1557,11 +1547,9 @@ function normalizeSitePlugin(source) {
   const raw = String(source?.plugin || source?.site_plugin || "").toLowerCase();
   if (["bt1207", "bt1207_magnet"].includes(raw)) return "bt1207";
   if (["qmp4", "qiwei", "qmp4_magnet"].includes(raw)) return "qmp4";
-  if (["hdhive", "yingchao", "hdhive_115"].includes(raw)) return "hdhive";
   const url = String(source?.url || "").toLowerCase();
   if (url.includes("bt1207")) return "bt1207";
   if (url.includes("qmp4.com")) return "qmp4";
-  if (url.includes("hdhive.com")) return "hdhive";
   return "generic_magnet";
 }
 
@@ -1574,7 +1562,6 @@ function sitePluginLabel(plugin) {
   const normalized = normalizeSitePlugin({ plugin });
   if (normalized === "bt1207") return "BT1207";
   if (normalized === "qmp4") return "QMP4";
-  if (normalized === "hdhive") return "HDHive / 影巢";
   return "通用磁力站";
 }
 
@@ -1589,7 +1576,6 @@ function rssSourceUrlLabel(type, plugin = "generic_magnet") {
   const value = normalizeRssSourceType(type);
   if (value === "site_plugin") {
     const normalized = normalizeSitePlugin({ plugin });
-    if (normalized === "hdhive") return "HDHive 站点首页";
     return "站点首页 / 搜索 URL 模板";
   }
   if (value === "torznab") return "Torznab URL";
@@ -1602,7 +1588,6 @@ function rssSourceUrlPlaceholder(type, plugin = "generic_magnet") {
     const normalized = normalizeSitePlugin({ plugin });
     if (normalized === "bt1207") return "例如：https://bt1207to.cc/";
     if (normalized === "qmp4") return "例如：https://www.qmp4.com/";
-    if (normalized === "hdhive") return "https://hdhive.com/";
     return "例如：https://yhdm33.com/s/{query}.html，也可以只填站点首页";
   }
   if (value === "torznab") return "例如：https://example.com/api?t=search&q={query}";
@@ -1682,14 +1667,12 @@ function builtinRssSourceItemHtml(source) {
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.enabled === false ? "停用" : "启用"}</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
-          ${plugin === "hdhive" ? `<span>积分 <= ${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}</span>` : ""}
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
           ${stat ? `<span>成功率 ${escapeHtml(stat.success_rate || 0)}%</span><span>命中 ${escapeHtml(stat.match_count || 0)}</span><span>${escapeHtml(stat.last_latency_ms || "-")} ms</span>` : ""}
         </div>
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-builtin-source="${escapeHtml(source.id)}">收起</button>
-        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
       </div>
     </div>
@@ -1726,7 +1709,6 @@ function rssSourceItemHtml(source, index) {
           <span>优先级 ${escapeHtml(priority)}</span>
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
-          ${plugin === "hdhive" ? `<span>积分 <= ${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}</span>` : ""}
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
           ${keywordCount ? `<span>关键词 ${keywordCount}</span>` : ""}
           ${qualityCount ? `<span>质量 ${qualityCount}</span>` : ""}
@@ -1735,7 +1717,6 @@ function rssSourceItemHtml(source, index) {
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-rss-source="${escapeHtml(source.id)}">${expanded ? "收起" : "编辑"}</button>
-        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
         <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
       </div>
@@ -1752,7 +1733,6 @@ function rssSourceItemHtml(source, index) {
       <label class="rss-source-plugin-row ${type === "site_plugin" ? "" : "hidden"}">插件
         <select class="rss-source-plugin">
           <option value="generic_magnet" ${plugin === "generic_magnet" ? "selected" : ""}>通用磁力站</option>
-          <option value="hdhive" ${plugin === "hdhive" ? "selected" : ""}>HDHive / 影巢</option>
         </select>
       </label>
       ${rssSourceCommonFields(source, type, plugin, priority, interval, testQuery, false)}
@@ -1766,20 +1746,11 @@ function rssSourceCommonFields(source, type, plugin, priority, interval, testQue
     <label class="rss-source-url"><span class="rss-source-url-label">${rssSourceUrlLabel(type, plugin)}</span> <input class="rss-source-url-input" placeholder="${rssSourceUrlPlaceholder(type, plugin)}" value="${escapeHtml(source.url || "")}" /></label>
     <label>优先级 <input class="rss-source-priority" type="number" step="1" value="${escapeHtml(priority)}" /></label>
     <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
-    <label>测试关键字 <input class="rss-source-test-query" placeholder="${plugin === "hdhive" ? "例如：tv:86344" : "例如：斗罗大陆"}" value="${escapeHtml(testQuery)}" /></label>
+    <label>测试关键字 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
     ${builtin ? `<label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>` : ""}
     <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
-    ${rssSourceHdhiveFields(source, plugin)}
     <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
     <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>`;
-}
-
-function rssSourceHdhiveFields(source, plugin) {
-  const hidden = plugin === "hdhive" ? "" : "hidden";
-  return `
-    <label class="hdhive-source-field ${hidden}">积分阈值 <input class="rss-source-points-threshold" type="number" min="0" step="1" value="${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}" /></label>
-    <label class="hdhive-source-field ${hidden}">浏览器路径 <input class="rss-source-browser-path" placeholder="留空使用镜像内 Chromium" value="${escapeHtml(source.browser_path || "")}" /></label>
-    <label class="hdhive-source-field ${hidden}">浏览器用户目录 <input class="rss-source-browser-user-data-dir" placeholder="留空使用 data/hdhive-browser" value="${escapeHtml(source.browser_user_data_dir || "")}" /></label>`;
 }
 
 function syncRssSourceTypeUi(event) {
@@ -1793,7 +1764,6 @@ function syncRssSourceTypeUi(event) {
   if (label) label.textContent = rssSourceUrlLabel(type, plugin);
   if (input) input.placeholder = rssSourceUrlPlaceholder(type, plugin);
   if (pluginRow) pluginRow.classList.toggle("hidden", type !== "site_plugin");
-  row.querySelectorAll(".hdhive-source-field").forEach((field) => field.classList.toggle("hidden", plugin !== "hdhive"));
   if (event.currentTarget.classList.contains("rss-source-plugin")) {
     updateRssSourceDraftFromRow(row, type, plugin);
     renderSettings();
@@ -1825,9 +1795,6 @@ function rssSourceFromRow(row, id, original, type, plugin) {
     keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
     quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
     test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-    points_threshold: Number.parseInt(row.querySelector(".rss-source-points-threshold")?.value || "0", 10) || 0,
-    browser_path: row.querySelector(".rss-source-browser-path")?.value.trim() || "",
-    browser_user_data_dir: row.querySelector(".rss-source-browser-user-data-dir")?.value.trim() || "",
     priority: Number.isFinite(priority) ? priority : 0,
     refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
     ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
@@ -1854,9 +1821,6 @@ function addRssSource() {
     priority: 0,
     refresh_interval: 30,
     test_query: "",
-    points_threshold: 0,
-    browser_path: "",
-    browser_user_data_dir: "",
   });
   state.rssSourceExpanded.add(id);
   state.settings.rss_sources = { value: { ...rssSourcesConfig(), sources } };
@@ -1969,203 +1933,6 @@ async function testRssSource(event) {
   } catch (error) {
     resultBox.innerHTML = `<span class="warn-text">不可用</span> · ${escapeHtml(error.message)}`;
   }
-}
-
-async function loginHdhiveSource(event) {
-  const id = event.currentTarget.dataset.loginHdhiveSource;
-  const row = document.querySelector(`.rss-source-item[data-source-id="${CSS.escape(id)}"]`);
-  const resultBox = document.querySelector(`[data-rss-test-result="${CSS.escape(id)}"]`);
-  if (!row) return;
-  const type = normalizeRssSourceType(row.querySelector(".rss-source-type")?.value || "site_plugin");
-  const plugin = normalizeSitePlugin({ plugin: row.querySelector(".rss-source-plugin")?.value || "hdhive", url: row.querySelector(".rss-source-url-input")?.value.trim() || "" });
-  const source = {
-    ...rssSourceFromRow(row, id, {}, type, plugin),
-    enabled: true,
-  };
-  if (resultBox) {
-    resultBox.classList.remove("hidden");
-    resultBox.innerHTML = `<span class="muted">正在打开影巢内置浏览器...</span>`;
-  }
-  try {
-    const data = await api("/api/hdhive/browser/open", {
-      method: "POST",
-      timeoutMs: 30000,
-      body: JSON.stringify({ source }),
-    });
-    showHdhiveBrowser(data);
-    if (data.ok) {
-      const message = "影巢内置浏览器已打开";
-      toast(message);
-      if (resultBox) resultBox.innerHTML = `<span class="ok-text">${escapeHtml(message)}</span>${renderHdhiveBrowserMeta(data)}`;
-    } else {
-      const message = data.error || "打开影巢内置浏览器失败";
-      toast(message);
-      if (resultBox) resultBox.innerHTML = `<span class="warn-text">内置浏览器不可用</span> · ${escapeHtml(message)}`;
-    }
-  } catch (error) {
-    toast(`打开影巢内置浏览器失败：${error.message}`);
-    if (resultBox) resultBox.innerHTML = `<span class="warn-text">内置浏览器不可用</span> · ${escapeHtml(error.message)}`;
-  }
-}
-
-function showHdhiveBrowser(data) {
-  state.hdhiveBrowser = data;
-  renderHdhiveBrowser();
-  startHdhiveBrowserRefresh();
-}
-
-function renderHdhiveBrowserMeta(data) {
-  const rows = [
-    ["状态", data.diagnostic || ""],
-    ["代理", data.proxy_enabled ? (data.proxy_server || "已启用") : "未启用"],
-    ["浏览器模式", data.headless === false ? "headed" : "headless"],
-    ["地址", data.url || ""],
-    ["标题", data.title || ""],
-    ["用户目录", data.user_data_dir || "data/hdhive-browser"],
-    ["页面摘要", data.page_text_excerpt || ""],
-  ].filter(([, value]) => value);
-  if (!rows.length) return "";
-  return `<div class="rss-source-diagnostic">${rows.map(([label, value]) => `<span>${escapeHtml(label)}：${escapeHtml(value)}</span>`).join("")}</div>`;
-}
-
-function renderHdhiveBrowserNotice(data) {
-  if (!data?.diagnostic && !data?.proxy_enabled && !data?.page_text_excerpt) return "";
-  const diagnosticClass = /错误|拦截|为空|失败|风控|拒绝/.test(data?.diagnostic || "") ? " warn" : "";
-  const rows = [
-    data?.diagnostic ? `<strong>${escapeHtml(data.diagnostic)}</strong>` : "",
-    `代理：${data?.proxy_enabled ? escapeHtml(data.proxy_server || "已启用") : "未启用"}`,
-    `浏览器模式：${data?.headless === false ? "headed" : "headless"}`,
-    data?.page_text_excerpt ? `页面摘要：${escapeHtml(data.page_text_excerpt)}` : "",
-  ].filter(Boolean);
-  return `<div class="hdhive-browser-notice${diagnosticClass}">${rows.map((row) => `<span>${row}</span>`).join("")}</div>`;
-}
-
-function renderHdhiveBrowser() {
-  const data = state.hdhiveBrowser;
-  let modal = document.querySelector("#hdhiveBrowserModal");
-  if (!data || !data.running) {
-    if (modal) modal.remove();
-    stopHdhiveBrowserRefresh();
-    return;
-  }
-  const html = `
-    <div class="hdhive-browser-dialog">
-      <header class="hdhive-browser-header">
-        <div>
-          <strong>HDHive / 影巢</strong>
-          <span title="${escapeHtml(data.url || "")}">${escapeHtml(data.title || data.url || "内置浏览器")}</span>
-        </div>
-        <div class="inline-actions">
-          <button type="button" class="secondary" id="hdhiveBrowserRefresh">刷新</button>
-          <button type="button" class="secondary danger-lite" id="hdhiveBrowserReset">重置环境</button>
-          <button type="button" class="secondary danger-lite" id="hdhiveBrowserClose">关闭</button>
-        </div>
-      </header>
-      <div class="hdhive-browser-nav">
-        <input id="hdhiveBrowserUrl" value="${escapeHtml(data.url || "")}" />
-        <button type="button" class="secondary" id="hdhiveBrowserGo">前往</button>
-      </div>
-      ${renderHdhiveBrowserNotice(data)}
-      <div class="hdhive-browser-screen" style="aspect-ratio: ${escapeHtml(data.width || 1365)} / ${escapeHtml(data.height || 900)}">
-        <img id="hdhiveBrowserImage" src="${escapeHtml(data.screenshot || "")}" alt="HDHive browser" />
-      </div>
-      <div class="hdhive-browser-inputs">
-        <input id="hdhiveBrowserText" placeholder="输入文本后点击发送" />
-        <button type="button" id="hdhiveBrowserType">发送文本</button>
-        <button type="button" class="secondary" data-hdhive-key="Enter">Enter</button>
-        <button type="button" class="secondary" data-hdhive-key="Backspace">Backspace</button>
-        <button type="button" class="secondary" data-hdhive-key="Escape">Esc</button>
-      </div>
-    </div>`;
-  if (!modal) {
-    modal = document.createElement("div");
-    modal.id = "hdhiveBrowserModal";
-    modal.className = "modal-backdrop hdhive-browser-modal";
-    document.body.appendChild(modal);
-  }
-  modal.innerHTML = html;
-  bindHdhiveBrowserEvents();
-}
-
-function bindHdhiveBrowserEvents() {
-  $("#hdhiveBrowserImage")?.addEventListener("click", clickHdhiveBrowser);
-  $("#hdhiveBrowserRefresh")?.addEventListener("click", refreshHdhiveBrowser);
-  $("#hdhiveBrowserReset")?.addEventListener("click", resetHdhiveBrowser);
-  $("#hdhiveBrowserClose")?.addEventListener("click", closeHdhiveBrowser);
-  $("#hdhiveBrowserGo")?.addEventListener("click", navigateHdhiveBrowser);
-  $("#hdhiveBrowserType")?.addEventListener("click", typeHdhiveBrowserText);
-  $("#hdhiveBrowserText")?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") typeHdhiveBrowserText();
-  });
-  document.querySelectorAll("[data-hdhive-key]").forEach((button) => button.addEventListener("click", () => pressHdhiveBrowserKey(button.dataset.hdhiveKey)));
-}
-
-async function clickHdhiveBrowser(event) {
-  const img = event.currentTarget;
-  const rect = img.getBoundingClientRect();
-  const width = state.hdhiveBrowser?.width || img.naturalWidth || rect.width;
-  const height = state.hdhiveBrowser?.height || img.naturalHeight || rect.height;
-  const x = ((event.clientX - rect.left) / rect.width) * width;
-  const y = ((event.clientY - rect.top) / rect.height) * height;
-  const data = await api("/api/hdhive/browser/click", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ x, y }) });
-  showHdhiveBrowser(data);
-}
-
-async function refreshHdhiveBrowser() {
-  const data = await api("/api/hdhive/browser/snapshot", { timeoutMs: 20000 });
-  showHdhiveBrowser(data);
-}
-
-async function navigateHdhiveBrowser() {
-  const url = $("#hdhiveBrowserUrl")?.value || "";
-  const data = await api("/api/hdhive/browser/navigate", { method: "POST", timeoutMs: 30000, body: JSON.stringify({ url }) });
-  showHdhiveBrowser(data);
-}
-
-async function typeHdhiveBrowserText() {
-  const input = $("#hdhiveBrowserText");
-  const text = input?.value || "";
-  if (!text) return;
-  const data = await api("/api/hdhive/browser/type", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ text }) });
-  if (input) input.value = "";
-  showHdhiveBrowser(data);
-}
-
-async function pressHdhiveBrowserKey(key) {
-  const data = await api("/api/hdhive/browser/key", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ key }) });
-  showHdhiveBrowser(data);
-}
-
-async function closeHdhiveBrowser() {
-  await api("/api/hdhive/browser/close", { method: "POST", timeoutMs: 12000 });
-  state.hdhiveBrowser = null;
-  renderHdhiveBrowser();
-}
-
-async function resetHdhiveBrowser() {
-  const data = await api("/api/hdhive/browser/reset", { method: "POST", timeoutMs: 20000, body: JSON.stringify({ source: {} }) });
-  toast(data.message || data.error || "影巢浏览器环境已重置");
-  state.hdhiveBrowser = null;
-  renderHdhiveBrowser();
-}
-
-function startHdhiveBrowserRefresh() {
-  if (state.hdhiveBrowserTimer) return;
-  state.hdhiveBrowserTimer = setInterval(async () => {
-    if (!state.hdhiveBrowser?.running) return;
-    try {
-      const data = await api("/api/hdhive/browser/snapshot", { timeoutMs: 12000 });
-      state.hdhiveBrowser = data;
-      renderHdhiveBrowser();
-    } catch {
-      stopHdhiveBrowserRefresh();
-    }
-  }, 2500);
-}
-
-function stopHdhiveBrowserRefresh() {
-  if (state.hdhiveBrowserTimer) clearInterval(state.hdhiveBrowserTimer);
-  state.hdhiveBrowserTimer = null;
 }
 
 /* source: static/src/js/64_settings_actions.js */

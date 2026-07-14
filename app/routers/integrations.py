@@ -7,12 +7,6 @@ from fastapi.responses import StreamingResponse
 
 from app.auth import current_user
 from app.schemas import (
-    HdhiveBrowserClickRequest,
-    HdhiveBrowserKeyRequest,
-    HdhiveBrowserNavigateRequest,
-    HdhiveBrowserOpenRequest,
-    HdhiveBrowserTypeRequest,
-    HdhiveLoginBrowserRequest,
     Pan115QrRequest,
     Pan115SaveRequest,
     TelegramCodeLoginRequest,
@@ -21,7 +15,6 @@ from app.schemas import (
     TelegramWebAppAuthRequest,
 )
 from app.services.integration_actions import (
-    hdhive_login_browser as open_hdhive_login_browser,
     pan115_folders as get_pan115_folders,
     pan115_login_status,
     pan115_qr_login_start,
@@ -34,14 +27,6 @@ from app.services.integration_actions import (
     telegram_sign_in_code,
     telegram_url_auth_login,
     telegram_webapp_auth_data,
-    hdhive_browser_click_at,
-    hdhive_browser_go,
-    hdhive_browser_open,
-    hdhive_browser_press_key,
-    hdhive_browser_reset_profile,
-    hdhive_browser_screen,
-    hdhive_browser_stop,
-    hdhive_browser_type_text,
 )
 
 router = APIRouter()
@@ -130,48 +115,3 @@ async def pan115_folders(cid: str = "0", user: dict = Depends(current_user)) -> 
 @router.post("/api/115/save")
 async def pan115_save(payload: Pan115SaveRequest, user: dict = Depends(current_user)) -> dict:
     return await pan115_save_link(payload.link, payload.target_path)
-
-
-@router.post("/api/hdhive/login-browser")
-async def hdhive_login_browser(payload: HdhiveLoginBrowserRequest, user: dict = Depends(current_user)) -> dict:
-    return await open_hdhive_login_browser(payload.source)
-
-
-@router.post("/api/hdhive/browser/open")
-async def hdhive_embedded_browser_open(payload: HdhiveBrowserOpenRequest, user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_open(payload.source)
-
-
-@router.get("/api/hdhive/browser/snapshot")
-async def hdhive_embedded_browser_snapshot(user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_screen()
-
-
-@router.post("/api/hdhive/browser/click")
-async def hdhive_embedded_browser_click(payload: HdhiveBrowserClickRequest, user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_click_at(payload.x, payload.y)
-
-
-@router.post("/api/hdhive/browser/type")
-async def hdhive_embedded_browser_type(payload: HdhiveBrowserTypeRequest, user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_type_text(payload.text)
-
-
-@router.post("/api/hdhive/browser/key")
-async def hdhive_embedded_browser_key(payload: HdhiveBrowserKeyRequest, user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_press_key(payload.key)
-
-
-@router.post("/api/hdhive/browser/navigate")
-async def hdhive_embedded_browser_navigate(payload: HdhiveBrowserNavigateRequest, user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_go(payload.url)
-
-
-@router.post("/api/hdhive/browser/close")
-async def hdhive_embedded_browser_close(user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_stop()
-
-
-@router.post("/api/hdhive/browser/reset")
-async def hdhive_embedded_browser_reset(payload: HdhiveBrowserOpenRequest, user: dict = Depends(current_user)) -> dict:
-    return await hdhive_browser_reset_profile(payload.source)

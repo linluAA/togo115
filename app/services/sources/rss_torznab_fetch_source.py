@@ -79,11 +79,6 @@ class RssTorznabFetchSourceMixin:
         query: str | None,
         query_context: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
-        if self._site_plugin_id(source) == "hdhive":
-            results = await self._fetch_hdhive_source(source, query, query_context)
-            add_log("debug", "rss", f"HDHive 订阅源搜索完成：{len(results)} 条", {"source": context.name, "url": context.url, "count": len(results)})
-            return results
-
         res = await self._get_magnet_web_page(client, context.url)
         if self._is_magnet_web_challenge(str(res.url), res.text):
             add_log("warning", "rss", "站点插件订阅源被浏览器验证拦截", {"source": context.name, "url": context.url, "plugin": self._site_plugin_id(source)})

@@ -66,7 +66,6 @@ function renderSettings() {
   document.querySelectorAll("[data-toggle-rss-source]").forEach((btn) => btn.addEventListener("click", toggleRssSource));
   document.querySelectorAll("[data-remove-rss-source]").forEach((btn) => btn.addEventListener("click", removeRssSource));
   document.querySelectorAll("[data-test-rss-source]").forEach((btn) => btn.addEventListener("click", testRssSource));
-  document.querySelectorAll("[data-login-hdhive-source]").forEach((btn) => btn.addEventListener("click", loginHdhiveSource));
   document.querySelectorAll(".rss-source-type").forEach((select) => select.addEventListener("change", syncRssSourceTypeUi));
   document.querySelectorAll(".rss-source-plugin").forEach((select) => select.addEventListener("change", syncRssSourceTypeUi));
   $("#exportBackup")?.addEventListener("click", exportBackup);
@@ -124,7 +123,7 @@ function fieldHtml(key, name, label, current, type = "text") {
   }
   if (key === "proxy" && name === "modules") {
     const selected = Array.isArray(current) ? current : String(current || "").split(",").filter(Boolean);
-    const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["emby", "Emby"], ["hdhive", "HDHive / 影巢"]];
+    const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["emby", "Emby"]];
     return `<fieldset class="check-group"><legend>${label}</legend>
       ${options.map(([value, text]) => `<label><input type="checkbox" name="modules" value="${value}" ${selected.includes(value) ? "checked" : ""} /> ${text}</label>`).join("")}
     </fieldset>`;

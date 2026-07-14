@@ -59,9 +59,6 @@ class RssTorznabAdapter(
         "qmp4": "qmp4",
         "qiwei": "qmp4",
         "qmp4_magnet": "qmp4",
-        "hdhive": "hdhive",
-        "yingchao": "hdhive",
-        "hdhive_115": "hdhive",
     }
     MAGNET_WEB_BROWSER_UA = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -90,19 +87,6 @@ class RssTorznabAdapter(
             "use_proxy": False,
             "priority": -50,
             "refresh_interval": 30,
-            "_builtin": True,
-        },
-        {
-            "id": "builtin_hdhive",
-            "name": "HDHive / 影巢",
-            "type": "site_plugin",
-            "plugin": "hdhive",
-            "url": "https://hdhive.com/",
-            "enabled": False,
-            "use_proxy": False,
-            "priority": -40,
-            "refresh_interval": 30,
-            "points_threshold": 0,
             "_builtin": True,
         },
     )

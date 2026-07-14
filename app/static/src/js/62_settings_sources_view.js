@@ -45,14 +45,12 @@ function builtinRssSourceItemHtml(source) {
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.enabled === false ? "停用" : "启用"}</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
-          ${plugin === "hdhive" ? `<span>积分 <= ${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}</span>` : ""}
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
           ${stat ? `<span>成功率 ${escapeHtml(stat.success_rate || 0)}%</span><span>命中 ${escapeHtml(stat.match_count || 0)}</span><span>${escapeHtml(stat.last_latency_ms || "-")} ms</span>` : ""}
         </div>
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-builtin-source="${escapeHtml(source.id)}">收起</button>
-        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
       </div>
     </div>
@@ -89,7 +87,6 @@ function rssSourceItemHtml(source, index) {
           <span>优先级 ${escapeHtml(priority)}</span>
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
-          ${plugin === "hdhive" ? `<span>积分 <= ${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}</span>` : ""}
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
           ${keywordCount ? `<span>关键词 ${keywordCount}</span>` : ""}
           ${qualityCount ? `<span>质量 ${qualityCount}</span>` : ""}
@@ -98,7 +95,6 @@ function rssSourceItemHtml(source, index) {
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-rss-source="${escapeHtml(source.id)}">${expanded ? "收起" : "编辑"}</button>
-        ${plugin === "hdhive" ? `<button type="button" class="secondary" data-login-hdhive-source="${escapeHtml(source.id)}">登录</button>` : ""}
         <button type="button" class="secondary" data-test-rss-source="${escapeHtml(source.id)}">测试</button>
         <button type="button" class="secondary danger-lite" data-remove-rss-source="${escapeHtml(source.id)}">删除</button>
       </div>
@@ -115,7 +111,6 @@ function rssSourceItemHtml(source, index) {
       <label class="rss-source-plugin-row ${type === "site_plugin" ? "" : "hidden"}">插件
         <select class="rss-source-plugin">
           <option value="generic_magnet" ${plugin === "generic_magnet" ? "selected" : ""}>通用磁力站</option>
-          <option value="hdhive" ${plugin === "hdhive" ? "selected" : ""}>HDHive / 影巢</option>
         </select>
       </label>
       ${rssSourceCommonFields(source, type, plugin, priority, interval, testQuery, false)}
@@ -129,20 +124,11 @@ function rssSourceCommonFields(source, type, plugin, priority, interval, testQue
     <label class="rss-source-url"><span class="rss-source-url-label">${rssSourceUrlLabel(type, plugin)}</span> <input class="rss-source-url-input" placeholder="${rssSourceUrlPlaceholder(type, plugin)}" value="${escapeHtml(source.url || "")}" /></label>
     <label>优先级 <input class="rss-source-priority" type="number" step="1" value="${escapeHtml(priority)}" /></label>
     <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
-    <label>测试关键字 <input class="rss-source-test-query" placeholder="${plugin === "hdhive" ? "例如：tv:86344" : "例如：斗罗大陆"}" value="${escapeHtml(testQuery)}" /></label>
+    <label>测试关键字 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
     ${builtin ? `<label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>` : ""}
     <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
-    ${rssSourceHdhiveFields(source, plugin)}
     <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
     <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>`;
-}
-
-function rssSourceHdhiveFields(source, plugin) {
-  const hidden = plugin === "hdhive" ? "" : "hidden";
-  return `
-    <label class="hdhive-source-field ${hidden}">积分阈值 <input class="rss-source-points-threshold" type="number" min="0" step="1" value="${escapeHtml(Number.parseInt(source.points_threshold, 10) || 0)}" /></label>
-    <label class="hdhive-source-field ${hidden}">浏览器路径 <input class="rss-source-browser-path" placeholder="留空使用镜像内 Chromium" value="${escapeHtml(source.browser_path || "")}" /></label>
-    <label class="hdhive-source-field ${hidden}">浏览器用户目录 <input class="rss-source-browser-user-data-dir" placeholder="留空使用 data/hdhive-browser" value="${escapeHtml(source.browser_user_data_dir || "")}" /></label>`;
 }
 
 function syncRssSourceTypeUi(event) {
@@ -156,7 +142,6 @@ function syncRssSourceTypeUi(event) {
   if (label) label.textContent = rssSourceUrlLabel(type, plugin);
   if (input) input.placeholder = rssSourceUrlPlaceholder(type, plugin);
   if (pluginRow) pluginRow.classList.toggle("hidden", type !== "site_plugin");
-  row.querySelectorAll(".hdhive-source-field").forEach((field) => field.classList.toggle("hidden", plugin !== "hdhive"));
   if (event.currentTarget.classList.contains("rss-source-plugin")) {
     updateRssSourceDraftFromRow(row, type, plugin);
     renderSettings();
@@ -188,9 +173,6 @@ function rssSourceFromRow(row, id, original, type, plugin) {
     keywords: row.querySelector(".rss-source-keywords")?.value.trim() || "",
     quality: row.querySelector(".rss-source-quality")?.value.trim() || "",
     test_query: row.querySelector(".rss-source-test-query")?.value.trim() || "",
-    points_threshold: Number.parseInt(row.querySelector(".rss-source-points-threshold")?.value || "0", 10) || 0,
-    browser_path: row.querySelector(".rss-source-browser-path")?.value.trim() || "",
-    browser_user_data_dir: row.querySelector(".rss-source-browser-user-data-dir")?.value.trim() || "",
     priority: Number.isFinite(priority) ? priority : 0,
     refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
     ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
@@ -217,9 +199,6 @@ function addRssSource() {
     priority: 0,
     refresh_interval: 30,
     test_query: "",
-    points_threshold: 0,
-    browser_path: "",
-    browser_user_data_dir: "",
   });
   state.rssSourceExpanded.add(id);
   state.settings.rss_sources = { value: { ...rssSourcesConfig(), sources } };

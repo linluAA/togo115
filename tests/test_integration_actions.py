@@ -4,17 +4,6 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.services import integration_actions
-from app.services.hdhive_browser import (
-    _hdhive_browser_args,
-    _hdhive_embedded_headless,
-    _hdhive_page_diagnostic,
-    _hdhive_stealth_init_script,
-    _hdhive_user_agent,
-    hdhive_browser_reset,
-    hdhive_playwright_proxy,
-    hdhive_proxy_label,
-)
-
 
 class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
     async def test_telegram_actions_delegate_to_adapter(self) -> None:
@@ -68,60 +57,6 @@ class IntegrationActionsTest(unittest.IsolatedAsyncioTestCase):
         adapter.qr_login_status.assert_awaited_once_with()
         adapter.list_folders.assert_awaited_once_with("0")
         adapter.transfer.assert_awaited_once_with("https://115.com/s/demo", "/tv")
-
-    async def test_hdhive_login_browser_delegates_to_source_helper(self) -> None:
-        source = {"plugin": "hdhive", "url": "https://hdhive.com/"}
-        with patch.object(integration_actions, "open_hdhive_embedded_browser", AsyncMock(return_value={"ok": True})) as login:
-            result = await integration_actions.hdhive_login_browser(source)
-
-        self.assertEqual(result, {"ok": True})
-        login.assert_awaited_once_with(source)
-
-    def test_hdhive_browser_uses_source_proxy(self) -> None:
-        with patch("app.services.hdhive_browser.get_setting", return_value={"url": "socks5://user:pass@127.0.0.1:7890"}):
-            proxy = hdhive_playwright_proxy({"use_proxy": True})
-
-        self.assertEqual(proxy, {"server": "socks5://127.0.0.1:7890", "username": "user", "password": "pass"})
-
-    def test_hdhive_browser_ignores_proxy_when_source_disabled(self) -> None:
-        with patch("app.services.hdhive_browser.get_setting", return_value={"url": "http://127.0.0.1:7890"}):
-            proxy = hdhive_playwright_proxy({"use_proxy": False})
-
-        self.assertIsNone(proxy)
-
-    def test_hdhive_proxy_label_hides_credentials(self) -> None:
-        with patch("app.services.hdhive_browser.get_setting", return_value={"url": "socks5://user:pass@127.0.0.1:7890"}):
-            label = hdhive_proxy_label({"use_proxy": True})
-
-        self.assertEqual(label, "socks5://127.0.0.1:7890")
-
-    def test_hdhive_site_error_page_has_diagnostic(self) -> None:
-        diagnostic = _hdhive_page_diagnostic(
-            "https://hdhive.com/",
-            "HDHive - HDHive",
-            "出现了很多奇怪的错误\n请联系管理员处理",
-            proxy_enabled=True,
-        )
-
-        self.assertIn("影巢返回站内错误页", diagnostic)
-        self.assertIn("更换代理出口", diagnostic)
-
-    def test_hdhive_browser_uses_stealth_defaults(self) -> None:
-        args = _hdhive_browser_args()
-        script = _hdhive_stealth_init_script()
-
-        self.assertIn("--disable-blink-features=AutomationControlled", args)
-        self.assertIn("--lang=zh-CN", args)
-        self.assertIn("webdriver", script)
-        self.assertIn("Win32", script)
-        self.assertIn("Chrome/", _hdhive_user_agent({}))
-        self.assertFalse(_hdhive_embedded_headless({}))
-
-    async def test_hdhive_browser_reset_rejects_custom_directory(self) -> None:
-        result = await hdhive_browser_reset({"browser_user_data_dir": "/tmp/not-togo115-hdhive"})
-
-        self.assertFalse(result["ok"])
-        self.assertIn("自定义目录", result["error"])
 
     async def test_telegram_errors_are_logged_and_reraised(self) -> None:
         adapter = Mock()

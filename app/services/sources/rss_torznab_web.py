@@ -24,10 +24,6 @@ class RssTorznabWebMixin:
         host = urlparse(str(url or "")).netloc.lower()
         return "qmp4.com" in host
 
-    def _is_hdhive_url(self, url: str | None) -> bool:
-        host = urlparse(str(url or "")).netloc.lower()
-        return host.endswith("hdhive.com")
-
     def _is_bt1207_search_url(self, url: str | None) -> bool:
         parsed = urlparse(str(url or ""))
         if "bt1207" not in parsed.netloc.lower():
