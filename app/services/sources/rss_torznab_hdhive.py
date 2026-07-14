@@ -229,6 +229,7 @@ async def start_hdhive_login_browser(source: dict[str, Any]) -> dict[str, Any]:
     """Open a headed HDHive browser session for manual login."""
     global _hdhive_login_browser_task
     if _hdhive_login_browser_task and not _hdhive_login_browser_task.done():
+        add_log("info", "rss", "HDHive login browser is already running", {})
         return _with_hdhive_novnc_url(source, {"ok": True, "running": True, "queued": False, "message": "HDHive login browser is already running"})
 
     loop = asyncio.get_running_loop()
@@ -238,6 +239,7 @@ async def start_hdhive_login_browser(source: dict[str, Any]) -> dict[str, Any]:
     try:
         return await asyncio.wait_for(asyncio.shield(started), timeout=8)
     except asyncio.TimeoutError:
+        add_log("info", "rss", "HDHive login browser is still starting", {})
         return _with_hdhive_novnc_url(source, {"ok": True, "running": True, "queued": True, "message": "HDHive login browser is starting"})
 
 
@@ -274,6 +276,7 @@ async def _run_hdhive_login_browser(source: dict[str, Any], started: asyncio.Fut
             try:
                 page = browser.pages[0] if browser.pages else await browser.new_page()
                 await page.goto(base_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                add_log("info", "rss", "HDHive login browser opened", {"url": base_url, "user_data_dir": user_data_dir})
                 _resolve_hdhive_login_start(
                     started,
                     _with_hdhive_novnc_url(login_source, {

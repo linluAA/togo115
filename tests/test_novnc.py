@@ -40,6 +40,25 @@ def test_hdhive_profile_lock_returns_running_payload(monkeypatch) -> None:
     assert payload["novnc_url"] == default_novnc_url()
 
 
+def test_hdhive_login_running_task_logs_brief_status(monkeypatch) -> None:
+    logs = []
+
+    class RunningTask:
+        def done(self):
+            return False
+
+    monkeypatch.setattr(hdhive, "_hdhive_login_browser_task", RunningTask())
+    monkeypatch.setattr(hdhive, "add_log", lambda *args: logs.append(args))
+    monkeypatch.delenv("TOGO115_NOVNC_URL", raising=False)
+
+    payload = asyncio.run(hdhive.start_hdhive_login_browser({"plugin": "hdhive"}))
+
+    assert payload["ok"] is True
+    assert payload["queued"] is False
+    assert payload["novnc_url"] == default_novnc_url()
+    assert logs == [("info", "rss", "HDHive login browser is already running", {})]
+
+
 def test_hdhive_clears_stale_profile_lock(tmp_path, monkeypatch) -> None:
     for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
         (tmp_path / name).write_text("host-12345", encoding="utf-8")
