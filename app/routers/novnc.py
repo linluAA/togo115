@@ -77,9 +77,11 @@ async def novnc_status(user: dict = Depends(current_user)) -> dict:
         "http": http_status,
         "websocket": ws_status,
         "ports": {"vnc": vnc_port(), "novnc": novnc_port()},
+        "client_path": "api/novnc/websockify",
     }
 
 
+@router.websocket("/api/novnc/websockify")
 @router.websocket("/novnc/websockify")
 async def novnc_websocket_proxy(websocket: WebSocket) -> None:
     if not _websocket_is_authenticated(websocket):

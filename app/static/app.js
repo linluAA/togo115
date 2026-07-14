@@ -2028,7 +2028,7 @@ function hdhiveNoVncUrl(url) {
   const target = new URL("/novnc/vnc.html", window.location.origin);
   target.searchParams.set("autoconnect", "true");
   target.searchParams.set("resize", "remote");
-  target.searchParams.set("path", "novnc/websockify");
+  target.searchParams.set("path", "api/novnc/websockify");
   return target.toString();
 }
 

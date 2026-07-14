@@ -16,7 +16,7 @@ def default_novnc_url() -> str:
     params = {
         "autoconnect": "true",
         "resize": "remote",
-        "path": "novnc/websockify",
+        "path": "api/novnc/websockify",
     }
     password = str(os.getenv("VNC_PASSWORD") or "").strip()
     if password:

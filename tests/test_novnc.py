@@ -9,13 +9,13 @@ from app.routers import novnc
 def test_default_novnc_url_uses_same_origin_proxy(monkeypatch) -> None:
     monkeypatch.delenv("VNC_PASSWORD", raising=False)
 
-    assert default_novnc_url() == "/novnc/vnc.html?autoconnect=true&resize=remote&path=novnc%2Fwebsockify"
+    assert default_novnc_url() == "/novnc/vnc.html?autoconnect=true&resize=remote&path=api%2Fnovnc%2Fwebsockify"
 
 
 def test_default_novnc_url_includes_vnc_password(monkeypatch) -> None:
     monkeypatch.setenv("VNC_PASSWORD", "togo 115")
 
-    assert default_novnc_url() == "/novnc/vnc.html?autoconnect=true&resize=remote&path=novnc%2Fwebsockify&password=togo+115"
+    assert default_novnc_url() == "/novnc/vnc.html?autoconnect=true&resize=remote&path=api%2Fnovnc%2Fwebsockify&password=togo+115"
 
 
 def test_hdhive_login_uses_default_novnc_proxy(monkeypatch) -> None:
@@ -114,4 +114,5 @@ def test_novnc_status_reports_http_and_websocket(monkeypatch) -> None:
         "http": {"ok": True, "status_code": 200},
         "websocket": {"ok": False, "error": "closed", "error_type": "ConnectionClosed"},
         "ports": {"vnc": "5900", "novnc": "6080"},
+        "client_path": "api/novnc/websockify",
     }
