@@ -483,6 +483,39 @@ class SubscriptionMatchingTest(unittest.TestCase):
         finally:
             conn.close()
 
+
+    def test_traditional_title_and_new_prefix_alias_match_subscription(self) -> None:
+        subscription = {
+            "title": "新攻壳机动队",
+            "media_type": "tv",
+            "tmdb_id": 255358,
+            "keywords": ["新攻壳机动队"],
+            "tmdb_total_count": 10,
+            "emby_episode_keys": [],
+        }
+        card = result(
+            "\n".join(
+                [
+                    "剧集：攻殻機動隊(2026)",
+                    "TMDB ID：255358",
+                    "季集：S01E01-E02",
+                    "质量：1080P / WEB-DL / AVC",
+                ]
+            )
+        )
+        self.assertTrue(result_matches_subscription(subscription, card))
+        self.assertTrue(result_matches_missing_episodes(subscription, card))
+
+    def test_traditional_title_matches_without_tmdb_via_prefix_alias(self) -> None:
+        subscription = {
+            "title": "新攻壳机动队",
+            "media_type": "tv",
+            "keywords": ["新攻壳机动队"],
+            "tmdb_total_count": 10,
+            "emby_episode_keys": [],
+        }
+        card = result("剧集：攻殻機動隊(2026)\n季集：S01E01-E02")
+        self.assertTrue(result_matches_subscription(subscription, card))
 if __name__ == "__main__":
     unittest.main()
 

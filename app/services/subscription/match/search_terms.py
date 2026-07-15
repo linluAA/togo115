@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.text_cjk import title_prefix_aliases
+
 from app.services.subscription.match.text_utils import (
     compact_match_text,
     _safe_text,
@@ -48,13 +50,21 @@ def extra_search_keywords(subscription: dict) -> list[str]:
     search_title = subscription_search_title(subscription)
     title_terms = {compact_match_text(title), compact_match_text(clean_title), compact_match_text(search_title)}
     extras: list[str] = []
+
+    def add_extra(value: str | None) -> None:
+        text = str(value or "").strip()
+        clean_value = title_without_year(text)
+        compact = compact_match_text(clean_value or text)
+        if not text or not compact or compact in title_terms:
+            return
+        if (clean_value or text) in extras:
+            return
+        extras.append(clean_value or text)
+
+    for alias in title_prefix_aliases(clean_title or title)[1:]:
+        add_extra(alias)
     for keyword in subscription.get("keywords") or []:
-        value = str(keyword or "").strip()
-        clean_value = title_without_year(value)
-        compact = compact_match_text(clean_value or value)
-        if not value or not compact or compact in title_terms:
-            continue
-        extras.append(clean_value or value)
+        add_extra(keyword)
     return extras
 
 

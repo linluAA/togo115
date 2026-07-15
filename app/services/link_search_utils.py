@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.services.text_cjk import normalize_cjk_for_match, query_match_aliases, title_prefix_aliases
+
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 LOCAL_SEARCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 
@@ -56,7 +58,7 @@ def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
 
 
 def _compact_search_text(value: str | None) -> str:
-    return LOCAL_SEARCH_DROP_RE.sub("", str(value or "").casefold())
+    return LOCAL_SEARCH_DROP_RE.sub("", normalize_cjk_for_match(str(value or "")).casefold())
 
 
 def _query_without_year(value: str | None) -> str:
@@ -70,8 +72,6 @@ def _search_title_variants(title: str | None) -> list[str]:
     raw = re.sub(r"\s+", " ", str(title or "").strip())
     if not raw:
         return []
-    years = sorted(years_from_text(raw))
-    base = _query_without_year(raw)
     variants: list[str] = []
 
     def add(value: str | None) -> None:
@@ -79,13 +79,16 @@ def _search_title_variants(title: str | None) -> list[str]:
         if normalized and normalized not in variants:
             variants.append(normalized)
 
-    add(raw)
-    add(base)
-    if base and years:
-        for year in years:
-            add(f"{base} {year}")
-            add(f"{base} ({year})")
-            add(f"{base}（{year}）")
+    for alias in title_prefix_aliases(raw):
+        years = sorted(years_from_text(alias))
+        base = _query_without_year(alias)
+        add(alias)
+        add(base)
+        if base and years:
+            for year in years:
+                add(f"{base} {year}")
+                add(f"{base} ({year})")
+                add(f"{base}（{year}）")
     return variants
 
 
@@ -126,9 +129,12 @@ def _expanded_search_queries(title: str, keywords: list[str], max_queries: int =
 
 def _local_text_matches_query(text: str | None, query: str | None) -> bool:
     compact_text = _compact_search_text(text)
-    parts = [part for part in re.split(r"\s+", str(query or "").strip()) if part]
-    if not compact_text or not parts:
+    if not compact_text:
         return False
-    return all(_compact_search_text(part) in compact_text for part in parts)
+    for candidate in query_match_aliases(query) or [str(query or "").strip()]:
+        parts = [part for part in re.split(r"\s+", candidate) if part]
+        if parts and all(_compact_search_text(part) in compact_text for part in parts):
+            return True
+    return False
 
 

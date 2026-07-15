@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from app.services.subscription.match.text_utils import compact_match_text
+from app.services.text_cjk import title_prefix_aliases
 
 
 CJK_RE = re.compile(r"[\u3400-\u9fff]")
@@ -54,22 +55,44 @@ def _title_term_in_text(term: tuple[str, str], text: str) -> bool:
     if not compact_title:
         return False
     compact_text = compact_match_text(text)
+    candidates = [compact_title]
+    # Also accept franchise packs that omit 新/续 prefixes present on the subscription title.
+    raw_title = term[0]
+    for alias in title_prefix_aliases(raw_title)[1:]:
+        compact_alias = compact_match_text(alias)
+        if compact_alias and compact_alias not in candidates:
+            candidates.append(compact_alias)
     title_has_cjk = bool(CJK_RE.search(compact_title))
-    start = 0
-    while True:
-        index = compact_text.find(compact_title, start)
-        if index < 0:
-            return False
-        after_index = index + len(compact_title)
-        after = compact_text[after_index] if after_index < len(compact_text) else ""
-        if _is_title_prefix_boundary(compact_text, index, title_has_cjk) and _is_title_suffix_boundary(after, title_has_cjk):
-            return True
-        start = index + 1
+    for candidate in candidates:
+        start = 0
+        while True:
+            index = compact_text.find(candidate, start)
+            if index < 0:
+                break
+            after_index = index + len(candidate)
+            after = compact_text[after_index] if after_index < len(compact_text) else ""
+            if _is_title_prefix_boundary(compact_text, index, title_has_cjk) and _is_title_suffix_boundary(after, title_has_cjk):
+                return True
+            start = index + 1
+    return False
 
 
 def _title_fragment_in_text(term: tuple[str, str] | None, text: str) -> bool:
     if not term:
         return False
-    if len(term[1]) < 3:
-        return _title_term_in_text(term, text)
-    return term[1] in compact_match_text(text)
+    compact_text = compact_match_text(text)
+    candidates = [term[1]] if term[1] else []
+    for alias in title_prefix_aliases(term[0])[1:]:
+        compact_alias = compact_match_text(alias)
+        if compact_alias and compact_alias not in candidates:
+            candidates.append(compact_alias)
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if len(candidate) < 3:
+            if _title_term_in_text((term[0], candidate), text):
+                return True
+            continue
+        if candidate in compact_text:
+            return True
+    return False
