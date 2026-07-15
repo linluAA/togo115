@@ -56,3 +56,23 @@ class TelegramMessageIndexTest(unittest.TestCase):
         results = search_telegram_message_index(["-1001"], ["南部档案"], 5)
 
         assert results == []
+
+
+    def test_index_search_does_not_attach_neighbor_link(self) -> None:
+        index_telegram_messages(
+            "-1001",
+            [
+                DummyMessage(30, "剧集：野狗骨头 2026 第 20 集 1080p"),
+                DummyMessage(31, "链接：https://115.com/s/ydgtlink?password=1111"),
+                DummyMessage(32, "名称: 念念相忘.Just.for.Meeting.You.2023.2160p"),
+                DummyMessage(33, "链接：https://115.com/s/swsbls23ndb?password=KMKM"),
+            ],
+        )
+
+        results = search_telegram_message_index(["-1001"], ["野狗骨头"], 10)
+        urls = [item.url for item in results]
+
+        assert "https://115.com/s/ydgtlink?password=1111" in urls
+        assert "https://115.com/s/swsbls23ndb?password=KMKM" not in urls
+        assert all("念念相忘" not in (item.title or "") for item in results)
+

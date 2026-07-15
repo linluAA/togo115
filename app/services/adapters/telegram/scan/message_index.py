@@ -5,10 +5,12 @@ import sqlite3
 from typing import Any
 
 from app.db import db, row_to_dict, utc_now
+from app.services.adapters.telegram.scan.message_links import _telegram_resource_title
 from app.services.link_parser import (
     _local_text_matches_query,
     _message_has_link_button_hint,
     _text_has_external_resource_page_hint,
+    context_for_115_link,
     extract_115_links,
     telegram_message_text,
 )
@@ -62,11 +64,16 @@ def search_telegram_message_index(sources: list[str], queries: list[str], limit:
                 matched_query = next((query for query in queries if _local_text_matches_query(context, query)), "")
                 if not matched_query:
                     continue
-                for url in extract_115_links(context):
+                links = extract_115_links(context)
+                for url in links:
                     if url in seen_urls:
                         continue
+                    # Scope each link to its local segment so a nearby title cannot claim unrelated shares.
+                    scoped = context_for_115_link(context, url, len(links))
+                    if not _local_text_matches_query(scoped, matched_query):
+                        continue
                     seen_urls.add(url)
-                    results.append(_row_to_result(row, url, context, matched_query))
+                    results.append(_row_to_result(row, url, scoped, matched_query))
                     if len(results) >= limit:
                         return results
     except sqlite3.OperationalError as exc:
@@ -146,6 +153,9 @@ def _row_to_result(row: dict[str, Any], url: str, context: str, matched_query: s
 
 
 def _title_from_context(context: str, matched_query: str) -> str:
+    title = _telegram_resource_title(context)
+    if title and title != "Telegram 资源":
+        return title[:160]
     for line in context.splitlines():
         if matched_query and _local_text_matches_query(line, matched_query):
             return line.strip()[:160]
