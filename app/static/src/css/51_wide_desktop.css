@@ -492,8 +492,7 @@ html[data-theme="light"] .subscription-card,
 html[data-theme="light"] .more-card,
 html[data-theme="light"] .rank-item,
 html[data-theme="light"] .empty,
-html[data-theme="light"] .failed-task-card,
-html[data-theme="light"] .table tbody,
+html[data-theme="light"] .failed-task-item,
 html[data-theme="light"] .folder-current {
   background: rgba(255, 255, 255, .72);
 }
@@ -537,8 +536,7 @@ html[data-theme="light"] .poster-overlay {
   background: linear-gradient(180deg, transparent, rgba(15, 23, 42, .72));
 }
 
-html[data-theme="light"] .detail-panel,
-html[data-theme="light"] .log-panel {
+html[data-theme="light"] .detail-panel {
   background: var(--surface);
 }
 

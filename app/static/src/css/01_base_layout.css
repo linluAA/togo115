@@ -268,7 +268,6 @@ a:hover { text-decoration: underline; }
 }
 
 .icon-action,
-.mobile-menu-btn,
 .avatar-btn {
   display: grid;
   place-items: center;
@@ -281,9 +280,6 @@ a:hover { text-decoration: underline; }
   background: rgba(255, 255, 255, .06);
 }
 
-.mobile-menu-btn {
-  display: none;
-}
 
 .avatar-btn {
   color: #071d1a;

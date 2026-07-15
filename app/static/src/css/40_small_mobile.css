@@ -35,48 +35,6 @@
     padding: 14px;
   }
 
-  .resource-table-wrap {
-    border: 0;
-    max-height: 360px;
-  }
-
-  .table,
-  .table tbody,
-  .table tr,
-  .table td {
-    display: block;
-    width: 100%;
-  }
-
-  .table thead {
-    display: none;
-  }
-
-  .table tr {
-    margin-bottom: 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: rgba(255, 255, 255, .04);
-    overflow: hidden;
-  }
-
-  .table td {
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    gap: 10px;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .table td::before {
-    content: attr(data-label);
-    color: var(--muted);
-    font-weight: 900;
-  }
-
-  .table td:last-child {
-    border-bottom: 0;
-  }
-
   .search-metrics {
     gap: 6px;
   }

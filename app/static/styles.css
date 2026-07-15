@@ -462,7 +462,6 @@ a:hover { text-decoration: underline; }
 }
 
 .icon-action,
-.mobile-menu-btn,
 .avatar-btn {
   display: grid;
   place-items: center;
@@ -475,9 +474,6 @@ a:hover { text-decoration: underline; }
   background: rgba(255, 255, 255, .06);
 }
 
-.mobile-menu-btn {
-  display: none;
-}
 
 .avatar-btn {
   color: #071d1a;
@@ -1460,45 +1456,6 @@ a:hover { text-decoration: underline; }
 .failed-task-item span {
   color: var(--muted);
   font-size: 12px;
-}
-
-.resource-table-wrap {
-  max-height: 360px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.table th,
-.table td {
-  padding: 12px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-
-.table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  color: var(--muted);
-  background: var(--surface-2);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.table td {
-  color: var(--ink-soft);
-  word-break: break-word;
-}
-
-.table tr:last-child td {
-  border-bottom: 0;
 }
 
 .resource-list {
@@ -3537,48 +3494,6 @@ legend {
     padding: 14px;
   }
 
-  .resource-table-wrap {
-    border: 0;
-    max-height: 360px;
-  }
-
-  .table,
-  .table tbody,
-  .table tr,
-  .table td {
-    display: block;
-    width: 100%;
-  }
-
-  .table thead {
-    display: none;
-  }
-
-  .table tr {
-    margin-bottom: 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: rgba(255, 255, 255, .04);
-    overflow: hidden;
-  }
-
-  .table td {
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    gap: 10px;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .table td::before {
-    content: attr(data-label);
-    color: var(--muted);
-    font-weight: 900;
-  }
-
-  .table td:last-child {
-    border-bottom: 0;
-  }
-
   .search-metrics {
     gap: 6px;
   }
@@ -4824,8 +4739,7 @@ html[data-theme="light"] .subscription-card,
 html[data-theme="light"] .more-card,
 html[data-theme="light"] .rank-item,
 html[data-theme="light"] .empty,
-html[data-theme="light"] .failed-task-card,
-html[data-theme="light"] .table tbody,
+html[data-theme="light"] .failed-task-item,
 html[data-theme="light"] .folder-current {
   background: rgba(255, 255, 255, .72);
 }
@@ -4869,8 +4783,7 @@ html[data-theme="light"] .poster-overlay {
   background: linear-gradient(180deg, transparent, rgba(15, 23, 42, .72));
 }
 
-html[data-theme="light"] .detail-panel,
-html[data-theme="light"] .log-panel {
+html[data-theme="light"] .detail-panel {
   background: var(--surface);
 }
 
