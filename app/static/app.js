@@ -95,6 +95,10 @@ function persistView() {
   if (window.location.hash !== hash) history.replaceState(null, "", hash);
 }
 
+function currentRenderToken() {
+  return appRenderToken;
+}
+
 function setView(view) {
   if (!VIEW_KEYS.includes(view)) return;
   if (view === state.view) {
@@ -104,6 +108,8 @@ function setView(view) {
     }
     return;
   }
+  // Bump token so any in-flight async page renderer can ignore stale work.
+  appRenderToken += 1;
   state.view = view;
   state.userMenuOpen = false;
   persistView();
@@ -148,6 +154,7 @@ function rememberTelegramDialogs(dialogs) {
 }
 
 const USER_CACHE_KEY = "togo115.user";
+let appRenderToken = 0;
 
 function readCachedUser() {
   try {
@@ -228,7 +235,8 @@ function backdropUrl(item) {
 
 function showBootLoading() {
   const app = $("#app");
-  if (!app || app.querySelector(".shell, .login")) return;
+  if (!app) return;
+  // Keep this as a non-shell placeholder so we can still paint the real UI once later.
   app.innerHTML = `
     <main class="login boot-loading">
       <section class="login-card">
@@ -240,29 +248,16 @@ function showBootLoading() {
 }
 
 async function boot() {
+  // Always show lightweight loading first. Paint the real shell only after auth+data
+  // are ready so hard refresh does not flash twice.
   const cachedUser = readCachedUser();
-  let painted = false;
-  // Instant feedback: reuse last session chrome, otherwise show a light loading shell.
-  if (cachedUser) {
-    state.user = cachedUser;
-    renderApp();
-    painted = true;
-  } else {
-    showBootLoading();
-  }
+  if (cachedUser) state.user = cachedUser;
+  showBootLoading();
   try {
     state.user = await api("/api/auth/me", { timeoutMs: 4000 });
     cacheUser(state.user);
-    if (!painted) {
-      renderApp();
-      painted = true;
-    } else if ((state.user?.username || "") !== (cachedUser?.username || "")) {
-      // Username changed while revalidating; refresh chrome once.
-      renderApp();
-    }
     await refreshBase();
-    // Update page content without remounting the whole shell.
-    if (state.user) renderView();
+    renderApp();
   } catch {
     cacheUser(null);
     state.user = null;
@@ -332,9 +327,8 @@ function renderLogin() {
       await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });
       state.user = await api("/api/auth/me");
       cacheUser(state.user);
-      renderApp();
       await refreshBase();
-      if (state.user) renderView();
+      renderApp();
     } catch (error) {
       toast(error.message);
     }

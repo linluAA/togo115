@@ -19,9 +19,8 @@ function renderLogin() {
       await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });
       state.user = await api("/api/auth/me");
       cacheUser(state.user);
-      renderApp();
       await refreshBase();
-      if (state.user) renderView();
+      renderApp();
     } catch (error) {
       toast(error.message);
     }
