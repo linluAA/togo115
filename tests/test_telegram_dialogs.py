@@ -70,3 +70,50 @@ class TelegramDialogsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(first), 1)
         self.assertEqual(len(second), 1)
         self.assertEqual(client.iter_dialog_calls, 1)
+
+
+class PersistentCacheClient:
+    def __init__(self) -> None:
+        self.get_entity_calls: list[Any] = []
+        self.iter_dialog_calls = 0
+
+    async def iter_dialogs(self):
+        self.iter_dialog_calls += 1
+        if False:
+            yield None
+
+    async def get_entity(self, candidate: Any):
+        self.get_entity_calls.append(candidate)
+        if str(candidate) in {"DramaChannel", "DramaChannel".lower(), "1234567890", "-1001234567890"} or candidate == 1234567890 or candidate == -1001234567890:
+            return FakeEntity()
+        raise RuntimeError(f"unknown {candidate}")
+
+
+class TelegramDialogPersistentCacheTest(unittest.IsolatedAsyncioTestCase):
+    async def test_resolve_dialogs_uses_persistent_cache_when_map_misses(self) -> None:
+        from unittest.mock import patch
+
+        resolver = DialogResolver()
+        client = PersistentCacheClient()
+        rows = [
+            {
+                "source": "-1001234567890",
+                "peer_id": "-1001234567890",
+                "entity_id": "1234567890",
+                "access_hash": "1",
+                "username": "DramaChannel",
+                "title": "影视频道",
+                "entity_type": "channel",
+            }
+        ]
+        with patch("app.services.adapters.telegram.session.dialogs.load_dialog_entity_rows", return_value=rows):
+            dialogs = await resolver._resolve_dialogs(client, ["-1001234567890"])
+
+        self.assertEqual(len(dialogs), 1)
+        self.assertIsInstance(dialogs[0]["entity"], FakeEntity)
+        self.assertEqual(client.iter_dialog_calls, 1)
+        self.assertTrue(client.get_entity_calls)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -8,7 +8,7 @@ from telethon import TelegramClient
 
 from app.db import add_log
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
-from app.services.adapters.telegram.models import TelegramSearchBudget
+from app.services.adapters.telegram.models import TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
 from app.services.link_parser import (
     _expanded_search_queries,
@@ -33,9 +33,16 @@ def _elapsed_ms(start: float) -> int:
 
 
 class TelegramFastSearchMixin:
-    async def search_history_fast(self, title: str, keywords: list[str]) -> list[SearchResult]:
+    async def search_history_fast(
+        self,
+        title: str,
+        keywords: list[str],
+        *,
+        shared_state: TelegramSearchSharedState | None = None,
+    ) -> list[SearchResult]:
         """Return the first usable Telegram hit with a hard 5s budget for interactive subscription creation."""
         started = time.perf_counter()
+        state = shared_state or TelegramSearchSharedState()
         client = await self._authorized_client_for_search()
         if client is None:
             return []
@@ -45,33 +52,39 @@ class TelegramFastSearchMixin:
             add_log("warning", "telegram", "未配置 Telegram 群组/频道 sources")
             return []
         resolve_started = time.perf_counter()
-        dialogs = await self._resolve_dialogs_for_fast_search(client, source_values)
+        if state.dialogs:
+            dialogs = state.dialogs
+        else:
+            dialogs = await self._resolve_dialogs_for_fast_search(client, source_values)
+            state.dialogs = dialogs
         resolve_ms = _elapsed_ms(resolve_started)
         if not dialogs:
             return []
         queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=3))[:1]
         if not queries:
             return []
-        indexed_results = search_telegram_message_index([str(item["canonical"]) for item in dialogs], queries, TELEGRAM_FAST_RETURN_TARGET)
-        if indexed_results:
-            add_log(
-                "info",
-                "telegram",
-                "Telegram 本地索引快速命中资源",
-                {"title": title, "count": len(indexed_results), "sources": len(dialogs), "resolve_ms": resolve_ms, "total_ms": _elapsed_ms(started)},
-            )
-            return indexed_results
+        if not state.force_remote:
+            indexed_results = search_telegram_message_index([str(item["canonical"]) for item in dialogs], queries, TELEGRAM_FAST_RETURN_TARGET)
+            if indexed_results:
+                results = self._dedupe_results(state.remember_results(indexed_results))
+                add_log(
+                    "info",
+                    "telegram",
+                    "Telegram 本地索引快速命中资源",
+                    {"title": title, "count": len(results), "sources": len(dialogs), "resolve_ms": resolve_ms, "total_ms": _elapsed_ms(started)},
+                )
+                return results
         budget = TelegramSearchBudget(TELEGRAM_FAST_TOTAL_BUDGET_SECONDS)
         add_log("info", "telegram", "Telegram 快速搜索开始", {**self._fast_search_start_payload(title, dialogs, queries[0]), "resolve_ms": resolve_ms})
         search_started = time.perf_counter()
-        results = await self._search_dialogs_fast(client, dialogs, queries[0], budget)
+        results = await self._search_dialogs_fast(client, dialogs, queries[0], budget, shared_state=state)
         add_log(
             "info",
             "telegram",
             "Telegram 快速搜索完成",
             {"title": title, "count": len(results), "resolve_ms": resolve_ms, "search_ms": _elapsed_ms(search_started), "total_ms": _elapsed_ms(started), "remaining_budget": round(budget.remaining, 2)},
         )
-        return self._dedupe_results(results)
+        return self._dedupe_results(state.remember_results(results))
 
     def _fast_search_start_payload(self, title: str, dialogs: list[dict[str, Any]], query: str) -> dict[str, Any]:
         return {"title": title, "sources": len(dialogs), "query": query, "budget": TELEGRAM_FAST_TOTAL_BUDGET_SECONDS}
@@ -90,10 +103,13 @@ class TelegramFastSearchMixin:
         dialogs: list[dict[str, Any]],
         query: str,
         budget: TelegramSearchBudget,
+        *,
+        shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
         semaphore = asyncio.Semaphore(TELEGRAM_FAST_DIALOG_SEARCH_CONCURRENCY)
         results: list[SearchResult] = []
-        tasks = [asyncio.create_task(self._guarded_fast_dialog_search(semaphore, client, dialog, query, budget, results)) for dialog in dialogs]
+        state = shared_state or TelegramSearchSharedState()
+        tasks = [asyncio.create_task(self._guarded_fast_dialog_search(semaphore, client, dialog, query, budget, results, shared_state=state)) for dialog in dialogs]
         pending: set[asyncio.Task] = set(tasks)
         try:
             while pending and not budget.exhausted() and not results:
@@ -111,11 +127,13 @@ class TelegramFastSearchMixin:
         query: str,
         budget: TelegramSearchBudget,
         shared_results: list[SearchResult],
+        *,
+        shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
         async with semaphore:
             if budget.exhausted() or shared_results:
                 return []
-            return await self._search_dialog_fast(client, dialog, query, budget)
+            return await self._search_dialog_fast(client, dialog, query, budget, shared_state=shared_state)
 
     def _collect_fast_dialog_results(self, done: set[asyncio.Task], results: list[SearchResult]) -> None:
         for task in done:
@@ -134,14 +152,17 @@ class TelegramFastSearchMixin:
         dialog: dict[str, Any],
         query: str,
         budget: TelegramSearchBudget,
+        *,
+        shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
         started = time.perf_counter()
         source = str(dialog["canonical"])
+        state = shared_state or TelegramSearchSharedState()
         messages = await self._get_fast_search_messages(client, dialog["entity"], query, budget)
         self._index_fast_messages(source, messages)
         read_ms = _elapsed_ms(started)
         extract_started = time.perf_counter()
-        seen_messages: set[int] = set()
+        seen_messages = state.seen_messages_for(source)
         for message in messages[:2]:
             hits = await self._extract_fast_message_hits(client, dialog["entity"], source, message, query, budget)
             if hits and not self._pipeline_seen_or_mark(message, seen_messages, TelegramPipelineStats()):

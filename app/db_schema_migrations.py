@@ -18,6 +18,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     ensure_columns(conn, "subscriptions", _SUBSCRIPTION_COLUMNS)
     ensure_columns(conn, "resources", _RESOURCE_COLUMNS)
     _ensure_telegram_message_index(conn)
+    _ensure_telegram_dialog_entities(conn)
     _merge_duplicate_tmdb_subscriptions(conn)
     _delete_duplicate_resources(conn)
     _ensure_indexes(conn)
@@ -108,6 +109,24 @@ def _delete_duplicate_resources(conn: sqlite3.Connection) -> None:
     )
 
 
+
+
+def _ensure_telegram_dialog_entities(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS telegram_dialog_entities (
+            source TEXT PRIMARY KEY,
+            peer_id TEXT NOT NULL,
+            entity_id TEXT,
+            access_hash TEXT,
+            username TEXT,
+            title TEXT,
+            entity_type TEXT,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
 def _ensure_telegram_message_index(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -149,6 +168,10 @@ def _ensure_indexes(conn: sqlite3.Connection) -> None:
             ON logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_telegram_scan_cursors_updated_at
             ON telegram_scan_cursors(updated_at);
+        CREATE INDEX IF NOT EXISTS idx_telegram_dialog_entities_peer_id
+            ON telegram_dialog_entities(peer_id);
+        CREATE INDEX IF NOT EXISTS idx_telegram_dialog_entities_updated_at
+            ON telegram_dialog_entities(updated_at);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_source_id
             ON telegram_message_index(source, message_id DESC);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_indexed_at

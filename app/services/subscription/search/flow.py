@@ -4,6 +4,7 @@ from typing import Any
 
 from app.db import add_log
 from app.services.subscription.search.discovery import search_fallback_sources, search_telegram_history
+from app.services.adapters.telegram.models import TelegramSearchSharedState
 from app.services.subscription.match.matching import subscription_search_title
 from app.services.subscription.search.selection import (
     attach_fallback_results_until_delivered,
@@ -16,13 +17,28 @@ from app.services.subscription.search.selection import (
 
 async def _search_telegram_first(subscription: dict, incremental_telegram: bool) -> tuple[list[dict], list, dict[str, Any]]:
     search_title = subscription_search_title(subscription)
+    shared_state = TelegramSearchSharedState()
     if not incremental_telegram:
-        created, matches, summary = await _run_telegram_search_stage(subscription, search_title, fast=True)
+        created, matches, summary = await _run_telegram_search_stage(
+            subscription,
+            search_title,
+            fast=True,
+            shared_state=shared_state,
+        )
         if created:
             return created, matches, summary
         if summary.get("raw_matched") and not _telegram_summary_needs_full_retry(summary):
             return created, matches, summary
-    return await _run_telegram_search_stage(subscription, search_title, fast=False, incremental=incremental_telegram)
+        # Full stage should re-validate remotely when index hits failed to produce a save.
+        if summary.get("from_index") and not summary.get("created"):
+            shared_state.force_remote = True
+    return await _run_telegram_search_stage(
+        subscription,
+        search_title,
+        fast=False,
+        incremental=incremental_telegram,
+        shared_state=shared_state,
+    )
 
 
 async def _run_telegram_search_stage(
@@ -31,8 +47,16 @@ async def _run_telegram_search_stage(
     *,
     fast: bool,
     incremental: bool = False,
+    shared_state: TelegramSearchSharedState | None = None,
 ) -> tuple[list[dict], list, dict[str, Any]]:
-    telegram_results = await search_telegram_history(None, subscription, search_title, incremental=incremental, fast=fast)
+    telegram_results = await search_telegram_history(
+        None,
+        subscription,
+        search_title,
+        incremental=incremental,
+        fast=fast,
+        shared_state=shared_state,
+    )
     created, telegram_matches, summary = await attach_telegram_results(None, subscription, telegram_results)
     _log_telegram_stage_result(subscription, created, telegram_matches, summary, fast=fast)
     return created, telegram_matches, summary

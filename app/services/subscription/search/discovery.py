@@ -6,6 +6,7 @@ from typing import Any, Callable
 from app.db import add_log, db
 import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram import TelegramClientAdapter
+from app.services.adapters.telegram.models import TelegramSearchSharedState
 from app.services.link_downloads import is_valid_download_link
 from app.services.sources.rss_torznab import RssTorznabAdapter, SearchResult
 from app.services.subscription.match.matching import extra_search_keywords, result_debug_payload
@@ -25,13 +26,14 @@ async def search_telegram_history(
     *,
     incremental: bool = False,
     fast: bool = False,
+    shared_state: TelegramSearchSharedState | None = None,
 ) -> list[SearchResult]:
     """Search Telegram history and convert transport errors into observable logs."""
     subscription_id = int(subscription["id"])
     timeout = 6 if fast and not incremental else runtime.TELEGRAM_SEARCH_TIMEOUT_SECONDS
     try:
         results = await asyncio.wait_for(
-            _telegram_search_call(subscription, search_title, incremental=incremental, fast=fast),
+            _telegram_search_call(subscription, search_title, incremental=incremental, fast=fast, shared_state=shared_state),
             timeout=timeout,
         )
     except asyncio.TimeoutError:
@@ -61,12 +63,19 @@ async def search_telegram_history(
     return results
 
 
-def _telegram_search_call(subscription: dict, search_title: str, *, incremental: bool, fast: bool):
+def _telegram_search_call(
+    subscription: dict,
+    search_title: str,
+    *,
+    incremental: bool,
+    fast: bool,
+    shared_state: TelegramSearchSharedState | None = None,
+):
     adapter = TelegramClientAdapter()
     keywords = extra_search_keywords(subscription)
     if fast and not incremental:
-        return adapter.search_history_fast(search_title, keywords)
-    return adapter.search_history(search_title, keywords, incremental=incremental)
+        return adapter.search_history_fast(search_title, keywords, shared_state=shared_state)
+    return adapter.search_history(search_title, keywords, incremental=incremental, shared_state=shared_state)
 
 
 def fallback_usable_checker(facade: Any, subscription: dict) -> Callable[[SearchResult], bool]:

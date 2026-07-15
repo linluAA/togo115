@@ -7,6 +7,11 @@ from typing import Any
 from telethon import TelegramClient, utils
 
 from app.db import add_log
+from app.services.adapters.telegram.session.dialog_store import (
+    load_dialog_entity_rows,
+    upsert_dialog_entities,
+    upsert_dialog_entity,
+)
 
 TELEGRAM_DIALOG_CACHE_TTL_SECONDS = 300
 
@@ -90,6 +95,86 @@ class TelegramDialogsMixin:
                 keys.add(text[1:].lower())
         return keys
 
+    def _entity_snapshot(self, entity: Any, source: str, title: str | None = None) -> dict[str, Any]:
+        peer_id = self._entity_source_id(entity, source)
+        entity_type = "channel" if getattr(entity, "broadcast", False) else "group" if getattr(entity, "megagroup", False) else "peer"
+        return {
+            "source": str(source),
+            "peer_id": peer_id,
+            "entity_id": str(getattr(entity, "id", "") or "") or None,
+            "access_hash": str(getattr(entity, "access_hash", "") or "") or None,
+            "username": str(getattr(entity, "username", "") or "") or None,
+            "title": str(title or getattr(entity, "title", "") or "") or None,
+            "entity_type": entity_type,
+        }
+
+    def _persist_entity(self, entity: Any, source: str, title: str | None = None) -> None:
+        try:
+            upsert_dialog_entity(**self._entity_snapshot(entity, source, title))
+        except Exception as exc:
+            add_log("debug", "telegram", "Telegram 来源映射落库失败", {"source": source, "error": str(exc)})
+
+    def _persist_entity_map(self, items: dict[str, dict[str, Any]]) -> None:
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in items.values():
+            entity = item.get("entity")
+            if entity is None:
+                continue
+            source = str(item.get("canonical") or item.get("source") or "")
+            if not source or source in seen:
+                continue
+            seen.add(source)
+            rows.append(self._entity_snapshot(entity, source, item.get("title")))
+        try:
+            upsert_dialog_entities(rows)
+        except Exception as exc:
+            add_log("debug", "telegram", "Telegram 会话映射批量落库失败", {"count": len(rows), "error": str(exc)})
+
+    async def _resolve_from_persistent_cache(self, client: TelegramClient, source: str) -> dict[str, Any] | None:
+        try:
+            rows = load_dialog_entity_rows([source, *self._dialog_lookup_keys(source)])
+        except Exception:
+            return None
+        if not rows:
+            # Also try peer_id match by scanning all keys loosely.
+            try:
+                all_rows = load_dialog_entity_rows()
+            except Exception:
+                return None
+            wanted = self._dialog_lookup_keys(source)
+            rows = [row for row in all_rows if wanted.intersection(self._dialog_lookup_keys(str(row.get("source") or "")) | self._dialog_lookup_keys(str(row.get("peer_id") or "")) | self._dialog_lookup_keys(str(row.get("username") or "")))]
+        for row in rows:
+            entity = await self._entity_from_row(client, row)
+            if entity is None:
+                continue
+            canonical = self._entity_source_id(entity, str(row.get("peer_id") or source))
+            return {"entity": entity, "source": source, "canonical": canonical}
+        return None
+
+    async def _entity_from_row(self, client: TelegramClient, row: dict[str, Any]) -> Any | None:
+        candidates: list[Any] = []
+        username = str(row.get("username") or "").strip()
+        peer_id = str(row.get("peer_id") or "").strip()
+        entity_id = str(row.get("entity_id") or "").strip()
+        if username:
+            candidates.append(username if not username.startswith("@") else username[1:])
+            candidates.append(f"@{username.lstrip('@')}")
+        for value in (peer_id, entity_id):
+            if not value:
+                continue
+            candidates.append(value)
+            try:
+                candidates.append(int(value))
+            except ValueError:
+                pass
+        for candidate in self._dedupe_dialog_candidates(candidates):
+            try:
+                return await asyncio.wait_for(client.get_entity(candidate), timeout=4)
+            except Exception:
+                continue
+        return None
+
     async def _dialog_entity_map(self, client: TelegramClient) -> dict[str, dict[str, Any]]:
         cache_key = self._dialog_cache_key(client)
         cached = self._cached_dialog_entity_map(cache_key)
@@ -105,12 +190,18 @@ class TelegramDialogsMixin:
                 if not (getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False)):
                     continue
                 canonical = self._entity_source_id(entity, str(getattr(entity, "id", "")))
-                item = {"entity": entity, "source": canonical, "canonical": canonical}
+                item = {
+                    "entity": entity,
+                    "source": canonical,
+                    "canonical": canonical,
+                    "title": getattr(dialog, "name", None),
+                }
                 for key in self._entity_lookup_keys(entity, getattr(dialog, "name", None)):
                     items[key] = item
 
         await asyncio.wait_for(collect(), timeout=15)
         self._store_dialog_entity_map(cache_key, items)
+        self._persist_entity_map(items)
         return items
 
     def _dialog_cache_key(self, client: TelegramClient) -> str:
@@ -145,6 +236,13 @@ class TelegramDialogsMixin:
                     break
             if matched:
                 dialogs.append({**matched, "source": source})
+                entity = matched.get("entity")
+                if entity is not None:
+                    self._persist_entity(entity, str(matched.get("canonical") or source), matched.get("title"))
+                continue
+            persisted = await self._resolve_from_persistent_cache(client, source)
+            if persisted is not None:
+                dialogs.append(persisted)
                 continue
             dialogs.append(await self._resolve_dialog(client, source))
         return dialogs
@@ -169,7 +267,9 @@ class TelegramDialogsMixin:
                 {"source": source, "error": str(last_error) if last_error else ""},
             )
             return {"entity": source, "source": source, "canonical": source}
-        return {"entity": entity, "source": source, "canonical": self._entity_source_id(entity, source)}
+        canonical = self._entity_source_id(entity, source)
+        self._persist_entity(entity, canonical, getattr(entity, "title", None))
+        return {"entity": entity, "source": source, "canonical": canonical}
 
     async def dialogs(self) -> list[dict[str, Any]]:
         client = await self.client()
@@ -187,6 +287,7 @@ class TelegramDialogsMixin:
         if not (getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False)):
             return None
         identifier = self._entity_source_id(entity, str(getattr(entity, "id", "")))
+        self._persist_entity(entity, identifier, dialog.name)
         return {
             "id": str(entity.id),
             "title": dialog.name,

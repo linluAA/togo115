@@ -95,6 +95,17 @@ SCHEMA_SQL = """
             updated_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS telegram_dialog_entities (
+            source TEXT PRIMARY KEY,
+            peer_id TEXT NOT NULL,
+            entity_id TEXT,
+            access_hash TEXT,
+            username TEXT,
+            title TEXT,
+            entity_type TEXT,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS telegram_message_index (
             source TEXT NOT NULL,
             message_id INTEGER NOT NULL,

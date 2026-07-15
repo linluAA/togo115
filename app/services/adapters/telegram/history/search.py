@@ -8,7 +8,7 @@ from telethon import TelegramClient
 
 from app.db import add_log
 from app.services.adapters.telegram.history.config import build_history_options, server_search_queries
-from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget
+from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.history.fast import TelegramFastSearchMixin
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
 from app.services.adapters.telegram.history.recent import TelegramRecentScanMixin
@@ -36,8 +36,16 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
     def _server_search_queries(self, queries: list[str]) -> list[str]:
         return server_search_queries(queries)
 
-    async def search_history(self, title: str, keywords: list[str], *, incremental: bool = False) -> list[SearchResult]:
+    async def search_history(
+        self,
+        title: str,
+        keywords: list[str],
+        *,
+        incremental: bool = False,
+        shared_state: TelegramSearchSharedState | None = None,
+    ) -> list[SearchResult]:
         total_started = time.perf_counter()
+        state = shared_state or TelegramSearchSharedState()
         client = await self._authorized_client_for_search()
         if client is None:
             return []
@@ -48,11 +56,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             return []
 
         resolve_started = time.perf_counter()
-        try:
-            dialogs = await asyncio.wait_for(self._resolve_dialogs(client, source_values), timeout=max(8, min(25, len(source_values) * 8)))
-        except asyncio.TimeoutError:
-            add_log("warning", "telegram", "Telegram 群组/频道解析超时，使用原始配置继续搜索", {"sources": len(source_values)})
-            dialogs = [{"entity": source, "source": source, "canonical": source} for source in source_values]
+        dialogs = await self._resolve_dialogs_for_history_search(client, source_values, state)
         resolve_ms = _elapsed_ms(resolve_started)
         if not dialogs:
             add_log("warning", "telegram", "Telegram 群组/频道解析失败或无可用来源", {"sources": len(source_values), "resolve_ms": resolve_ms})
@@ -67,23 +71,50 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             "info",
             "telegram",
             "Telegram 历史搜索开始",
-            {"title": title, "sources": len(dialogs), "queries": queries, "budget": options.total_budget, "resolve_ms": resolve_ms},
+            {
+                "title": title,
+                "sources": len(dialogs),
+                "queries": queries,
+                "budget": options.total_budget,
+                "resolve_ms": resolve_ms,
+                "force_remote": state.force_remote,
+                "shared_seen_urls": len(state.seen_urls),
+            },
         )
-        indexed_results = self._search_indexed_telegram_messages(dialogs, queries)
-        if indexed_results:
-            add_log(
-                "info",
-                "telegram",
-                "Telegram 本地索引命中资源，将与远端历史搜索结果合并",
-                {"title": title, "count": len(indexed_results), "sources": len(dialogs), "resolve_ms": resolve_ms, "total_ms": _elapsed_ms(total_started)},
-            )
+        indexed_results: list[SearchResult] = []
+        if not state.force_remote:
+            indexed_results = self._search_indexed_telegram_messages(dialogs, queries)
+            if indexed_results:
+                results = self._dedupe_results(state.remember_results(indexed_results))
+                add_log(
+                    "info",
+                    "telegram",
+                    "Telegram 本地索引命中资源，跳过远端历史搜索",
+                    {
+                        "title": title,
+                        "count": len(results),
+                        "sources": len(dialogs),
+                        "resolve_ms": resolve_ms,
+                        "search_ms": 0,
+                        "total_ms": _elapsed_ms(total_started),
+                    },
+                )
+                return results
 
         search_started = time.perf_counter()
-        remote_results = await self._search_dialogs_concurrently(client, dialogs, queries, options, budget, incremental=incremental)
+        remote_results = await self._search_dialogs_concurrently(
+            client,
+            dialogs,
+            queries,
+            options,
+            budget,
+            incremental=incremental,
+            shared_state=state,
+        )
         all_results = [*indexed_results, *remote_results]
         search_ms = _elapsed_ms(search_started)
 
-        results = self._dedupe_results(all_results)
+        results = self._dedupe_results(state.remember_results(all_results))
         payload = {
             "title": title,
             "count": len(results),
@@ -91,11 +122,36 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             "resolve_ms": resolve_ms,
             "search_ms": search_ms,
             "total_ms": _elapsed_ms(total_started),
+            "force_remote": state.force_remote,
         }
         if budget.exhausted():
             add_log("warning", "telegram", "Telegram 历史搜索时间预算用尽，已提前返回已找到结果", {**payload, "budget": options.total_budget})
         add_log("info", "telegram", "Telegram 历史搜索完成", payload)
         return results
+
+    async def _resolve_dialogs_for_history_search(
+        self,
+        client: TelegramClient,
+        source_values: list[str],
+        state: TelegramSearchSharedState,
+    ) -> list[dict[str, Any]]:
+        if state.dialogs:
+            return state.dialogs
+        try:
+            dialogs = await asyncio.wait_for(
+                self._resolve_dialogs(client, source_values),
+                timeout=max(8, min(25, len(source_values) * 8)),
+            )
+        except asyncio.TimeoutError:
+            add_log(
+                "warning",
+                "telegram",
+                "Telegram 群组/频道解析超时，使用原始配置继续搜索",
+                {"sources": len(source_values)},
+            )
+            dialogs = [{"entity": source, "source": source, "canonical": source} for source in source_values]
+        state.dialogs = dialogs
+        return dialogs
 
     def _search_indexed_telegram_messages(self, dialogs: list[dict[str, Any]], queries: list[str]) -> list[SearchResult]:
         sources = [str(item["canonical"]) for item in dialogs if item.get("canonical") is not None]
@@ -110,9 +166,11 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         budget: TelegramSearchBudget,
         *,
         incremental: bool = False,
+        shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
         semaphore = asyncio.Semaphore(TELEGRAM_DIALOG_SEARCH_CONCURRENCY)
         all_results: list[SearchResult] = []
+        state = shared_state or TelegramSearchSharedState()
 
         async def search_one(dialog: dict[str, Any]) -> list[SearchResult]:
             if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
@@ -121,7 +179,15 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                 if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
                     return []
                 await telegram_request_gate.wait()
-                return await self._search_dialog_history(client, dialog, queries, options, budget, incremental=incremental)
+                return await self._search_dialog_history(
+                    client,
+                    dialog,
+                    queries,
+                    options,
+                    budget,
+                    incremental=incremental,
+                    shared_state=state,
+                )
 
         tasks = [asyncio.create_task(search_one(dialog)) for dialog in dialogs]
         pending: set[asyncio.Task] = set(tasks)
@@ -181,12 +247,14 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         budget: TelegramSearchBudget,
         *,
         incremental: bool = False,
+        shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
         started = time.perf_counter()
         entity = dialog["entity"]
         source = str(dialog["canonical"])
         results: list[SearchResult] = []
-        seen_messages: set[int] = set()
+        state = shared_state or TelegramSearchSharedState()
+        seen_messages = state.seen_messages_for(source)
         stats = {"searched": 0, "fallback": 0, "links": 0, "timeouts": 0, "skipped_no_link_hint": 0}
         add_log("debug", "telegram", "Telegram 来源搜索开始", {"dialog": source, "queries": queries, "recent_limit": options.fallback_scan_limit, "server_limit": options.history_limit})
 

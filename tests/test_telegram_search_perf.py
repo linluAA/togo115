@@ -110,5 +110,111 @@ class TelegramSearchPerfTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(recheck, [])
 
 
+
+
+class IndexEarlyReturnHarness(TelegramHistorySearchMixin):
+    def __init__(self) -> None:
+        self.remote_calls = 0
+        self.indexed = [
+            SearchResult(
+                title="索引命中",
+                url="https://115.com/s/index?password=1111",
+                source="TelegramIndex",
+                message_id="99",
+            )
+        ]
+
+    def _dedupe_results(self, results):
+        return results
+
+    async def _authorized_client_for_search(self):
+        return object()
+
+    def _config(self):
+        return {"sources": ["-1001"]}
+
+    def _configured_sources(self, config):
+        return ["-1001"]
+
+    async def _resolve_dialogs(self, client, sources):
+        return [{"entity": "e", "source": sources[0], "canonical": sources[0]}]
+
+    def _history_options(self, config):
+        return TelegramHistoryOptions(20, 20, 5, 10, 2, 2)
+
+    def _search_indexed_telegram_messages(self, dialogs, queries):
+        return list(self.indexed)
+
+    async def _search_dialogs_concurrently(self, *args, **kwargs):
+        self.remote_calls += 1
+        return [SearchResult(title="远端", url="https://115.com/s/remote?password=1111", source="tg")]
+
+
+class SharedStateHarness(TelegramHistorySearchMixin):
+    def __init__(self) -> None:
+        self.resolve_calls = 0
+        self.dialog_history_calls = 0
+
+    async def _authorized_client_for_search(self):
+        return object()
+
+    def _config(self):
+        return {"sources": ["-1001"]}
+
+    def _configured_sources(self, config):
+        return ["-1001"]
+
+    async def _resolve_dialogs(self, client, sources):
+        self.resolve_calls += 1
+        return [{"entity": "e", "source": sources[0], "canonical": sources[0]}]
+
+    def _history_options(self, config):
+        return TelegramHistoryOptions(20, 20, 5, 10, 2, 2)
+
+    def _search_indexed_telegram_messages(self, dialogs, queries):
+        return []
+
+    async def _search_dialog_history(self, client, dialog, queries, options, budget, *, incremental=False, shared_state=None):
+        self.dialog_history_calls += 1
+        return [SearchResult(title="远端", url="https://115.com/s/shared?password=1111", source=str(dialog["canonical"]), message_id="12")]
+
+    def _dedupe_results(self, results):
+        return results
+
+
+class TelegramSearchP1Test(unittest.IsolatedAsyncioTestCase):
+    async def test_full_search_returns_index_hits_without_remote(self) -> None:
+        harness = IndexEarlyReturnHarness()
+        with patch("app.services.adapters.telegram.history.search._expanded_search_queries", return_value=["将夜"]):
+            results = await harness.search_history("将夜", [])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].source, "TelegramIndex")
+        self.assertEqual(harness.remote_calls, 0)
+
+    async def test_full_search_force_remote_skips_index(self) -> None:
+        from app.services.adapters.telegram.models import TelegramSearchSharedState
+
+        harness = IndexEarlyReturnHarness()
+        state = TelegramSearchSharedState(force_remote=True)
+        with patch("app.services.adapters.telegram.history.search._expanded_search_queries", return_value=["将夜"]):
+            results = await harness.search_history("将夜", [], shared_state=state)
+        self.assertEqual(harness.remote_calls, 1)
+        self.assertEqual(results[0].url, "https://115.com/s/remote?password=1111")
+
+    async def test_shared_state_reuses_dialogs_between_stages(self) -> None:
+        from app.services.adapters.telegram.models import TelegramSearchSharedState
+
+        harness = SharedStateHarness()
+        state = TelegramSearchSharedState()
+        with patch("app.services.adapters.telegram.history.search._expanded_search_queries", return_value=["将夜"]):
+            first = await harness.search_history("将夜", [], shared_state=state)
+            second = await harness.search_history("将夜", [], shared_state=state)
+        self.assertEqual(harness.resolve_calls, 1)
+        self.assertEqual(len(first), 1)
+        # second stage should filter the same URL already remembered
+        self.assertEqual(second, [])
+        self.assertEqual(harness.dialog_history_calls, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
