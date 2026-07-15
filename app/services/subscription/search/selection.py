@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from app.db import add_log, db, utc_now
+from app.services.search_metrics import record_115_validation
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.delivery.link_validation import classify_115_results, pick_first_available_115_result
 from app.services.subscription.resource.ops import (

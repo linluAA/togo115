@@ -32,7 +32,7 @@ class SubscriptionRecheckTest(unittest.IsolatedAsyncioTestCase):
         settings.database_path = self.old_database_path
         self.temp_dir.cleanup()
 
-    def _insert_recheck_resource(self, *, retry_count: int = 0, seconds_ago: int = 60) -> int:
+    def _insert_recheck_resource(self, *, retry_count: int = 0, seconds_ago: int = 180) -> int:
         now = datetime.now(timezone.utc)
         created_at = (now - timedelta(seconds=seconds_ago)).isoformat()
         with db() as conn:
@@ -86,7 +86,7 @@ class SubscriptionRecheckTest(unittest.IsolatedAsyncioTestCase):
         assert "失效" in row["last_error"]
 
     async def test_unknown_recheck_keeps_pending_until_retry_limit(self) -> None:
-        resource_id = self._insert_recheck_resource(retry_count=1, seconds_ago=180)
+        resource_id = self._insert_recheck_resource(retry_count=1, seconds_ago=700)
         FakePan115Adapter.state = SHARE_UNKNOWN
 
         result = await recheck_pending_115_resources(pan115_adapter_cls=FakePan115Adapter)

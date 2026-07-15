@@ -673,8 +673,11 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row["message"], "\u641c\u7d22\u8ba2\u9605\u8d85\u65f6\uff0c\u5df2\u7ee7\u7eed\u5904\u7406\u4e0b\u4e00\u4e2a\u8ba2\u9605")
 
     async def test_background_subscription_searches_are_limited(self) -> None:
-        first_id = self._subscription()
-        second_id = self._drama_subscription()
+        ids = [self._subscription(), self._drama_subscription()]
+        # ensure at least concurrency count unique subscriptions
+        while len(set(ids)) < runtime_module.SUBSCRIPTION_SEARCH_CONCURRENCY:
+            ids.append(self._subscription())
+        ids = list(dict.fromkeys(ids))[: runtime_module.SUBSCRIPTION_SEARCH_CONCURRENCY]
         active = 0
         max_active = 0
 
@@ -682,15 +685,15 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             nonlocal active, max_active
             active += 1
             max_active = max(max_active, active)
-            await asyncio.sleep(0.03)
+            await asyncio.sleep(0.05)
             active -= 1
             return []
 
         with patch("app.services.subscription.search.tasks._default_search", AsyncMock(side_effect=tracked_search)):
-            await asyncio.gather(
-                subscription_tasks._search_subscription_background(first_id, search_func=subscription_tasks._default_search),
-                subscription_tasks._search_subscription_background(second_id, search_func=subscription_tasks._default_search),
-            )
+            await asyncio.gather(*[
+                subscription_tasks._search_subscription_background(item_id, search_func=subscription_tasks._default_search)
+                for item_id in ids
+            ])
 
         self.assertEqual(max_active, runtime_module.SUBSCRIPTION_SEARCH_CONCURRENCY)
 

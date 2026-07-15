@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.auth import current_user
 from app.services.log_queries import list_logs
+from app.services.search_metrics import metrics_snapshot
 
 
 router = APIRouter()
@@ -20,3 +21,8 @@ async def logs(
     user: dict = Depends(current_user),
 ) -> list[dict]:
     return await asyncio.to_thread(list_logs, mode=mode, limit=limit, before_id=before_id, after_id=after_id)
+
+
+@router.get("/api/metrics/search")
+async def search_metrics(user: dict = Depends(current_user)) -> dict:
+    return await asyncio.to_thread(metrics_snapshot)
