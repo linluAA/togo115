@@ -36,3 +36,18 @@ def test_adjacent_button_only_sibling_can_be_merged() -> None:
     sibling = DummyMessage(101, "", [[DummyButton("115")]])
 
     assert harness._should_merge_sibling(base, sibling, True, ["后室 2026"])
+
+def test_non_adjacent_link_only_sibling_is_not_merged() -> None:
+    harness = ContextHarness()
+    base = DummyMessage(100, "剧集：野狗骨头 2026 第 20 集 1080p")
+    sibling = DummyMessage(103, "链接：https://115.com/s/swsbls23ndb?password=KMKM")
+
+    assert not harness._should_merge_sibling(base, sibling, True, ["野狗骨头"])
+
+
+def test_adjacent_link_only_sibling_can_be_merged() -> None:
+    harness = ContextHarness()
+    base = DummyMessage(100, "剧集：野狗骨头 2026 第 20 集 1080p")
+    sibling = DummyMessage(101, "链接：https://115.com/s/ydgtlink?password=1111")
+
+    assert harness._should_merge_sibling(base, sibling, True, ["野狗骨头"])

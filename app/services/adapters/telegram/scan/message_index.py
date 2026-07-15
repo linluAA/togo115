@@ -60,17 +60,24 @@ def search_telegram_message_index(sources: list[str], queries: list[str], limit:
     try:
         with db() as conn:
             for row in _candidate_rows(conn, sources):
-                context = str(row.get("context") or row.get("text") or "")
+                text = str(row.get("text") or "")
+                context = str(row.get("context") or text)
+                # Only attach links that appear on this message itself. Neighbor links stay on their own rows.
+                links = extract_115_links(text)
+                if not links:
+                    continue
                 matched_query = next((query for query in queries if _local_text_matches_query(context, query)), "")
                 if not matched_query:
                     continue
-                links = extract_115_links(context)
                 for url in links:
                     if url in seen_urls:
                         continue
-                    # Scope each link to its local segment so a nearby title cannot claim unrelated shares.
-                    scoped = context_for_115_link(context, url, len(links))
+                    # Always scope to the local segment so nearby titles cannot claim this share.
+                    scoped = context_for_115_link(context, url, max(len(links), 2))
                     if not _local_text_matches_query(scoped, matched_query):
+                        continue
+                    title = _telegram_resource_title(scoped)
+                    if title and not str(title).startswith("Telegram ") and not _local_text_matches_query(title, matched_query):
                         continue
                     seen_urls.add(url)
                     results.append(_row_to_result(row, url, scoped, matched_query))
@@ -98,7 +105,7 @@ def _index_rows(source: str, messages: list[Any]) -> list[dict[str, Any]]:
                 "message_id": message_id,
                 "text": text,
                 "context": context,
-                "has_115": 1 if extract_115_links(context) else 0,
+                "has_115": 1 if extract_115_links(text) else 0,
                 "has_link_hint": 1 if _has_link_hint(message, context) else 0,
                 "message_date": _message_date(message),
                 "indexed_at": indexed_at,
@@ -108,14 +115,26 @@ def _index_rows(source: str, messages: list[Any]) -> list[dict[str, Any]]:
 
 
 def _message_context(messages: list[Any], index: int) -> str:
-    parts: list[str] = []
-    seen: set[str] = set()
-    for item_index in range(max(0, index - TELEGRAM_INDEX_WINDOW), min(len(messages), index + TELEGRAM_INDEX_WINDOW + 1)):
-        text = telegram_message_text(messages[item_index]).strip()
-        if text and text not in seen:
-            seen.add(text)
-            parts.append(text)
-    return "\n".join(parts)
+    """Build a tight card context for index rows.
+
+    Index is an early-return cache, so it prefers precision over recall:
+    - non-link messages stay as themselves
+    - link messages may take only the immediately previous non-link message
+    - never cross another 115 share
+    """
+    current = telegram_message_text(messages[index]).strip()
+    if not current:
+        return ""
+    if not extract_115_links(current):
+        return current
+    if index <= 0:
+        return current
+    previous = telegram_message_text(messages[index - 1]).strip()
+    if not previous or extract_115_links(previous):
+        return current
+    return f"{previous}\n{current}"
+
+
 
 
 def _has_link_hint(message: Any, context: str) -> bool:
@@ -149,12 +168,19 @@ def _candidate_rows(conn: Any, sources: list[str]) -> list[dict[str, Any]]:
 def _row_to_result(row: dict[str, Any], url: str, context: str, matched_query: str) -> SearchResult:
     message_id = str(row.get("message_id") or "")
     title = _title_from_context(context, matched_query)
-    return SearchResult(title=title, url=url, source="TelegramIndex", message_id=message_id, context=context, priority=30)
+    # Keep context limited to the accepted title segment so subscription match cannot re-expand
+    # into neighboring cards that only appeared in the raw window.
+    safe_context = context
+    if title and not str(title).startswith("Telegram ") and title not in context:
+        safe_context = f"{title}\n{url}"
+    elif title and not str(title).startswith("Telegram "):
+        safe_context = context_for_115_link(context, url, 2) or context
+    return SearchResult(title=title, url=url, source="TelegramIndex", message_id=message_id, context=safe_context, priority=30)
 
 
 def _title_from_context(context: str, matched_query: str) -> str:
     title = _telegram_resource_title(context)
-    if title and title != "Telegram 资源":
+    if title and not str(title).startswith("Telegram "):
         return title[:160]
     for line in context.splitlines():
         if matched_query and _local_text_matches_query(line, matched_query):

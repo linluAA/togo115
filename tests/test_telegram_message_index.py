@@ -76,3 +76,53 @@ class TelegramMessageIndexTest(unittest.TestCase):
         assert "https://115.com/s/swsbls23ndb?password=KMKM" not in urls
         assert all("念念相忘" not in (item.title or "") for item in results)
 
+
+
+    def test_index_search_requires_link_on_same_message(self) -> None:
+        index_telegram_messages(
+            "-1001",
+            [
+                DummyMessage(40, "剧集：野狗骨头 2026 第 20 集 1080p"),
+                DummyMessage(41, "名称: 念念相忘.Just.for.Meeting.You.2023.2160p"),
+                DummyMessage(42, "链接：https://115.com/s/swsbls23ndb?password=KMKM"),
+            ],
+        )
+
+        results = search_telegram_message_index(["-1001"], ["野狗骨头"], 10)
+        urls = [item.url for item in results]
+
+        # Title-only rows must not pull a later neighbor share just because the window includes it.
+        assert urls == []
+
+    def test_index_search_scopes_single_link_window(self) -> None:
+        index_telegram_messages(
+            "-1001",
+            [
+                DummyMessage(50, "剧集：野狗骨头 2026 第 20 集 1080p\n名称: 念念相忘.Just.for.Meeting.You.2023.2160p\n链接：https://115.com/s/swsbls23ndb?password=KMKM"),
+            ],
+        )
+
+        results = search_telegram_message_index(["-1001"], ["野狗骨头"], 10)
+        urls = [item.url for item in results]
+
+        # Nearest title above the share is 念念相忘; 野狗骨头 must not claim this share.
+        assert "https://115.com/s/swsbls23ndb?password=KMKM" not in urls
+        assert all("念念相忘" not in (item.title or "") or "野狗骨头" not in (item.title or "") for item in results)
+
+
+    def test_index_search_only_uses_immediate_previous_title(self) -> None:
+        index_telegram_messages(
+            "-1001",
+            [
+                DummyMessage(60, "剧集：野狗骨头 2026 第 20 集 1080p"),
+                DummyMessage(61, "名称: 念念相忘.Just.for.Meeting.You.2023.2160p"),
+                DummyMessage(62, "链接：https://115.com/s/swsbls23ndb?password=KMKM"),
+            ],
+        )
+
+        results = search_telegram_message_index(["-1001"], ["野狗骨头"], 10)
+        assert results == []
+
+        results = search_telegram_message_index(["-1001"], ["念念相忘"], 10)
+        assert len(results) == 1
+        assert results[0].url == "https://115.com/s/swsbls23ndb?password=KMKM"

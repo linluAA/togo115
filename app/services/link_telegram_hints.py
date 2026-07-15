@@ -60,9 +60,11 @@ def _looks_like_link_only_message(text: str) -> bool:
 def _nearby_link_text_matches(text: str, queries: list[str] | None) -> bool:
     if not extract_115_links(text):
         return False
-    if _looks_like_link_only_message(text):
+    # Link-only messages are ambiguous. Callers that know adjacency may still
+    # merge them; this helper only accepts shares whose own text matches query.
+    if not queries:
         return True
-    return any(_local_text_matches_query(text, query) for query in queries or [])
+    return any(_local_text_matches_query(text, query) for query in queries)
 
 
 def _message_button_values(message: Any) -> list[str]:

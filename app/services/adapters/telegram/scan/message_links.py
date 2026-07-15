@@ -16,6 +16,7 @@ from app.services.adapters.telegram.scan.extract_cache import (
     set_cached_message_extract,
 )
 from app.services.link_parser import (
+    _local_text_matches_query,
     context_for_115_link,
     extract_115_links,
     telegram_message_text,
@@ -84,7 +85,7 @@ class TelegramMessageLinkMixin:
                     "Telegram 消息提取缓存命中",
                     {"source": source, "message_id": message_id, "links": len(cached), "total_ms": _elapsed_ms(started)},
                 )
-                return list(cached)
+                return self._filter_cached_results_by_query(list(cached), match_queries)
         related_messages, related_ms = await self._timed_related_messages(client, message, entity, match_queries, extra_texts)
         message_text = self._combined_message_text(related_messages, extra_texts)
         link_contexts, direct_ms, direct_links = self._timed_direct_link_contexts(related_messages, extra_texts)
@@ -108,7 +109,7 @@ class TelegramMessageLinkMixin:
                     "skipped_heavy_extract": 1,
                 },
             )
-            return self._finalize_message_extract(message, source, link_contexts, cacheable=cacheable)
+            return self._finalize_message_extract(message, source, link_contexts, cacheable=cacheable, match_queries=match_queries)
         external_page_ms, text_page_links = await self._timed_external_page_contexts(message_text, link_contexts, direct_links)
         button_ms, button_links = await self._merge_button_link_contexts(related_messages, client, entity, extra_texts, link_contexts)
         self._log_link_extraction(message, source, related_messages, link_contexts, message_text, {
@@ -122,7 +123,7 @@ class TelegramMessageLinkMixin:
             "total_ms": _elapsed_ms(started),
             "skipped_heavy_extract": 0,
         })
-        return self._finalize_message_extract(message, source, link_contexts, cacheable=cacheable)
+        return self._finalize_message_extract(message, source, link_contexts, cacheable=cacheable, match_queries=match_queries)
 
     def _finalize_message_extract(
         self,
@@ -131,11 +132,44 @@ class TelegramMessageLinkMixin:
         link_contexts: dict[str, str],
         *,
         cacheable: bool,
+        match_queries: list[str] | None = None,
     ) -> list[SearchResult]:
-        results = self._search_results_from_contexts(message, source, link_contexts)
+        filtered = self._filter_link_contexts_by_query(link_contexts, match_queries)
+        results = self._search_results_from_contexts(message, source, filtered)
         if cacheable:
-            set_cached_message_extract(source, getattr(message, "id", None), results)
+            # Cache unfiltered extract; query filtering is applied per search.
+            set_cached_message_extract(
+                source,
+                getattr(message, "id", None),
+                self._search_results_from_contexts(message, source, link_contexts),
+            )
         return results
+
+    
+    def _filter_cached_results_by_query(self, results: list[SearchResult], match_queries: list[str] | None) -> list[SearchResult]:
+        if not match_queries:
+            return results
+        contexts = {result.url: result.context or result.title for result in results}
+        allowed = set(self._filter_link_contexts_by_query(contexts, match_queries))
+        return [result for result in results if result.url in allowed]
+
+    def _filter_link_contexts_by_query(
+        self,
+        link_contexts: dict[str, str],
+        match_queries: list[str] | None,
+    ) -> dict[str, str]:
+        if not match_queries:
+            return link_contexts
+        filtered: dict[str, str] = {}
+        for link, context in link_contexts.items():
+            scoped = context_for_115_link(context, link, max(len(link_contexts), 2)) or context
+            title = _telegram_resource_title(scoped)
+            if not any(_local_text_matches_query(scoped, query) for query in match_queries):
+                continue
+            if title and not str(title).startswith("Telegram ") and not any(_local_text_matches_query(title, query) for query in match_queries):
+                continue
+            filtered[link] = scoped
+        return filtered
 
     async def _timed_related_messages(self, client, message, entity, match_queries, extra_texts) -> tuple[list[Any], int]:
         started = time.perf_counter()

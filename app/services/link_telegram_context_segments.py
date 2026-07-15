@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from urllib.parse import urlparse
 
 from app.services.adapters.pan115 import PAN115_URL_RE
@@ -36,5 +38,30 @@ def _previous_link_indexes(lines: list[str], index: int, share_code: str) -> lis
 
 
 def _next_link_end(lines: list[str], index: int) -> int:
-    next_link_indexes = [line_index for line_index, value in enumerate(lines[index + 1:], start=index + 1) if _line_has_link_hint(value)]
-    return min(next_link_indexes[0], index + 4, len(lines)) if next_link_indexes else min(len(lines), index + 4)
+    # Include only the share line and a short tail of non-title metadata
+    # (password / size / notes). Stop before the next share or next resource title.
+    end = min(len(lines), index + 1)
+    for line_index in range(index + 1, min(len(lines), index + 4)):
+        value = lines[line_index]
+        if _line_has_link_hint(value):
+            break
+        if _looks_like_resource_title_line(value):
+            break
+        end = line_index + 1
+    return end
+
+
+def _looks_like_resource_title_line(line: str) -> bool:
+    value = str(line or "").strip()
+    if not value:
+        return False
+    if _line_has_link_hint(value):
+        return False
+    return bool(
+        re.search(
+            r"(?:^|[\s\[【(（])(?:电视剧|电影|动漫|动画|综艺|剧集|名称|片名|标题|资源)\s*[:：|｜]",
+            value,
+            re.I,
+        )
+        or re.search(r"(?<!\d)(?:19|20)\d{2}(?!\d).{0,40}(?:1080|2160|4K|REMUX|BluRay|WEB|S\d{1,2}E\d{1,3})", value, re.I)
+    )

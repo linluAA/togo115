@@ -11,6 +11,7 @@ from app.services.link_parser import (
     TELEGRAM_MESSAGE_FETCH_TIMEOUT_SECONDS,
     _local_text_matches_query,
     _looks_like_context_message,
+    _looks_like_link_only_message,
     _message_has_link_button_hint,
     _nearby_link_text_matches,
     extract_115_links,
@@ -57,11 +58,16 @@ class TelegramMessageContextMixin:
         sibling_text = telegram_message_text(sibling)
         same_group = self._same_message_group(message, sibling)
         sibling_has_button = _message_has_link_button_hint(sibling)
-        return bool(
-            same_group
-            or _nearby_link_text_matches(sibling_text, match_queries)
-            or (base_matches_query and sibling_has_button and self._button_sibling_belongs_to_base(message, sibling, match_queries))
-        )
+        if same_group:
+            return True
+        # Only merge a sibling share when its own text matches the query, or it is an
+        # immediately adjacent link-only / button prompt belonging to the matched card.
+        if _nearby_link_text_matches(sibling_text, match_queries):
+            return True
+        distance = self._message_distance(getattr(message, "id", None), getattr(sibling, "id", None))
+        if base_matches_query and distance == 1 and extract_115_links(sibling_text) and _looks_like_link_only_message(sibling_text):
+            return True
+        return bool(base_matches_query and sibling_has_button and self._button_sibling_belongs_to_base(message, sibling, match_queries))
 
     def _button_sibling_belongs_to_base(self, message: Any, sibling: Any, match_queries: list[str] | None) -> bool:
         distance = self._message_distance(getattr(message, "id", None), getattr(sibling, "id", None))
