@@ -426,5 +426,63 @@ class SubscriptionMatchingTest(unittest.TestCase):
         self.assertFalse(blocked)
 
 
+
+    def test_similar_bare_title_does_not_block_pack_with_more_episodes(self) -> None:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE resources (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription_id INTEGER, title TEXT, url TEXT, status TEXT)"
+        )
+        subscription = {
+            "title": "野狗骨头",
+            "media_type": "tv",
+            "keywords": ["野狗骨头"],
+            "tmdb_total_count": 32,
+            "emby_count": 19,
+            "emby_episode_keys": [f"1x{i}" for i in range(1, 20)],
+        }
+        try:
+            conn.execute(
+                "INSERT INTO resources (subscription_id, title, url, status) VALUES (1, '野狗骨头', 'https://115.com/s/oldpack?password=aaaa', 'delivered')"
+            )
+            pack = SearchResult(
+                title="野狗骨头(2026) S01E01-E21",
+                url="https://115.com/s/newpack?password=bbbb",
+                source="-1003793333793",
+                context="剧集：野狗骨头(2026)\n季集：S01E01-E21\nTMDB ID：291392",
+            )
+            self.assertIsNone(resource_already_exists(conn, 1, pack, subscription))
+        finally:
+            conn.close()
+
+    def test_covered_episodes_still_blocks_subset_pack(self) -> None:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE resources (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription_id INTEGER, title TEXT, url TEXT, status TEXT)"
+        )
+        subscription = {
+            "title": "野狗骨头",
+            "media_type": "tv",
+            "keywords": ["野狗骨头"],
+            "tmdb_total_count": 32,
+            "emby_count": 19,
+            "emby_episode_keys": [f"1x{i}" for i in range(1, 20)],
+        }
+        try:
+            conn.execute(
+                "INSERT INTO resources (subscription_id, title, url, status) VALUES (1, '野狗骨头 S01E01-E21', 'https://115.com/s/big?password=aaaa', 'delivered')"
+            )
+            smaller = SearchResult(
+                title="野狗骨头 S01E01-E19",
+                url="https://115.com/s/small?password=bbbb",
+                source="tg",
+                context="野狗骨头 S01E01-E19",
+            )
+            self.assertEqual(resource_already_exists(conn, 1, smaller, subscription), "covered_episodes")
+        finally:
+            conn.close()
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -35,6 +35,7 @@ TITLE_CLEAN_RE = re.compile(
 )
 NON_TITLE_RE = re.compile(r"(?:\u63d0\u53d6\u7801|\u8bbf\u95ee\u7801|\u5bc6\u7801|\u590d\u5236|\u4e0b\u8f7d|\u94fe\u63a5|\u6587\u4ef6\u5927\u5c0f|\u6587\u4ef6\u6570\u91cf|\u6536\u5f55\u65f6\u95f4|\u5206\u4eab\u65f6\u95f4)", re.I)
 EPISODE_QUALITY_RE = re.compile(r"(?i)(S\d{1,2}E\d{1,3}|\u7b2c\s*\d{1,3}\s*[\u96c6\u8bdd\u8a71]|1080p|2160p|4K|BluRay|WEB)")
+EPISODE_MARKER_RE = re.compile(r"(?i)(S\d{1,2}E\d{1,3}|第\s*\d{1,3}\s*[集话話]|更新至|全\s*\d{1,3}\s*[集话話])")
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 
 
@@ -284,14 +285,55 @@ class TelegramMessageLinkMixin:
 def _telegram_resource_title(context: str | None) -> str:
     lines = [line.strip() for line in str(context or "").splitlines() if line.strip()]
     labeled = [_strip_title_label(line) for line in lines if _title_label_score(line) > 0]
+    base = ""
     for title in labeled:
         if _usable_title_line(title):
-            return title[:120]
-    scored = _scored_title_lines(lines)
-    if scored:
-        scored.sort(key=lambda item: item[0], reverse=True)
-        return scored[0][1]
-    return "Telegram 资源"
+            base = title[:120]
+            break
+    if not base:
+        scored = _scored_title_lines(lines)
+        if scored:
+            scored.sort(key=lambda item: item[0], reverse=True)
+            base = scored[0][1]
+    if not base:
+        return "Telegram 资源"
+    return _enrich_title_with_episode_marker(base, str(context or ""))
+
+
+def _enrich_title_with_episode_marker(title: str, context: str) -> str:
+    """Keep episode/range markers in stored titles for coverage and dedupe.
+
+    HDHive-style cards often put the drama name on one line and S01E01-E21 on
+    another. Without the range in title, similar_title / covered_episodes
+    cannot distinguish a newer pack from an older bare-title resource.
+    """
+    value = str(title or "").strip()
+    if not value:
+        return value
+    if EPISODE_MARKER_RE.search(value):
+        return value[:120]
+    marker = _episode_marker_from_context(context)
+    if not marker:
+        return value[:120]
+    combined = f"{value} {marker}".strip()
+    return combined[:120]
+
+
+def _episode_marker_from_context(context: str) -> str:
+    text = str(context or "")
+    if not text:
+        return ""
+    for pattern in (
+        r"(?i)S\d{1,2}E\d{1,3}\s*(?:-|~|–|—|至|到)\s*E?\d{1,3}",
+        r"(?i)S\d{1,2}E\d{1,3}",
+        r"第\s*\d{1,3}\s*[-~–—至到]\s*\d{1,3}\s*[集话話]",
+        r"更新至\s*第?\s*\d{1,3}\s*[集话話]?",
+        r"全\s*\d{1,3}\s*[集话話]",
+    ):
+        match = re.search(pattern, text)
+        if match:
+            return re.sub(r"\s+", "", match.group(0))
+    return ""
 
 
 def _scored_title_lines(lines: list[str]) -> list[tuple[int, str]]:

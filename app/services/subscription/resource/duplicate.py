@@ -61,10 +61,19 @@ def _similar_title_reason(
     result_episodes: set[tuple[int, int]],
     existing_episodes: set[tuple[int, int]],
 ) -> str | None:
+    """Treat similar titles as duplicates only when episode scope is comparable.
+
+    Bare titles (no episode keys) must not block a newer pack that carries an
+    explicit range such as S01E01-E21. Otherwise progressive TG hits with a
+    clean drama title permanently suppress later packs that cover missing eps.
+    """
     existing_title_key = compact_match_text(title_without_year(row.get("title")) or row.get("title"))
     if not result_title_key or not existing_title_key:
         return None
     similarity = SequenceMatcher(None, result_title_key, existing_title_key).ratio()
-    if similarity >= 0.94 and (not result_episodes or not existing_episodes or result_episodes == existing_episodes):
-        return "similar_title"
-    return None
+    if similarity < 0.94:
+        return None
+    if result_episodes or existing_episodes:
+        if result_episodes != existing_episodes:
+            return None
+    return "similar_title"

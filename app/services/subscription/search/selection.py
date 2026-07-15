@@ -4,9 +4,8 @@ import time
 from typing import Any
 
 from app.db import add_log, db, utc_now
-from app.services.search_metrics import record_115_validation
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription.delivery.link_validation import classify_115_results, pick_first_available_115_result
+from app.services.adapters.pan115 import PAN115_URL_RE, SHARE_UNAVAILABLE, SHARE_UNKNOWN, Pan115Adapter
 from app.services.subscription.resource.ops import (
     existing_resource_rows,
     fallback_result_candidates,
@@ -39,46 +38,76 @@ async def attach_telegram_results(
             "TG 已提取链接但标题上下文未命中订阅，已跳过以避免错误投递",
             {"id": subscription_id, "title": subscription.get("title"), "candidates": len(results)},
         )
-    # Progressive validation: check candidates in priority order and stop at first usable link.
+    # Progressive validation with duplicate fall-through:
+    # order by missing-episode coverage, validate 115 one-by-one, skip expired and
+    # already-saved packs, stop at the first newly created resource.
     ordered = fallback_result_candidates(raw_matched, subscription)
     matched: list[SearchResult] = []
     recheck_results: list[SearchResult] = []
-    first_is_recheck = False
     validation_started = time.perf_counter()
-    if ordered:
-        first, recheck_results, validation_report, first_is_recheck = await pick_first_available_115_result(ordered)
-        if first is not None:
-            matched = [first]
-    else:
-        validation_report = {"checked_115": 0, "expired_115": 0, "recheck_115": 0}
-    validation_report = {**validation_report, "115_ms": int((time.perf_counter() - validation_started) * 1000)}
+    validation_report: dict[str, Any] = {"checked_115": 0, "expired_115": 0, "recheck_115": 0}
     created: list[dict] = []
     duplicate_count = 0
     save_failed_count = 0
     recheck_saved_count = 0
     with db() as conn:
         existing_rows = existing_resource_rows(conn, subscription_id)
-        for result in matched:
+        adapter = Pan115Adapter() if ordered else None
+        for result in ordered:
+            url = str(getattr(result, "url", "") or "")
+            mark_recheck = False
+            if adapter is not None and PAN115_URL_RE.match(url):
+                state = await adapter.share_availability(url)
+                validation_report["checked_115"] += 1
+                if state == SHARE_UNAVAILABLE:
+                    validation_report["expired_115"] += 1
+                    add_log(
+                        "info",
+                        "subscription",
+                        "115 分享链接已失效，跳过保存和投递",
+                        {
+                            "url": url,
+                            "title": str(getattr(result, "title", "") or "")[:120],
+                            "source": getattr(result, "source", ""),
+                        },
+                    )
+                    continue
+                if state == SHARE_UNKNOWN:
+                    validation_report["recheck_115"] += 1
+                    mark_recheck = True
+                    recheck_results.append(result)
+                    add_log(
+                        "warning",
+                        "subscription",
+                        "115 分享链接有效性待复检，先继续投递",
+                        {
+                            "url": url,
+                            "title": str(getattr(result, "title", "") or "")[:120],
+                            "source": getattr(result, "source", ""),
+                        },
+                    )
             outcome = _save_telegram_result(
                 conn,
                 subscription,
                 result,
                 existing_rows,
-                mark_recheck=first_is_recheck,
+                mark_recheck=mark_recheck,
             )
             if outcome == "created":
+                matched = [result]
                 created.append(getattr(result, "_saved_item"))
-                if first_is_recheck:
+                if mark_recheck:
                     recheck_saved_count += 1
                 break
             if outcome == "duplicate":
                 duplicate_count += 1
-            else:
-                save_failed_count += 1
+                continue
+            save_failed_count += 1
         if not created:
             for result in recheck_results:
                 outcome = _save_telegram_result(conn, subscription, result, existing_rows, mark_recheck=True)
                 if outcome == "created":
+                    matched = [result]
                     created.append(getattr(result, "_saved_item"))
                     recheck_saved_count += 1
                     break
@@ -90,6 +119,8 @@ async def attach_telegram_results(
             "UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?",
             (utc_now(), utc_now(), subscription_id),
         )
+    validation_report = {**validation_report, "115_ms": int((time.perf_counter() - validation_started) * 1000)}
+
     log_unmatched_results(facade, subscription, results, matched, source_label="TG 历史搜索")
     summary = {
         "raw_matched": len(raw_matched),

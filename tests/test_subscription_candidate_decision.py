@@ -56,3 +56,27 @@ def test_fallback_candidates_prefer_missing_episode_coverage_over_source_priorit
 
     assert candidates[0] is low_priority_but_useful
     assert candidates[-1] is high_priority_but_owned
+
+def test_decision_accepts_s01e01_e21_when_library_has_1_to_19() -> None:
+    sub = {
+        "id": 1,
+        "title": "野狗骨头",
+        "media_type": "tv",
+        "tmdb_id": 291392,
+        "tmdb_total_count": 32,
+        "emby_count": 19,
+        "emby_episode_keys": [f"1x{episode}" for episode in range(1, 20)],
+        "keywords": ["野狗骨头"],
+    }
+    result = SearchResult(
+        title="野狗骨头(2026) S01E01-E21",
+        url="https://115.com/s/ydgt21?password=8888",
+        source="-1003793333793",
+        context="剧集：野狗骨头(2026)\nTMDB ID：291392\n季集：S01E01-E21",
+    )
+    decision = decide_resource_candidate(sub, result)
+    assert decision.accepted
+    assert (1, 20) in decision.missing_coverage
+    assert (1, 21) in decision.missing_coverage
+    assert decision.coverage_count >= 2
+
