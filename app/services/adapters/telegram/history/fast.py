@@ -17,6 +17,7 @@ from app.services.link_parser import (
     telegram_message_text,
 )
 from app.services.types import SearchResult
+from app.services.adapters.telegram.rate_limit import telegram_request_gate
 
 
 TELEGRAM_FAST_DIALOG_SEARCH_CONCURRENCY = 6
@@ -94,6 +95,7 @@ class TelegramFastSearchMixin:
             timeout = max(1.0, min(2.5, len(source_values) * 0.7))
             return await asyncio.wait_for(self._resolve_dialogs(client, source_values), timeout=timeout)
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("debug", "telegram", "Telegram 快速搜索来源解析超时，使用原始配置继续", {"sources": len(source_values), "error": str(exc), "error_type": type(exc).__name__})
             return [{"entity": source, "source": source, "canonical": source} for source in source_values]
 
@@ -140,6 +142,7 @@ class TelegramFastSearchMixin:
             try:
                 hits = task.result()
             except Exception as exc:
+                telegram_request_gate.note_error(exc)
                 add_log("debug", "telegram", "Telegram 快速搜索单来源失败", {"error": str(exc), "error_type": type(exc).__name__})
                 continue
             if hits:
@@ -188,6 +191,7 @@ class TelegramFastSearchMixin:
                 timeout=budget.timeout(TELEGRAM_FAST_MESSAGE_EXTRACT_TIMEOUT_SECONDS),
             )
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("debug", "telegram", "Telegram 快速搜索链接提取失败", {"dialog": source, "query": query, "error": str(exc), "error_type": type(exc).__name__})
             return []
 
@@ -205,6 +209,7 @@ class TelegramFastSearchMixin:
         try:
             index_telegram_messages(source, messages)
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("debug", "telegram", "Telegram 快速搜索索引写入失败", {"dialog": source, "error": str(exc), "error_type": type(exc).__name__})
 
     async def _fast_links_from_message(

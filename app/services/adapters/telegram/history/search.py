@@ -1,3 +1,5 @@
+
+
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +13,9 @@ from app.services.adapters.telegram.history.config import build_history_options,
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.history.metrics import TelegramSearchMetrics
 from app.services.adapters.telegram.scan.extract_cache import extract_cache_stats
+from app.services.search_metrics import record_telegram_search
 from app.services.adapters.telegram.history.fast import TelegramFastSearchMixin
+from app.services.adapters.telegram.history.prewarm import TelegramIndexPrewarmMixin
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
 from app.services.adapters.telegram.history.recent import TelegramRecentScanMixin
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
@@ -31,7 +35,7 @@ def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
-class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixin):
+class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixin, TelegramIndexPrewarmMixin):
     def _history_options(self, config: dict[str, Any]) -> TelegramHistoryOptions:
         return build_history_options(config)
 
@@ -100,6 +104,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                 }
                 add_log("info", "telegram", "Telegram 本地索引命中资源，跳过远端历史搜索", payload)
                 add_log("info", "telegram", "Telegram 搜索指标", payload)
+                record_telegram_search(payload)
                 return results
 
         search_started = time.perf_counter()
@@ -135,6 +140,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             add_log("warning", "telegram", "Telegram 历史搜索时间预算用尽，已提前返回已找到结果", {**payload, "budget": options.total_budget})
         add_log("info", "telegram", "Telegram 历史搜索完成", payload)
         add_log("info", "telegram", "Telegram 搜索指标", payload)
+        record_telegram_search(payload)
         return results
 
     async def _resolve_dialogs_for_history_search(
@@ -215,6 +221,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                         cancelled += 1
                         continue
                     except Exception as exc:
+                        telegram_request_gate.note_error(exc)
                         add_log("warning", "telegram", "Telegram 来源并发搜索失败，已跳过单个来源", {"error": str(exc), "error_type": type(exc).__name__})
                         continue
                     if isinstance(result, tuple):
@@ -243,11 +250,13 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         try:
             client = await asyncio.wait_for(self.client(), timeout=15)
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("warning", "telegram", "Telegram 客户端初始化失败", {"error": str(exc), "error_type": type(exc).__name__})
             return None
         try:
             authorized = await asyncio.wait_for(client.is_user_authorized(), timeout=8)
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("warning", "telegram", "Telegram 授权状态检查失败", {"error": str(exc), "error_type": type(exc).__name__})
             return None
         if not authorized:
@@ -378,6 +387,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             stats["timeouts"] += 1
             add_log("warning", "telegram", "Telegram 单次查询超时，继续下一个查询", {"dialog": source, "query": query, "timeout": round(timeout, 2), "messages": processed, "read_ms": read_ms, "extract_ms": extract_ms})
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("warning", "telegram", "Telegram 历史查询失败", {"dialog": source, "query": query, "error": str(exc), "error_type": type(exc).__name__})
         payload = {"dialog": source, "query": query, "messages": processed, "read_ms": read_ms, "extract_ms": extract_ms, "total_ms": _elapsed_ms(started), **pipeline_stats.as_payload()}
         if processed and not results:
@@ -409,6 +419,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             except asyncio.TimeoutError:
                 add_log("debug", "telegram", "Telegram get_messages 历史查询超时，回退 iter_messages", {"query": query, "limit": limit, "timeout": 2})
             except Exception as exc:
+                telegram_request_gate.note_error(exc)
                 add_log("debug", "telegram", "Telegram get_messages 历史查询失败，回退 iter_messages", {"query": query, "limit": limit, "error": str(exc), "error_type": type(exc).__name__})
         try:
             messages = await asyncio.wait_for(self._iter_search_messages(client, entity, query, limit), timeout=3)
@@ -418,6 +429,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         except asyncio.TimeoutError:
             add_log("warning", "telegram", "Telegram iter_messages 历史查询超时", {"query": query, "limit": limit, "timeout": 3})
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("warning", "telegram", "Telegram iter_messages 历史查询失败", {"query": query, "limit": limit, "error": str(exc), "error_type": type(exc).__name__})
         return []
 
@@ -433,4 +445,5 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             if count:
                 add_log("debug", "telegram", "Telegram 消息已写入本地索引", {"dialog": source, "count": count})
         except Exception as exc:
+            telegram_request_gate.note_error(exc)
             add_log("debug", "telegram", "Telegram 消息索引写入失败，继续远端搜索", {"dialog": source, "error": str(exc), "error_type": type(exc).__name__})

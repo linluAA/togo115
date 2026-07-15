@@ -19,6 +19,7 @@ class MonitorService:
         self._stopping = asyncio.Event()
         self._last_emby_sync = 0.0
         self._last_recheck = 0.0
+        self._last_index_prewarm = 0.0
         self._last_subscription_rescan = 0.0
         self._bot = TelegramBotAdapter()
 
@@ -27,7 +28,7 @@ class MonitorService:
             return
         self._stopping.clear()
         self._task = asyncio.create_task(self._run(), name="togo115-monitor")
-        add_log("info", "monitor", "订阅监控已启动")
+        add_log("info", "monitor", "\u8ba2\u9605\u76d1\u63a7\u5df2\u542f\u52a8")
 
     async def stop(self) -> None:
         self._stopping.set()
@@ -36,7 +37,7 @@ class MonitorService:
             with suppress(asyncio.CancelledError):
                 await self._task
         await self._bot.stop_polling()
-        add_log("info", "monitor", "订阅监控已停止")
+        add_log("info", "monitor", "\u8ba2\u9605\u76d1\u63a7\u5df2\u505c\u6b62")
 
     async def _run(self) -> None:
         telegram = TelegramClientAdapter()
@@ -45,37 +46,49 @@ class MonitorService:
                 await telegram.ensure_monitoring()
                 await self._bot.ensure_polling()
                 now = time.monotonic()
-                if now - self._last_recheck > 30:
+                if now - self._last_recheck > 120:
                     await recheck_pending_115_resources()
                     self._last_recheck = now
+                if now - self._last_index_prewarm > 900:
+                    try:
+                        await telegram.prewarm_message_index()
+                    except Exception as exc:
+                        add_log(
+                            "warning",
+                            "monitor",
+                            "Telegram \u7d22\u5f15\u9884\u70ed\u5f02\u5e38",
+                            {"error": str(exc), "error_type": type(exc).__name__},
+                        )
+                    self._last_index_prewarm = now
                 if now - self._last_emby_sync > 600:
                     await sync_subscription_list_with_emby(list_subscriptions(include_completed=True))
                     self._last_emby_sync = now
                 self._maybe_schedule_subscription_rescan(now)
             except Exception as exc:
-                add_log("error", "monitor", "监控循环异常，下一轮将自动重试", {"error": str(exc)})
+                add_log(
+                    "error",
+                    "monitor",
+                    "\u76d1\u63a7\u5faa\u73af\u5f02\u5e38\uff0c\u4e0b\u4e00\u8f6e\u5c06\u81ea\u52a8\u91cd\u8bd5",
+                    {"error": str(exc)},
+                )
             await asyncio.sleep(settings.monitor_interval_seconds)
 
     def _maybe_schedule_subscription_rescan(self, now: float | None = None) -> dict | None:
-        """Queue a full active-subscription rescan when the interval has elapsed."""
         interval = int(getattr(settings, "subscription_rescan_interval_seconds", 0) or 0)
         if interval <= 0:
             return None
         current = time.monotonic() if now is None else now
-        # First tick after start: arm the timer without scanning immediately.
-        # New subscriptions already schedule their own search.
         if self._last_subscription_rescan <= 0:
             self._last_subscription_rescan = current
             return None
         if current - self._last_subscription_rescan < interval:
             return None
         result = schedule_search_all_active_subscriptions()
-        # Always advance the timer so a long-running search doesn't re-trigger every monitor tick.
         self._last_subscription_rescan = current
         add_log(
             "info",
             "monitor",
-            "已按计划触发全部活跃订阅重搜",
+            "\u5df2\u6309\u8ba1\u5212\u89e6\u53d1\u5168\u90e8\u6d3b\u8dc3\u8ba2\u9605\u91cd\u641c",
             {
                 "interval_seconds": interval,
                 "queued": bool(result.get("queued")),
