@@ -19,8 +19,20 @@ async def search_all_active_subscriptions() -> dict:
         {"active": len(subscriptions), "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY},
     )
     snapshot = await library_snapshot_or_none()
-    subscriptions = await _sync_emby_before_search(subscriptions, snapshot)
-    outcomes = await asyncio.gather(*(_search_one(subscription, snapshot) for subscription in subscriptions))
+    # Emby sync is useful, but must not block the first subscription search.
+    emby_task = asyncio.create_task(_sync_emby_in_background(list(subscriptions), snapshot))
+    try:
+        outcomes = await asyncio.gather(*(_search_one(subscription, snapshot) for subscription in subscriptions))
+    finally:
+        try:
+            await asyncio.wait_for(asyncio.shield(emby_task), timeout=max(1.0, EMBY_SYNC_TIMEOUT_SECONDS))
+        except Exception:
+            if not emby_task.done():
+                emby_task.cancel()
+                try:
+                    await emby_task
+                except Exception:
+                    pass
     searched = sum(item[0] for item in outcomes)
     total = sum(item[1] for item in outcomes)
     failed = sum(item[2] for item in outcomes)
@@ -33,19 +45,30 @@ async def search_all_active_subscriptions() -> dict:
     return {"ok": True, "searched": searched, "count": total, "failed": failed}
 
 
-async def _sync_emby_before_search(subscriptions: list[dict], snapshot) -> list[dict]:
+async def _sync_emby_in_background(subscriptions: list[dict], snapshot) -> None:
     if snapshot is None or "__failed__" in snapshot:
-        return subscriptions
+        return
     try:
-        add_log("debug", "subscription", "\u641c\u7d22\u524d\u5f00\u59cb\u540c\u6b65 Emby \u5165\u5e93\u72b6\u6001", {"active": len(subscriptions)})
-        await asyncio.wait_for(sync_subscriptions_with_emby_snapshot(subscriptions, snapshot), timeout=EMBY_SYNC_TIMEOUT_SECONDS)
-        subscriptions = active_subscriptions()
-        add_log("debug", "subscription", "\u641c\u7d22\u524d Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5b8c\u6210", {"active": len(subscriptions)})
+        add_log("debug", "subscription", "搜索并行同步 Emby 入库状态开始", {"active": len(subscriptions)})
+        await asyncio.wait_for(
+            sync_subscriptions_with_emby_snapshot(subscriptions, snapshot),
+            timeout=EMBY_SYNC_TIMEOUT_SECONDS,
+        )
+        add_log("debug", "subscription", "搜索并行同步 Emby 入库状态完成", {"active": len(active_subscriptions())})
     except asyncio.TimeoutError:
-        add_log("warning", "subscription", "\u641c\u7d22\u524d Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u8d85\u65f6\uff0c\u8df3\u8fc7\u540c\u6b65\u7ee7\u7eed\u641c\u7d22", {"timeout": EMBY_SYNC_TIMEOUT_SECONDS})
+        add_log(
+            "warning",
+            "subscription",
+            "搜索并行 Emby 入库状态同步超时，已跳过",
+            {"timeout": EMBY_SYNC_TIMEOUT_SECONDS},
+        )
     except Exception as exc:
-        add_log("warning", "subscription", "\u641c\u7d22\u524d Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5931\u8d25\uff0c\u8df3\u8fc7\u540c\u6b65\u7ee7\u7eed\u641c\u7d22", {"error": str(exc)})
-    return subscriptions
+        add_log(
+            "warning",
+            "subscription",
+            "搜索并行 Emby 入库状态同步失败，已跳过",
+            {"error": str(exc)},
+        )
 
 
 async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
@@ -53,7 +76,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
     subscription = get_subscription(subscription["id"]) or subscription
     if subscription.get("status") != "active":
         return (0, 0, 0)
-    add_log("debug", "subscription", "\u5f00\u59cb\u641c\u7d22\u8ba2\u9605", {"id": subscription.get("id"), "title": subscription.get("title")})
+    add_log("debug", "subscription", "开始搜索订阅", {"id": subscription.get("id"), "title": subscription.get("title")})
     try:
         results = await asyncio.wait_for(
             _search_and_attach_resources_guarded(subscription["id"], snapshot, incremental_telegram=False),
@@ -64,7 +87,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
         add_log(
             "error",
             "subscription",
-            "\u641c\u7d22\u8ba2\u9605\u8d85\u65f6\uff0c\u5df2\u7ee7\u7eed\u5904\u7406\u4e0b\u4e00\u4e2a\u8ba2\u9605",
+            "搜索订阅超时，已继续处理下一个订阅",
             {"id": subscription["id"], "title": subscription.get("title"), "timeout": runtime.SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS},
         )
         return (1, 0, 1)
@@ -73,7 +96,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
         add_log(
             "error",
             "subscription",
-            "\u641c\u7d22\u8ba2\u9605\u5931\u8d25\uff0c\u5df2\u7ee7\u7eed\u5904\u7406\u4e0b\u4e00\u4e2a\u8ba2\u9605",
+            "搜索订阅失败，已继续处理下一个订阅",
             {
                 "id": subscription["id"],
                 "title": subscription.get("title"),
