@@ -11,6 +11,10 @@ from app.services.adapters.telegram.scan.message_candidates import (
     telegram_candidate_context_text,
     telegram_candidate_link_contexts,
 )
+from app.services.adapters.telegram.scan.extract_cache import (
+    get_cached_message_extract,
+    set_cached_message_extract,
+)
 from app.services.link_parser import (
     context_for_115_link,
     extract_115_links,
@@ -68,6 +72,19 @@ class TelegramMessageLinkMixin:
         extra_texts: list[str] | None = None,
     ) -> list[SearchResult]:
         started = time.perf_counter()
+        # Cache only pure message extracts (no extra_texts), keyed by source+message_id.
+        cacheable = not extra_texts
+        message_id = getattr(message, "id", None)
+        if cacheable:
+            cached = get_cached_message_extract(source, message_id)
+            if cached is not None:
+                add_log(
+                    "debug",
+                    "telegram",
+                    "Telegram 消息提取缓存命中",
+                    {"source": source, "message_id": message_id, "links": len(cached), "total_ms": _elapsed_ms(started)},
+                )
+                return list(cached)
         related_messages, related_ms = await self._timed_related_messages(client, message, entity, match_queries, extra_texts)
         message_text = self._combined_message_text(related_messages, extra_texts)
         link_contexts, direct_ms, direct_links = self._timed_direct_link_contexts(related_messages, extra_texts)
@@ -91,7 +108,7 @@ class TelegramMessageLinkMixin:
                     "skipped_heavy_extract": 1,
                 },
             )
-            return self._search_results_from_contexts(message, source, link_contexts)
+            return self._finalize_message_extract(message, source, link_contexts, cacheable=cacheable)
         external_page_ms, text_page_links = await self._timed_external_page_contexts(message_text, link_contexts, direct_links)
         button_ms, button_links = await self._merge_button_link_contexts(related_messages, client, entity, extra_texts, link_contexts)
         self._log_link_extraction(message, source, related_messages, link_contexts, message_text, {
@@ -105,7 +122,20 @@ class TelegramMessageLinkMixin:
             "total_ms": _elapsed_ms(started),
             "skipped_heavy_extract": 0,
         })
-        return self._search_results_from_contexts(message, source, link_contexts)
+        return self._finalize_message_extract(message, source, link_contexts, cacheable=cacheable)
+
+    def _finalize_message_extract(
+        self,
+        message: Any,
+        source: str,
+        link_contexts: dict[str, str],
+        *,
+        cacheable: bool,
+    ) -> list[SearchResult]:
+        results = self._search_results_from_contexts(message, source, link_contexts)
+        if cacheable:
+            set_cached_message_extract(source, getattr(message, "id", None), results)
+        return results
 
     async def _timed_related_messages(self, client, message, entity, match_queries, extra_texts) -> tuple[list[Any], int]:
         started = time.perf_counter()

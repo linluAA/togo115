@@ -12,6 +12,10 @@ from telethon import TelegramClient
 
 from app.db import add_log
 from app.services.integration_state import module_proxy
+from app.services.adapters.telegram.scan.extract_cache import (
+    get_cached_external_page_links,
+    set_cached_external_page_links,
+)
 from app.services.link_parser import (
     HTTP_URL_RE,
     TELEGRAM_BUTTON_CLICK_MAX_PER_MESSAGE,
@@ -152,12 +156,31 @@ class TelegramButtonLinkMixin:
         proxy = module_proxy("telegram")
         fetched = 0
         seen: set[str] = set()
+        pending: list[tuple[str, str]] = []
+        for page_url, label in pages:
+            if page_url in seen:
+                continue
+            seen.add(page_url)
+            cached_links = get_cached_external_page_links(page_url)
+            if cached_links is not None:
+                page_label = "\n".join(part for part in (label, page_url) if part)
+                for link in cached_links:
+                    collect(link, page_label)
+                add_log(
+                    "debug",
+                    "telegram",
+                    "Telegram 外部资源页缓存命中",
+                    {"url": page_url, "links": len(cached_links)},
+                )
+                continue
+            if fetched >= TELEGRAM_EXTERNAL_PAGE_MAX_FETCHES:
+                continue
+            fetched += 1
+            pending.append((page_url, label))
+        if not pending:
+            return
         async with _compat_httpx().AsyncClient(proxy=proxy or None, timeout=TELEGRAM_EXTERNAL_PAGE_TIMEOUT_SECONDS, follow_redirects=True) as page_client:
-            for page_url, label in pages:
-                if page_url in seen or fetched >= TELEGRAM_EXTERNAL_PAGE_MAX_FETCHES:
-                    continue
-                seen.add(page_url)
-                fetched += 1
+            for page_url, label in pending:
                 await self._collect_one_external_page(page_client, page_url, label, collect)
 
     async def _collect_one_external_page(self, page_client, page_url: str, label: str, collect: Callable[[Any, str], None]) -> None:
@@ -167,16 +190,24 @@ class TelegramButtonLinkMixin:
             response.raise_for_status()
         except Exception as exc:
             add_log("debug", "telegram", "Telegram 外部资源页读取失败", {"url": page_url, "error": str(exc), "error_type": type(exc).__name__, "elapsed_ms": _elapsed_ms(page_started)})
+            # Cache empty to avoid hammering dead pages in the same window.
+            set_cached_external_page_links(page_url, [])
             return
         html_text = response.text or ""
         page_label = "\n".join(part for part in (label, page_url) if part)
-        collect(html_text, page_label)
-        collect(unquote(html_text), page_label)
+        found: list[str] = []
+        for value in (html_text, unquote(html_text)):
+            collect(value, page_label)
+            found.extend(extract_115_links(value))
         for href in _html_hrefs(html_text):
             absolute = urljoin(str(response.url), href)
-            collect(absolute, page_label)
-            collect(unquote(absolute), page_label)
-        add_log("debug", "telegram", "Telegram 外部资源页已解析", {"url": page_url, "links": len(extract_115_links(html_text)), "elapsed_ms": _elapsed_ms(page_started)})
+            for value in (absolute, unquote(absolute)):
+                collect(value, page_label)
+                found.extend(extract_115_links(value))
+        # Deduplicate while preserving order.
+        unique_links = list(dict.fromkeys(found))
+        set_cached_external_page_links(page_url, unique_links)
+        add_log("debug", "telegram", "Telegram 外部资源页已解析", {"url": page_url, "links": len(unique_links), "elapsed_ms": _elapsed_ms(page_started)})
 
     async def _collect_refreshed_message_links(self, message: Any, client: TelegramClient | None, entity: Any, label: str, collect: Callable[[Any, str], None]) -> None:
         if not client or not getattr(message, "id", None):
