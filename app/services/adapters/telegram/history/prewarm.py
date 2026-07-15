@@ -31,7 +31,12 @@ class TelegramIndexPrewarmMixin:
             dialogs = await asyncio.wait_for(self._resolve_dialogs(client, source_values), timeout=20)
         except Exception as exc:
             telegram_request_gate.note_error(exc)
-            add_log("warning", "telegram", "Telegram ??????????", {"error": str(exc), "error_type": type(exc).__name__})
+            add_log(
+                "warning",
+                "telegram",
+                "Telegram 索引预热解析来源失败",
+                {"error": str(exc), "error_type": type(exc).__name__},
+            )
             return {"sources": len(source_values), "indexed": 0, "dialogs": 0}
         if not dialogs:
             return {"sources": len(source_values), "indexed": 0, "dialogs": 0}
@@ -58,7 +63,7 @@ class TelegramIndexPrewarmMixin:
             "gate": telegram_request_gate.stats(),
         }
         record_prewarm(payload)
-        add_log("info", "telegram", "Telegram ??????", payload)
+        add_log("info", "telegram", "Telegram 索引预热完成", payload)
         return payload
 
     async def _prewarm_dialog_index(self, client: TelegramClient, dialog: dict[str, Any], limit: int) -> int:
@@ -80,7 +85,7 @@ class TelegramIndexPrewarmMixin:
             add_log(
                 "debug",
                 "telegram",
-                "Telegram ?????????",
+                "Telegram 索引预热单源失败",
                 {"dialog": source, "error": str(exc), "error_type": type(exc).__name__},
             )
             return 0

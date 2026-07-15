@@ -236,7 +236,7 @@ class TelegramExtractCacheTest(unittest.IsolatedAsyncioTestCase):
         class Message:
             def __init__(self):
                 self.id = 77
-                self.raw_text = "???https://115.com/s/cache?password=1111"
+                self.raw_text = "资源 https://115.com/s/cache?password=1111"
                 self.message = self.raw_text
                 self.buttons = []
                 self.grouped_id = None
