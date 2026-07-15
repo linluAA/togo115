@@ -71,6 +71,27 @@ class TelegramMessageLinkMixin:
         related_messages, related_ms = await self._timed_related_messages(client, message, entity, match_queries, extra_texts)
         message_text = self._combined_message_text(related_messages, extra_texts)
         link_contexts, direct_ms, direct_links = self._timed_direct_link_contexts(related_messages, extra_texts)
+        # Fast path: message/context already has usable 115 links. Skip external pages and button clicks.
+        if direct_links > 0:
+            self._log_link_extraction(
+                message,
+                source,
+                related_messages,
+                link_contexts,
+                message_text,
+                {
+                    "direct_links": direct_links,
+                    "external_page_links": 0,
+                    "button_links": 0,
+                    "related_ms": related_ms,
+                    "direct_ms": direct_ms,
+                    "external_page_ms": 0,
+                    "button_ms": 0,
+                    "total_ms": _elapsed_ms(started),
+                    "skipped_heavy_extract": 1,
+                },
+            )
+            return self._search_results_from_contexts(message, source, link_contexts)
         external_page_ms, text_page_links = await self._timed_external_page_contexts(message_text, link_contexts, direct_links)
         button_ms, button_links = await self._merge_button_link_contexts(related_messages, client, entity, extra_texts, link_contexts)
         self._log_link_extraction(message, source, related_messages, link_contexts, message_text, {
@@ -82,6 +103,7 @@ class TelegramMessageLinkMixin:
             "external_page_ms": external_page_ms,
             "button_ms": button_ms,
             "total_ms": _elapsed_ms(started),
+            "skipped_heavy_extract": 0,
         })
         return self._search_results_from_contexts(message, source, link_contexts)
 

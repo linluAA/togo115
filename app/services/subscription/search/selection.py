@@ -4,7 +4,7 @@ from typing import Any
 
 from app.db import add_log, db, utc_now
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription.delivery.link_validation import classify_115_results
+from app.services.subscription.delivery.link_validation import classify_115_results, pick_first_available_115_result
 from app.services.subscription.resource.ops import (
     existing_resource_rows,
     fallback_result_candidates,
@@ -37,26 +37,45 @@ async def attach_telegram_results(
             "TG 已提取链接但标题上下文未命中订阅，已跳过以避免错误投递",
             {"id": subscription_id, "title": subscription.get("title"), "candidates": len(results)},
         )
-    matched, recheck_results, validation_report = await classify_115_results(raw_matched)
+    # Progressive validation: check candidates in priority order and stop at first usable link.
+    ordered = fallback_result_candidates(raw_matched, subscription)
+    matched: list[SearchResult] = []
+    recheck_results: list[SearchResult] = []
+    first_is_recheck = False
+    if ordered:
+        first, recheck_results, validation_report, first_is_recheck = await pick_first_available_115_result(ordered)
+        if first is not None:
+            matched = [first]
+    else:
+        validation_report = {"checked_115": 0, "expired_115": 0, "recheck_115": 0}
     created: list[dict] = []
     duplicate_count = 0
     save_failed_count = 0
     recheck_saved_count = 0
     with db() as conn:
         existing_rows = existing_resource_rows(conn, subscription_id)
-        for result in fallback_result_candidates(matched, subscription):
-            outcome = _save_telegram_result(conn, subscription, result, existing_rows, mark_recheck=False)
+        for result in matched:
+            outcome = _save_telegram_result(
+                conn,
+                subscription,
+                result,
+                existing_rows,
+                mark_recheck=first_is_recheck,
+            )
             if outcome == "created":
                 created.append(getattr(result, "_saved_item"))
+                if first_is_recheck:
+                    recheck_saved_count += 1
                 break
             if outcome == "duplicate":
                 duplicate_count += 1
             else:
                 save_failed_count += 1
         if not created:
-            for result in fallback_result_candidates(recheck_results, subscription):
+            for result in recheck_results:
                 outcome = _save_telegram_result(conn, subscription, result, existing_rows, mark_recheck=True)
                 if outcome == "created":
+                    created.append(getattr(result, "_saved_item"))
                     recheck_saved_count += 1
                     break
                 if outcome == "duplicate":

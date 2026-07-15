@@ -279,7 +279,11 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             context="Drama 1080p\nhttps://115.com/s/valid?password=2222",
         )
         pan = AsyncMock()
-        pan.share_availability = AsyncMock(side_effect=["unavailable", "available"])
+
+        async def share_side(url: str) -> str:
+            return "unavailable" if "expired" in str(url) else "available"
+
+        pan.share_availability = AsyncMock(side_effect=share_side)
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"

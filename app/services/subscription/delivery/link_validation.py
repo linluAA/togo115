@@ -3,7 +3,13 @@ from __future__ import annotations
 import asyncio
 
 from app.db import add_log
-from app.services.adapters.pan115 import PAN115_URL_RE, SHARE_AVAILABLE, SHARE_UNAVAILABLE, SHARE_UNKNOWN, Pan115Adapter
+from app.services.adapters.pan115 import (
+    PAN115_URL_RE,
+    SHARE_AVAILABLE,
+    SHARE_UNAVAILABLE,
+    SHARE_UNKNOWN,
+    Pan115Adapter,
+)
 from app.services.sources.rss_torznab import SearchResult
 
 PAN115_VALIDATION_CONCURRENCY = 4
@@ -46,7 +52,11 @@ async def classify_115_results(results: list[SearchResult]) -> tuple[list[Search
                 "warning",
                 "subscription",
                 "115 分享链接有效性待复检，先继续投递",
-                {"url": url, "title": str(getattr(result, "title", "") or "")[:120], "source": getattr(result, "source", "")},
+                {
+                    "url": url,
+                    "title": str(getattr(result, "title", "") or "")[:120],
+                    "source": getattr(result, "source", ""),
+                },
             )
             continue
 
@@ -56,7 +66,11 @@ async def classify_115_results(results: list[SearchResult]) -> tuple[list[Search
             "info",
             "subscription",
             "115 分享链接已失效，跳过保存和投递",
-            {"url": url, "title": str(getattr(result, "title", "") or "")[:120], "source": getattr(result, "source", "")},
+            {
+                "url": url,
+                "title": str(getattr(result, "title", "") or "")[:120],
+                "source": getattr(result, "source", ""),
+            },
         )
 
     return filtered, recheck, report
@@ -86,3 +100,58 @@ def _unique_115_urls(results: list[SearchResult]) -> list[str]:
         seen.add(url)
         urls.append(url)
     return urls
+
+
+async def pick_first_available_115_result(
+    results: list[SearchResult],
+) -> tuple[SearchResult | None, list[SearchResult], dict[str, int], bool]:
+    """Validate candidates in priority order.
+
+    Returns:
+      first_usable: first available link, or first unknown if none available
+      remaining_recheck: other unknown links
+      report: counters
+      first_is_recheck: True when first_usable is unknown and should be saved as pending_recheck
+    """
+    report = {"checked_115": 0, "expired_115": 0, "recheck_115": 0}
+    if not results:
+        return None, [], report, False
+
+    adapter = Pan115Adapter()
+    recheck: list[SearchResult] = []
+    for result in results:
+        url = str(getattr(result, "url", "") or "")
+        if not PAN115_URL_RE.match(url):
+            return result, recheck, report, False
+        state = await adapter.share_availability(url)
+        report["checked_115"] += 1
+        if state == SHARE_AVAILABLE:
+            return result, recheck, report, False
+        if state == SHARE_UNKNOWN:
+            report["recheck_115"] += 1
+            recheck.append(result)
+            add_log(
+                "warning",
+                "subscription",
+                "115 分享链接有效性待复检，先继续投递",
+                {
+                    "url": url,
+                    "title": str(getattr(result, "title", "") or "")[:120],
+                    "source": getattr(result, "source", ""),
+                },
+            )
+            continue
+        report["expired_115"] += 1
+        add_log(
+            "info",
+            "subscription",
+            "115 分享链接已失效，跳过保存和投递",
+            {
+                "url": url,
+                "title": str(getattr(result, "title", "") or "")[:120],
+                "source": getattr(result, "source", ""),
+            },
+        )
+    if recheck:
+        return recheck[0], recheck[1:], report, True
+    return None, [], report, False

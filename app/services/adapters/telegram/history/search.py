@@ -18,10 +18,11 @@ from app.services.link_parser import (
     _expanded_search_queries,
 )
 from app.services.types import SearchResult
+from app.services.adapters.telegram.rate_limit import telegram_request_gate
 
 
 TELEGRAM_DIALOG_SEARCH_CONCURRENCY = 3
-TELEGRAM_HISTORY_RETURN_TARGET = 8
+TELEGRAM_HISTORY_RETURN_TARGET = 2
 
 
 def _elapsed_ms(start: float) -> int:
@@ -119,6 +120,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             async with semaphore:
                 if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
                     return []
+                await telegram_request_gate.wait()
                 return await self._search_dialog_history(client, dialog, queries, options, budget, incremental=incremental)
 
         tasks = [asyncio.create_task(search_one(dialog)) for dialog in dialogs]
@@ -190,15 +192,8 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
 
         recent_ms = 0
         server_ms = 0
-        if not incremental:
-            recent_started = time.perf_counter()
-            recent_hits = await self._scan_recent_messages(client, entity, source, queries, options, budget, seen_messages, stats, incremental=False)
-            recent_ms = _elapsed_ms(recent_started)
-            results.extend(recent_hits)
-            if results:
-                add_log("debug", "telegram", "Telegram 最近消息已命中，跳过服务端历史搜索", {"dialog": source, "links": len(results), "recent_ms": recent_ms})
-
-        if not incremental and not results and not budget.exhausted():
+        # Non-incremental: prefer server search first. Recent scan is only a fallback.
+        if not incremental and not budget.exhausted():
             server_started = time.perf_counter()
             for query in self._server_search_queries(queries):
                 if budget.exhausted() or len(results) >= TELEGRAM_HISTORY_MAX_RESULTS:
@@ -207,13 +202,35 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                 results.extend(hits)
             server_ms = _elapsed_ms(server_started)
             if results:
-                add_log("debug", "telegram", "Telegram 服务端搜索已命中，跳过最近消息兜底扫描", {"dialog": source, "links": len(results), "server_ms": server_ms})
+                add_log(
+                    "debug",
+                    "telegram",
+                    "Telegram 服务端搜索已命中，跳过最近消息兜底扫描",
+                    {"dialog": source, "links": len(results), "server_ms": server_ms},
+                )
 
-        if incremental and not results and not budget.exhausted():
+        if not results and not budget.exhausted():
             recent_started = time.perf_counter()
-            recent_hits = await self._scan_recent_messages(client, entity, source, queries, options, budget, seen_messages, stats, incremental=incremental)
+            recent_hits = await self._scan_recent_messages(
+                client,
+                entity,
+                source,
+                queries,
+                options,
+                budget,
+                seen_messages,
+                stats,
+                incremental=incremental,
+            )
             recent_ms = _elapsed_ms(recent_started)
             results.extend(recent_hits)
+            if results and not incremental:
+                add_log(
+                    "debug",
+                    "telegram",
+                    "Telegram 最近消息兜底扫描命中",
+                    {"dialog": source, "links": len(results), "recent_ms": recent_ms},
+                )
 
         stats["links"] = len(results)
         add_log(
