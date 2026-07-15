@@ -97,6 +97,13 @@ function persistView() {
 
 function setView(view) {
   if (!VIEW_KEYS.includes(view)) return;
+  if (view === state.view) {
+    if (state.userMenuOpen) {
+      state.userMenuOpen = false;
+      updateShellUiState();
+    }
+    return;
+  }
   state.view = view;
   state.userMenuOpen = false;
   persistView();
@@ -200,7 +207,7 @@ function backdropUrl(item) {
 async function boot() {
   try {
     state.user = await api("/api/auth/me", { timeoutMs: 6000 });
-    renderApp();
+    // Load base data first, then paint once to avoid a visible double refresh.
     await refreshBase();
     renderApp();
   } catch {
