@@ -835,3 +835,27 @@ legend {
 .subscription-results {
   min-width: 0;
 }
+
+
+.search-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.search-metrics .metric-card {
+  border: 1px solid var(--border, #2a3140);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--panel, #151a22) 92%, white 8%);
+}
+.search-metrics .metric-label {
+  font-size: 12px;
+  opacity: 0.72;
+  margin-bottom: 4px;
+}
+.search-metrics .metric-value {
+  font-size: 14px;
+  font-weight: 600;
+  word-break: break-word;
+}

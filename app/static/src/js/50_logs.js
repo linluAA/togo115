@@ -1,4 +1,6 @@
 async function renderLogs() {
+  const metrics = await loadSearchMetrics();
+
   const root = $("#view");
   state.logs = [];
   state.logsHasMore = false;
@@ -13,6 +15,7 @@ async function renderLogs() {
       <button class="${state.logsMode === "debug" ? "active" : ""}" data-mode="debug">全部</button>
       <button class="danger" id="clearLogView">清空</button>
     </section>
+    ${renderSearchMetrics(metrics)}
     <div class="log-terminal"><div class="log-list"><div class="empty">正在读取日志...</div></div></div>
     <button class="secondary log-more" id="loadMoreLogs">加载更多</button>
   `;
@@ -90,4 +93,39 @@ function groupLogRows(logs) {
     groups.push({ key, log, count: 1 });
   }
   return groups;
+}
+
+
+async function loadSearchMetrics() {
+  try {
+    return await api("/api/metrics/search");
+  } catch (error) {
+    console.warn("load search metrics failed", error);
+    return null;
+  }
+}
+
+function renderSearchMetrics(metrics) {
+  if (!metrics) {
+    return `<section class="search-metrics"><div class="empty">????????</div></section>`;
+  }
+  const tg = metrics.telegram || {};
+  const share = metrics.share_115 || {};
+  const cache = metrics.cache || {};
+  const gate = metrics.gate || {};
+  const prewarm = metrics.prewarm || {};
+  const msgCache = cache.message_extract || {};
+  const pageCache = cache.external_page || {};
+  return `
+    <section class="search-metrics">
+      <div class="metric-card"><div class="metric-label">TG ????</div><div class="metric-value">${tg.searches || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">avg resolve/search/extract</div><div class="metric-value">${tg.avg_resolve_ms || 0}/${tg.avg_search_ms || 0}/${tg.avg_extract_ms || 0} ms</div></div>
+      <div class="metric-card"><div class="metric-label">???? / ????</div><div class="metric-value">${tg.index_hits || 0} / ${tg.remote_hits || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">115 avg / ?? / ??</div><div class="metric-value">${share.avg_ms || 0} ms / ${share.expired || 0} / ${share.recheck || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">???? hits</div><div class="metric-value">${msgCache.hits || 0}/${pageCache.hits || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">TG gate / Flood</div><div class="metric-value">${gate.interval || 0}s / ${gate.flood_events || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">????</div><div class="metric-value">${prewarm.runs || 0} ? / ${prewarm.indexed || 0} ?</div></div>
+      <div class="metric-card"><div class="metric-label">????</div><div class="metric-value">${metrics.concurrency || 0}</div></div>
+    </section>
+  `;
 }
