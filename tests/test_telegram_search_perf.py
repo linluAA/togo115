@@ -36,7 +36,7 @@ class TelegramSearchPerfTest(unittest.IsolatedAsyncioTestCase):
             recent_budget=2,
         )
         budget = TelegramSearchBudget(10)
-        results = await harness._search_dialog_history(
+        results, _extract_ms = await harness._search_dialog_history(
             client=None,
             dialog={"entity": "e", "canonical": "source"},
             queries=["将夜"],
@@ -64,7 +64,7 @@ class TelegramSearchPerfTest(unittest.IsolatedAsyncioTestCase):
             query_budget=2,
             recent_budget=2,
         )
-        results = await harness._search_dialog_history(
+        results, _extract_ms = await harness._search_dialog_history(
             client=None,
             dialog={"entity": "e", "canonical": "source"},
             queries=["将夜"],
@@ -147,7 +147,7 @@ class IndexEarlyReturnHarness(TelegramHistorySearchMixin):
 
     async def _search_dialogs_concurrently(self, *args, **kwargs):
         self.remote_calls += 1
-        return [SearchResult(title="远端", url="https://115.com/s/remote?password=1111", source="tg")]
+        return [SearchResult(title="remote", url="https://115.com/s/remote?password=1111", source="tg")], {"extract_ms": 1, "cancelled": 0}
 
 
 class SharedStateHarness(TelegramHistorySearchMixin):
@@ -176,7 +176,7 @@ class SharedStateHarness(TelegramHistorySearchMixin):
 
     async def _search_dialog_history(self, client, dialog, queries, options, budget, *, incremental=False, shared_state=None):
         self.dialog_history_calls += 1
-        return [SearchResult(title="远端", url="https://115.com/s/shared?password=1111", source=str(dialog["canonical"]), message_id="12")]
+        return [SearchResult(title="shared", url="https://115.com/s/shared?password=1111", source=str(dialog["canonical"]), message_id="12")], 2
 
     def _dedupe_results(self, results):
         return results
@@ -218,3 +218,48 @@ class TelegramSearchP1Test(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TelegramExtractCacheTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        from app.services.adapters.telegram.scan.extract_cache import clear_extract_caches
+        clear_extract_caches()
+
+    def tearDown(self) -> None:
+        from app.services.adapters.telegram.scan.extract_cache import clear_extract_caches
+        clear_extract_caches()
+
+    async def test_message_extract_cache_hit_skips_second_extract(self) -> None:
+        from app.services.adapters.telegram.scan.scanner import TelegramMessageScanner
+        from app.services.adapters.telegram.scan.extract_cache import extract_cache_stats
+
+        class Message:
+            def __init__(self):
+                self.id = 77
+                self.raw_text = "???https://115.com/s/cache?password=1111"
+                self.message = self.raw_text
+                self.buttons = []
+                self.grouped_id = None
+                self.media = None
+
+        scanner = TelegramMessageScanner()
+        message = Message()
+        first = await scanner._links_from_message(None, message, "tg-source")
+        second = await scanner._links_from_message(None, message, "tg-source")
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first[0].url, second[0].url)
+        stats = extract_cache_stats()["message_extract"]
+        self.assertGreaterEqual(stats["hits"], 1)
+
+    def test_external_page_cache_roundtrip(self) -> None:
+        from app.services.adapters.telegram.scan.extract_cache import (
+            get_cached_external_page_links,
+            set_cached_external_page_links,
+            extract_cache_stats,
+        )
+
+        set_cached_external_page_links("https://telegra.ph/demo", ["https://115.com/s/page?password=1"])
+        cached = get_cached_external_page_links("https://telegra.ph/demo")
+        self.assertEqual(cached, ["https://115.com/s/page?password=1"])
+        stats = extract_cache_stats()["external_page"]
+        self.assertGreaterEqual(stats["hits"], 1)

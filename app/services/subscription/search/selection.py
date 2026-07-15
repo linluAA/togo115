@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from app.db import add_log, db, utc_now
@@ -42,12 +43,14 @@ async def attach_telegram_results(
     matched: list[SearchResult] = []
     recheck_results: list[SearchResult] = []
     first_is_recheck = False
+    validation_started = time.perf_counter()
     if ordered:
         first, recheck_results, validation_report, first_is_recheck = await pick_first_available_115_result(ordered)
         if first is not None:
             matched = [first]
     else:
         validation_report = {"checked_115": 0, "expired_115": 0, "recheck_115": 0}
+    validation_report = {**validation_report, "115_ms": int((time.perf_counter() - validation_started) * 1000)}
     created: list[dict] = []
     duplicate_count = 0
     save_failed_count = 0
@@ -97,6 +100,21 @@ async def attach_telegram_results(
         "from_index": any(getattr(result, "source", "") == "TelegramIndex" for result in results),
         **validation_report,
     }
+    add_log(
+        "info",
+        "subscription",
+        "TG 搜索指标",
+        {
+            "id": subscription_id,
+            "115_ms": summary.get("115_ms", 0),
+            "checked_115": summary.get("checked_115", 0),
+            "expired_115": summary.get("expired_115", 0),
+            "recheck_115": summary.get("recheck_115", 0),
+            "raw_matched": summary.get("raw_matched", 0),
+            "created": summary.get("created", 0),
+            "from_index": summary.get("from_index", False),
+        },
+    )
     _log_telegram_attach_summary(subscription_id, summary)
     return created, matched, summary
 

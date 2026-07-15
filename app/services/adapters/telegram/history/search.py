@@ -9,6 +9,8 @@ from telethon import TelegramClient
 from app.db import add_log
 from app.services.adapters.telegram.history.config import build_history_options, server_search_queries
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget, TelegramSearchSharedState
+from app.services.adapters.telegram.history.metrics import TelegramSearchMetrics
+from app.services.adapters.telegram.scan.extract_cache import extract_cache_stats
 from app.services.adapters.telegram.history.fast import TelegramFastSearchMixin
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
 from app.services.adapters.telegram.history.recent import TelegramRecentScanMixin
@@ -81,28 +83,27 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                 "shared_seen_urls": len(state.seen_urls),
             },
         )
+        metrics = TelegramSearchMetrics(resolve_ms=resolve_ms, dialogs=len(dialogs), force_remote=state.force_remote)
         indexed_results: list[SearchResult] = []
         if not state.force_remote:
             indexed_results = self._search_indexed_telegram_messages(dialogs, queries)
             if indexed_results:
                 results = self._dedupe_results(state.remember_results(indexed_results))
-                add_log(
-                    "info",
-                    "telegram",
-                    "Telegram 本地索引命中资源，跳过远端历史搜索",
-                    {
-                        "title": title,
-                        "count": len(results),
-                        "sources": len(dialogs),
-                        "resolve_ms": resolve_ms,
-                        "search_ms": 0,
-                        "total_ms": _elapsed_ms(total_started),
-                    },
-                )
+                metrics.index_hits = len(results)
+                metrics.extra["cache"] = extract_cache_stats()
+                payload = {
+                    "title": title,
+                    "count": len(results),
+                    "sources": len(dialogs),
+                    "total_ms": _elapsed_ms(total_started),
+                    **metrics.as_payload(),
+                }
+                add_log("info", "telegram", "Telegram 本地索引命中资源，跳过远端历史搜索", payload)
+                add_log("info", "telegram", "Telegram 搜索指标", payload)
                 return results
 
         search_started = time.perf_counter()
-        remote_results = await self._search_dialogs_concurrently(
+        remote_results, search_metrics = await self._search_dialogs_concurrently(
             client,
             dialogs,
             queries,
@@ -112,21 +113,28 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
             shared_state=state,
         )
         all_results = [*indexed_results, *remote_results]
-        search_ms = _elapsed_ms(search_started)
+        metrics.search_ms = _elapsed_ms(search_started)
+        metrics.extract_ms = int(search_metrics.get("extract_ms", 0) or 0)
+        metrics.remote_hits = len(remote_results)
+        metrics.cancelled = int(search_metrics.get("cancelled", 0) or 0)
+        metrics.extra["cache"] = extract_cache_stats()
+        metrics.extra["cancel_rate"] = round(
+            metrics.cancelled / max(1, len(dialogs)),
+            3,
+        )
 
         results = self._dedupe_results(state.remember_results(all_results))
         payload = {
             "title": title,
             "count": len(results),
             "raw_count": len(all_results),
-            "resolve_ms": resolve_ms,
-            "search_ms": search_ms,
             "total_ms": _elapsed_ms(total_started),
-            "force_remote": state.force_remote,
+            **metrics.as_payload(),
         }
         if budget.exhausted():
             add_log("warning", "telegram", "Telegram 历史搜索时间预算用尽，已提前返回已找到结果", {**payload, "budget": options.total_budget})
         add_log("info", "telegram", "Telegram 历史搜索完成", payload)
+        add_log("info", "telegram", "Telegram 搜索指标", payload)
         return results
 
     async def _resolve_dialogs_for_history_search(
@@ -167,17 +175,19 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         *,
         incremental: bool = False,
         shared_state: TelegramSearchSharedState | None = None,
-    ) -> list[SearchResult]:
+    ) -> tuple[list[SearchResult], dict[str, int]]:
         semaphore = asyncio.Semaphore(TELEGRAM_DIALOG_SEARCH_CONCURRENCY)
         all_results: list[SearchResult] = []
         state = shared_state or TelegramSearchSharedState()
+        extract_ms_total = 0
+        cancelled = 0
 
-        async def search_one(dialog: dict[str, Any]) -> list[SearchResult]:
+        async def search_one(dialog: dict[str, Any]) -> tuple[list[SearchResult], int]:
             if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
-                return []
+                return [], 0
             async with semaphore:
                 if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
-                    return []
+                    return [], 0
                 await telegram_request_gate.wait()
                 return await self._search_dialog_history(
                     client,
@@ -202,19 +212,26 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                     try:
                         result = task.result()
                     except asyncio.CancelledError:
+                        cancelled += 1
                         continue
                     except Exception as exc:
                         add_log("warning", "telegram", "Telegram 来源并发搜索失败，已跳过单个来源", {"error": str(exc), "error_type": type(exc).__name__})
                         continue
-                    all_results.extend(result)
+                    if isinstance(result, tuple):
+                        hits, dialog_extract_ms = result
+                    else:
+                        hits, dialog_extract_ms = result, 0
+                    all_results.extend(hits)
+                    extract_ms_total += int(dialog_extract_ms or 0)
                     if len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
+                        cancelled += len(pending)
                         await self._cancel_pending_dialog_searches(pending)
-                        return all_results[:TELEGRAM_HISTORY_MAX_RESULTS]
+                        return all_results[:TELEGRAM_HISTORY_MAX_RESULTS], {"extract_ms": extract_ms_total, "cancelled": cancelled}
                 if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_MAX_RESULTS:
                     break
         finally:
             await self._cancel_pending_dialog_searches(pending)
-        return all_results[:TELEGRAM_HISTORY_MAX_RESULTS]
+        return all_results[:TELEGRAM_HISTORY_MAX_RESULTS], {"extract_ms": extract_ms_total, "cancelled": cancelled}
 
     async def _cancel_pending_dialog_searches(self, pending: set[asyncio.Task]) -> None:
         for task in pending:
@@ -248,7 +265,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         *,
         incremental: bool = False,
         shared_state: TelegramSearchSharedState | None = None,
-    ) -> list[SearchResult]:
+    ) -> tuple[list[SearchResult], int]:
         started = time.perf_counter()
         entity = dialog["entity"]
         source = str(dialog["canonical"])
@@ -300,14 +317,17 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                     {"dialog": source, "links": len(results), "recent_ms": recent_ms},
                 )
 
-        stats["links"] = len(results)
+                stats["links"] = len(results)
+        total_ms = _elapsed_ms(started)
+        # Approximate extract cost as total minus network-ish recent/server stages.
+        extract_ms = max(0, total_ms - int(recent_ms or 0) - int(server_ms or 0))
         add_log(
             "debug",
             "telegram",
             "Telegram 来源搜索完成",
-            {"dialog": source, **stats, "recent_ms": recent_ms, "server_ms": server_ms, "total_ms": _elapsed_ms(started), "remaining_budget": round(budget.remaining, 2)},
+            {"dialog": source, **stats, "recent_ms": recent_ms, "server_ms": server_ms, "extract_ms": extract_ms, "total_ms": total_ms, "remaining_budget": round(budget.remaining, 2)},
         )
-        return results
+        return results, extract_ms
 
     async def _search_dialog_query(
         self,
