@@ -79,11 +79,18 @@ def _search_title_variants(title: str | None) -> list[str]:
         if normalized and normalized not in variants:
             variants.append(normalized)
 
+    # Prefer bare franchise names first so prefix/CJK aliases are not crowded out by
+    # year parentheses variants when callers use a small max_queries budget.
+    bases: list[str] = []
+    for alias in title_prefix_aliases(raw):
+        base = _query_without_year(alias) or alias
+        add(base)
+        if base not in bases:
+            bases.append(base)
     for alias in title_prefix_aliases(raw):
         years = sorted(years_from_text(alias))
-        base = _query_without_year(alias)
+        base = _query_without_year(alias) or alias
         add(alias)
-        add(base)
         if base and years:
             for year in years:
                 add(f"{base} {year}")
@@ -114,11 +121,14 @@ def _expanded_search_queries(title: str, keywords: list[str], max_queries: int =
         if normalized and normalized not in queries:
             queries.append(normalized)
 
-    for query in base_queries:
+    # Core names first (no year decorations), then year variants, then keyword combos.
+    bare = [q for q in base_queries if not years_from_text(q)]
+    with_year = [q for q in base_queries if years_from_text(q)]
+    for query in bare + with_year:
         add(query)
     for keyword in clean_keywords:
         keyword_key = _compact_search_text(keyword)
-        for base_query in base_queries:
+        for base_query in bare + with_year:
             if keyword_key and keyword_key in _compact_search_text(base_query):
                 continue
             add(f"{base_query} {keyword}")

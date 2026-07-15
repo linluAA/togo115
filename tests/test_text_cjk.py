@@ -30,3 +30,18 @@ def test_search_queries_include_prefix_stripped_alias() -> None:
 def test_extra_search_keywords_include_prefix_stripped_alias() -> None:
     extras = extra_search_keywords({"title": "新攻壳机动队", "keywords": ["新攻壳机动队"]})
     assert "攻壳机动队" in extras
+
+def test_expanded_queries_prioritize_prefix_stripped_alias_within_small_budget() -> None:
+    queries = _expanded_search_queries("新攻壳机动队 2026", ["攻壳机动队"], max_queries=4)
+    assert "攻壳机动队" in queries
+    assert queries.index("攻壳机动队") < queries.index("新攻壳机动队 2026") if "新攻壳机动队 2026" in queries else True
+
+
+def test_server_search_queries_include_alias_when_limit_two() -> None:
+    from app.services.adapters.telegram.history.config import server_search_queries
+
+    queries = _expanded_search_queries("新攻壳机动队 2026", ["攻壳机动队"], max_queries=6)
+    selected = server_search_queries(queries, limit=2)
+    assert "攻壳机动队" in selected
+    assert all(not __import__("app.services.link_search_utils", fromlist=["years_from_text"]).years_from_text(item) for item in selected)
+

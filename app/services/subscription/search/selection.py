@@ -32,11 +32,25 @@ async def attach_telegram_results(
     subscription_id = int(subscription["id"])
     raw_matched = matching_results(subscription, results)
     if not raw_matched and results:
+        samples = [
+            {
+                "title": str(getattr(result, "title", "") or "")[:120],
+                "source": str(getattr(result, "source", "") or "")[:80],
+                "url": str(getattr(result, "url", "") or "")[:160],
+                "message_id": getattr(result, "message_id", None),
+            }
+            for result in results[:3]
+        ]
         add_log(
             "info",
             "subscription",
             "TG 已提取链接但标题上下文未命中订阅，已跳过以避免错误投递",
-            {"id": subscription_id, "title": subscription.get("title"), "candidates": len(results)},
+            {
+                "id": subscription_id,
+                "title": subscription.get("title"),
+                "candidates": len(results),
+                "samples": samples,
+            },
         )
     # Progressive validation with duplicate fall-through:
     # order by missing-episode coverage, validate 115 one-by-one, skip expired and
@@ -148,6 +162,33 @@ async def attach_telegram_results(
         },
     )
     _log_telegram_attach_summary(subscription_id, summary)
+    if results and not created:
+        add_log(
+            "info",
+            "subscription",
+            "TG 提取结果未形成新投递",
+            {
+                "id": subscription_id,
+                "title": subscription.get("title"),
+                "candidates": len(results),
+                "raw_matched": summary.get("raw_matched", 0),
+                "available_matched": summary.get("available_matched", 0),
+                "created": summary.get("created", 0),
+                "duplicates": summary.get("duplicates", 0),
+                "expired_115": summary.get("expired_115", 0),
+                "recheck_115": summary.get("recheck_115", 0),
+                "save_failed": summary.get("save_failed", 0),
+                "from_index": summary.get("from_index", False),
+                "samples": [
+                    {
+                        "title": str(getattr(result, "title", "") or "")[:120],
+                        "source": str(getattr(result, "source", "") or "")[:80],
+                        "url": str(getattr(result, "url", "") or "")[:160],
+                    }
+                    for result in results[:3]
+                ],
+            },
+        )
     return created, matched, summary
 
 

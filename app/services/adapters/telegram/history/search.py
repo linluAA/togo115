@@ -40,7 +40,9 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         return build_history_options(config)
 
     def _server_search_queries(self, queries: list[str]) -> list[str]:
-        return server_search_queries(queries)
+        # Keep a small multi-query set so franchise aliases (e.g. 新攻壳机动队 -> 攻壳机动队)
+        # can hit traditional titles without exploding Telegram request volume.
+        return server_search_queries(queries, limit=2)
 
     async def search_history(
         self,
@@ -67,7 +69,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         if not dialogs:
             add_log("warning", "telegram", "Telegram 群组/频道解析失败或无可用来源", {"sources": len(source_values), "resolve_ms": resolve_ms})
             return []
-        queries = _expanded_search_queries(title, keywords, max_queries=4)
+        queries = _expanded_search_queries(title, keywords, max_queries=6)
         if not queries:
             return []
 

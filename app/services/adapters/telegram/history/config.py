@@ -51,7 +51,7 @@ def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
     candidates = sorted(
         queries,
         key=lambda item: (
-            0 if years_from_text(item) else 1,
+            0 if not years_from_text(item) else 1,
             0 if re.search(r"\s", item.strip()) else 1,
             -len(_compact_search_text(item)),
         ),
@@ -62,6 +62,7 @@ def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
         key = _compact_search_text(query)
         if not key or key in seen:
             continue
+        # Prefer unique franchise bases; year decorations of the same base are lower priority.
         seen.add(key)
         selected.append(query)
         if len(selected) >= limit:
