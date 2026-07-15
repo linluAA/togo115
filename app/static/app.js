@@ -147,6 +147,28 @@ function rememberTelegramDialogs(dialogs) {
   localStorage.setItem("telegramDialogLabels", JSON.stringify(labels));
 }
 
+const USER_CACHE_KEY = "togo115.user";
+
+function readCachedUser() {
+  try {
+    const raw = sessionStorage.getItem(USER_CACHE_KEY);
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    return user && typeof user === "object" ? user : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheUser(user) {
+  try {
+    if (user) sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    else sessionStorage.removeItem(USER_CACHE_KEY);
+  } catch {
+    // Ignore storage failures (private mode / quota).
+  }
+}
+
 async function api(path, options = {}) {
   const timeoutMs = options.timeoutMs || 12000;
   const controller = new AbortController();
@@ -182,7 +204,7 @@ async function apiOptional(path, fallback, options = {}) {
 }
 
 async function apiQuick(path, fallback, options = {}) {
-  return apiOptional(path, fallback, { timeoutMs: 5000, ...options });
+  return apiOptional(path, fallback, { timeoutMs: 3500, ...options });
 }
 
 
@@ -204,13 +226,46 @@ function backdropUrl(item) {
   return item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : posterUrl(item);
 }
 
+function showBootLoading() {
+  const app = $("#app");
+  if (!app || app.querySelector(".shell, .login")) return;
+  app.innerHTML = `
+    <main class="login boot-loading">
+      <section class="login-card">
+        <h1>ToGo115</h1>
+        <p>正在加载控制台…</p>
+      </section>
+    </main>
+  `;
+}
+
 async function boot() {
-  try {
-    state.user = await api("/api/auth/me", { timeoutMs: 6000 });
-    // Load base data first, then paint once to avoid a visible double refresh.
-    await refreshBase();
+  const cachedUser = readCachedUser();
+  let painted = false;
+  // Instant feedback: reuse last session chrome, otherwise show a light loading shell.
+  if (cachedUser) {
+    state.user = cachedUser;
     renderApp();
+    painted = true;
+  } else {
+    showBootLoading();
+  }
+  try {
+    state.user = await api("/api/auth/me", { timeoutMs: 4000 });
+    cacheUser(state.user);
+    if (!painted) {
+      renderApp();
+      painted = true;
+    } else if ((state.user?.username || "") !== (cachedUser?.username || "")) {
+      // Username changed while revalidating; refresh chrome once.
+      renderApp();
+    }
+    await refreshBase();
+    // Update page content without remounting the whole shell.
+    if (state.user) renderView();
   } catch {
+    cacheUser(null);
+    state.user = null;
     renderLogin();
   }
 }
@@ -276,8 +331,10 @@ function renderLogin() {
     try {
       await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });
       state.user = await api("/api/auth/me");
-      await refreshBase();
+      cacheUser(state.user);
       renderApp();
+      await refreshBase();
+      if (state.user) renderView();
     } catch (error) {
       toast(error.message);
     }
@@ -377,6 +434,8 @@ function renderApp() {
   $("#logoutBtn")?.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
     state.userMenuOpen = false;
+    cacheUser(null);
+    state.user = null;
     renderLogin();
   });
   renderView();

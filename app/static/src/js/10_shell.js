@@ -18,8 +18,10 @@ function renderLogin() {
     try {
       await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });
       state.user = await api("/api/auth/me");
-      await refreshBase();
+      cacheUser(state.user);
       renderApp();
+      await refreshBase();
+      if (state.user) renderView();
     } catch (error) {
       toast(error.message);
     }
@@ -119,6 +121,8 @@ function renderApp() {
   $("#logoutBtn")?.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
     state.userMenuOpen = false;
+    cacheUser(null);
+    state.user = null;
     renderLogin();
   });
   renderView();
