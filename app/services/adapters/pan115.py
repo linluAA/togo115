@@ -2,20 +2,30 @@ from __future__ import annotations
 
 import re
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 import httpx
 
 from app.services.adapters.pan115_offline import Pan115OfflineMixin
 from app.services.adapters.pan115_qr import Pan115QrMixin
+from app.services.adapters.pan115_share import (
+    SHARE_AUTH_REQUIRED,
+    SHARE_AVAILABLE,
+    SHARE_RATE_LIMITED,
+    SHARE_UNAVAILABLE,
+    SHARE_UNKNOWN,
+    ShareAvailability,
+    _share_available_payload as classify_share_available_payload,
+    clear_share_availability_cache,
+    probe_share_availability,
+)
 from app.services.adapters.pan115_state import add_log, get_setting, module_proxy
 
 
-SHARE_AVAILABLE = "available"
-SHARE_UNAVAILABLE = "unavailable"
-SHARE_UNKNOWN = "unknown"
-
-PAN115_URL_RE = re.compile(r'(?:https?://)?(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?(?:password|pwd|receive_code)=[A-Za-z0-9]{2,12})?', re.I)
+PAN115_URL_RE = re.compile(
+    r"(?:https?://)?(?:www\.)?115(?:cdn)?\.com/s/[A-Za-z0-9_-]+(?:\?(?:password|pwd|receive_code)=[A-Za-z0-9]{2,12})?",
+    re.I,
+)
 
 
 def normalize_115_share_link(link: str) -> str:
@@ -39,7 +49,6 @@ def parse_115_share_link(link: str) -> tuple[str, str | None]:
     if match:
         receive_code = match.group(1)
     return share_code, receive_code
-
 
 
 class Pan115Adapter(Pan115QrMixin, Pan115OfflineMixin):
@@ -84,76 +93,27 @@ class Pan115Adapter(Pan115QrMixin, Pan115OfflineMixin):
         return "已接收" in message or "重复接收" in message or "无需重复" in message
 
     def _share_available_payload(self, payload: dict[str, Any]) -> bool:
-        if payload.get("state") is True or payload.get("errno") == 0 or payload.get("errcode") == 0 or payload.get("code") == 0:
-            return True
-        message = str(
-            payload.get("message")
-            or payload.get("msg")
-            or payload.get("error")
-            or payload.get("errno_msg")
-            or payload.get("err_msg")
-            or ""
-        ).casefold()
-        unavailable_words = (
-            "不存在",
-            "取消",
-            "过期",
-            "失效",
-            "提取码",
-            "访问码",
-            "错误",
-            "invalid",
-            "expired",
-            "not found",
-            "not exist",
-            "share not found",
-        )
-        return not any(word in message for word in unavailable_words)
+        return classify_share_available_payload(payload)
 
     async def share_available(self, link: str) -> bool:
-        return await self.share_availability(link) == SHARE_AVAILABLE
+        return (await self.inspect_share(link)).status == SHARE_AVAILABLE
 
     async def share_availability(self, link: str) -> str:
+        """Backward-compatible tri-state: available / unavailable / unknown."""
+        return (await self.inspect_share(link)).legacy_status
+
+    async def inspect_share(self, link: str) -> ShareAvailability:
         clean_link = normalize_115_share_link(link)
         share_code, receive_code = parse_115_share_link(clean_link)
-        if not clean_link or not share_code:
-            add_log("info", "115", "115 分享链接格式无效", {"link": str(link or "")[:240]})
-            return SHARE_UNAVAILABLE
         config = get_setting("115")
-        if not config.get("cookie"):
-            add_log("debug", "115", "115 Cookie 尚未配置，跳过分享有效性检测", {"link": clean_link})
-            return SHARE_AVAILABLE
-        headers = {"Referer": clean_link, "Cookie": config["cookie"]}
-        params = {
-            "share_code": share_code,
-            "receive_code": receive_code or "",
-            "offset": 0,
-            "limit": 1,
-        }
-        try:
-            async with self._client() as client:
-                res = await client.get(self.SHARE_SNAP_URL, params=params, headers=headers)
-            if res.status_code in {404, 410}:
-                add_log("info", "115", "115 分享链接不可用", {"link": clean_link, "status": res.status_code})
-                return SHARE_UNAVAILABLE
-            if res.status_code >= 500:
-                add_log("warning", "115", "115 分享有效性检测服务异常，已标记待复检", {"status": res.status_code, "link": clean_link})
-                return SHARE_UNKNOWN
-            if res.status_code >= 400:
-                add_log("warning", "115", "115 分享有效性检测请求失败，已标记待复检", {"status": res.status_code, "link": clean_link})
-                return SHARE_UNKNOWN
-            payload = res.json()
-            ok = self._share_available_payload(payload)
-            if not ok:
-                add_log("info", "115", "115 分享链接不可用", {"link": clean_link, "response": payload})
-                return SHARE_UNAVAILABLE
-            return SHARE_AVAILABLE
-        except (UnicodeEncodeError, httpx.InvalidURL) as exc:
-            add_log("warning", "115", "115 分享链接格式异常，已判定不可用", {"link": str(link or "")[:240], "clean_link": clean_link, "error": repr(exc)})
-            return SHARE_UNAVAILABLE
-        except Exception as exc:
-            add_log("warning", "115", "115 分享有效性检测异常，已标记待复检", {"link": clean_link, "error": str(exc), "error_type": type(exc).__name__, "error_repr": repr(exc)})
-            return SHARE_UNKNOWN
+        return await probe_share_availability(
+            link=link,
+            share_code=share_code,
+            receive_code=receive_code,
+            cookie=str(config.get("cookie") or "") or None,
+            client_factory=self._client,
+            normalize_link=normalize_115_share_link,
+        )
 
     async def list_folders(self, cid: str = "0") -> dict[str, Any]:
         config = get_setting("115")
@@ -225,6 +185,16 @@ class Pan115Adapter(Pan115QrMixin, Pan115OfflineMixin):
         return ok
 
 
-
-
-__all__ = ["PAN115_URL_RE", "Pan115Adapter", "SHARE_AVAILABLE", "SHARE_UNAVAILABLE", "SHARE_UNKNOWN", "normalize_115_share_link", "parse_115_share_link"]
+__all__ = [
+    "PAN115_URL_RE",
+    "Pan115Adapter",
+    "SHARE_AUTH_REQUIRED",
+    "SHARE_AVAILABLE",
+    "SHARE_RATE_LIMITED",
+    "SHARE_UNAVAILABLE",
+    "SHARE_UNKNOWN",
+    "ShareAvailability",
+    "clear_share_availability_cache",
+    "normalize_115_share_link",
+    "parse_115_share_link",
+]

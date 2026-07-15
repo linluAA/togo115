@@ -45,7 +45,7 @@ async def classify_115_results(results: list[SearchResult]) -> tuple[list[Search
             add_log(
                 "warning",
                 "subscription",
-                "115 分享链接有效性检测超时，先继续投递，后续仍会复检",
+                "115 分享链接有效性待复检，先继续投递",
                 {"url": url, "title": str(getattr(result, "title", "") or "")[:120], "source": getattr(result, "source", "")},
             )
             continue

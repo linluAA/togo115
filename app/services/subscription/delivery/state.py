@@ -80,19 +80,36 @@ def _update_resource_delivery_status(resource_id: int, ok: bool, error_message: 
 
 def delivery_failed_status(error_message: str) -> str:
     text = str(error_message or "").casefold()
-    if any(word in text for word in ("\u5f85\u590d\u68c0", "\u5f85\u8907\u6aa2", "recheck", "unknown")):
+    if any(
+        word in text
+        for word in (
+            "待复检",
+            "待複檢",
+            "recheck",
+            "unknown",
+            "cookie",
+            "auth_required",
+            "rate_limited",
+            "未配置",
+            "请先登录",
+        )
+    ):
         return "pending_recheck"
     if any(
         word in text
         for word in (
-            "\u683c\u5f0f\u65e0\u6548",
-            "\u683c\u5f0f\u7121\u6548",
-            "\u94fe\u63a5\u4e3a\u7a7a",
-            "\u93c8\u63a5\u70ba\u7a7a",
-            "\u5931\u6548",
-            "\u4e0d\u53ef\u7528",
+            "格式无效",
+            "格式無效",
+            "链接为空",
+            "鏈接為空",
+            "失效",
+            "不可用",
             "invalid",
             "unavailable",
+            "password_error",
+            "not_found",
+            "expired",
+            "cancelled",
         )
     ):
         return "link_invalid"
