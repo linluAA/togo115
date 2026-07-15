@@ -76,4 +76,26 @@
   .table td:last-child {
     border-bottom: 0;
   }
+
+  .search-metrics {
+    gap: 6px;
+  }
+
+  .search-metrics .metric-card {
+    padding: 8px;
+  }
+
+  .search-metrics .metric-label {
+    font-size: 10.5px;
+  }
+
+  .search-metrics .metric-value {
+    font-size: 12px;
+  }
+
+  .mobile-bottom-nav button {
+    font-size: 10px;
+    min-height: 48px;
+    padding: 5px 1px;
+  }
 }

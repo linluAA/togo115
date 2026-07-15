@@ -656,4 +656,50 @@
   .detail-hero img {
     width: min(220px, 68vw);
   }
+
+  .toast {
+    left: 12px;
+    right: 12px;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+    width: auto;
+  }
+
+  .search-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .search-metrics .metric-card {
+    padding: 9px 10px;
+    border-color: var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, .045);
+  }
+
+  .search-metrics .metric-label {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .search-metrics .metric-value {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .mobile-bottom-nav button {
+    min-width: 0;
+  }
+
+  .mobile-bottom-nav button > span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .settings-tabs {
+    background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  }
 }

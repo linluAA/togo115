@@ -1336,7 +1336,7 @@ async function loadSearchMetrics() {
 
 function renderSearchMetrics(metrics) {
   if (!metrics) {
-    return `<section class="search-metrics"><div class="empty">????????</div></section>`;
+    return `<section class="search-metrics"><div class="empty">暂无搜索指标</div></section>`;
   }
   const tg = metrics.telegram || {};
   const share = metrics.share_115 || {};
@@ -1347,14 +1347,14 @@ function renderSearchMetrics(metrics) {
   const pageCache = cache.external_page || {};
   return `
     <section class="search-metrics">
-      <div class="metric-card"><div class="metric-label">TG ????</div><div class="metric-value">${tg.searches || 0}</div></div>
-      <div class="metric-card"><div class="metric-label">avg resolve/search/extract</div><div class="metric-value">${tg.avg_resolve_ms || 0}/${tg.avg_search_ms || 0}/${tg.avg_extract_ms || 0} ms</div></div>
-      <div class="metric-card"><div class="metric-label">???? / ????</div><div class="metric-value">${tg.index_hits || 0} / ${tg.remote_hits || 0}</div></div>
-      <div class="metric-card"><div class="metric-label">115 avg / ?? / ??</div><div class="metric-value">${share.avg_ms || 0} ms / ${share.expired || 0} / ${share.recheck || 0}</div></div>
-      <div class="metric-card"><div class="metric-label">???? hits</div><div class="metric-value">${msgCache.hits || 0}/${pageCache.hits || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">TG 搜索次数</div><div class="metric-value">${tg.searches || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">平均 resolve/search/extract</div><div class="metric-value">${tg.avg_resolve_ms || 0}/${tg.avg_search_ms || 0}/${tg.avg_extract_ms || 0} ms</div></div>
+      <div class="metric-card"><div class="metric-label">索引命中 / 远程命中</div><div class="metric-value">${tg.index_hits || 0} / ${tg.remote_hits || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">115 平均 / 失效 / 复检</div><div class="metric-value">${share.avg_ms || 0} ms / ${share.expired || 0} / ${share.recheck || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">缓存 hits</div><div class="metric-value">${msgCache.hits || 0}/${pageCache.hits || 0}</div></div>
       <div class="metric-card"><div class="metric-label">TG gate / Flood</div><div class="metric-value">${gate.interval || 0}s / ${gate.flood_events || 0}</div></div>
-      <div class="metric-card"><div class="metric-label">????</div><div class="metric-value">${prewarm.runs || 0} ? / ${prewarm.indexed || 0} ?</div></div>
-      <div class="metric-card"><div class="metric-label">????</div><div class="metric-value">${metrics.concurrency || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">索引预热</div><div class="metric-value">${prewarm.runs || 0} 次 / ${prewarm.indexed || 0} 条</div></div>
+      <div class="metric-card"><div class="metric-label">并发上限</div><div class="metric-value">${metrics.concurrency || 0}</div></div>
     </section>
   `;
 }

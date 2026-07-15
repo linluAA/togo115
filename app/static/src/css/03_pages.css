@@ -1,6 +1,3 @@
-  background: var(--ok);
-}
-
 .resource-status.danger {
   color: #fff;
   background: rgba(239, 91, 91, .82);
@@ -843,19 +840,24 @@ legend {
   gap: 10px;
   margin: 0 0 12px;
 }
+
 .search-metrics .metric-card {
-  border: 1px solid var(--border, #2a3140);
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   padding: 10px 12px;
-  background: color-mix(in srgb, var(--panel, #151a22) 92%, white 8%);
+  background: rgba(255, 255, 255, .04);
 }
+
 .search-metrics .metric-label {
-  font-size: 12px;
-  opacity: 0.72;
   margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
+
 .search-metrics .metric-value {
+  color: var(--ink);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   word-break: break-word;
 }
