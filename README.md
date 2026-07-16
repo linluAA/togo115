@@ -9,31 +9,23 @@
 
 登录后请到“设置 / 账号安全”修改。
 
-## Docker Compose 部署
+## Docker 部署
 
-推荐使用仓库根目录的 `docker-compose.yml` 直接部署。默认拉取 GitHub Container Registry 镜像：
+推荐直接拉取远程镜像部署，无需本地构建。
+
+镜像地址：
 
 ```text
 ghcr.io/linluaa/togo115-app:main
 ```
 
-### 1. 准备目录
+### 1. 准备文件
+
+在服务器上创建目录，写入 `docker-compose.yml`：
 
 ```bash
-mkdir -p togo115 && cd togo115
-# 将仓库中的 docker-compose.yml 放到当前目录，或直接 clone 本仓库后进入根目录
-mkdir -p data
+mkdir -p togo115/data && cd togo115
 ```
-
-### 2. 编辑配置
-
-打开 `docker-compose.yml`，至少修改：
-
-- `TOGO115_SECRET_KEY`：改为随机长字符串
-- 端口映射：默认 `8000:8000`，可按需改成 `宿主机端口:8000`
-- 数据目录：默认 `./data:/data`
-
-示例（与仓库文件一致）：
 
 ```yaml
 services:
@@ -52,63 +44,55 @@ services:
       - ./data:/data
 ```
 
-### 3. 启动
+也可直接使用仓库根目录的 `docker-compose.yml`（内容相同）。
+
+部署前请把 `TOGO115_SECRET_KEY` 改成随机长字符串；端口可按需改成 `宿主机端口:8000`。
+
+### 2. 拉取并启动
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-若需要本地构建镜像而不是拉远程镜像：
-
-```bash
-docker compose up -d --build
-```
-
-> 注意：仓库默认 `docker-compose.yml` 使用 `image:` 拉取预构建镜像。本地 `--build` 需要自行在 compose 中增加 `build: .`，或直接用 `docker build` 后改 image 名。
-
-### 4. 访问与数据
+访问：
 
 ```text
 http://localhost:8000
 ```
 
 - 默认账号：`admin` / `admin123`（登录后请到「设置 / 账号安全」修改）
-- 数据、Cookie、会话等持久化在宿主机 `./data`
-- 容器数据目录环境变量：`TOGO115_DATA_DIR=/data`，数据库默认 `/data/togo115.sqlite3`
+- 数据持久化在宿主机 `./data` 目录
 
-### 5. 常用运维命令
+### 3. 更新 / 运维
 
 ```bash
-# 查看状态 / 日志
-docker compose ps
-docker compose logs -f togo115
-
 # 更新到最新 main 镜像
 docker compose pull
 docker compose up -d
 
-# 停止 / 删除容器（保留 ./data）
+# 查看日志
+docker compose logs -f togo115
+
+# 停止容器（保留 ./data）
 docker compose down
 ```
 
-### 6. 环境变量
+### 4. 环境变量
 
 | 变量 | 说明 | 默认 |
 |------|------|------|
 | `TOGO115_SECRET_KEY` | 应用密钥，生产环境务必修改 | compose 示例占位值 |
 | `TOGO115_MONITOR_INTERVAL_SECONDS` | 监控心跳间隔（秒） | `60` |
 | `TOGO115_SUBSCRIPTION_RESCAN_INTERVAL_SECONDS` | 全部活跃订阅定时重搜间隔（秒）；`0` 关闭 | `1800` |
-| `TOGO115_DATA_DIR` | 容器内数据目录 | `/data` |
-| `TOGO115_DATABASE_PATH` | SQLite 路径 | `/data/togo115.sqlite3` |
 
-### 7. 镜像说明
+### 5. 镜像说明
 
-- 镜像仓库：`ghcr.io/linluaa/togo115-app`
-- 分支推送 `main` 后由 GitHub Actions 自动构建并推送
-- 标签：分支名（如 `main`）、版本 tag（如 `v1.0.0`）
+- 镜像：`ghcr.io/linluaa/togo115-app`
+- `main` 分支推送后由 GitHub Actions 自动构建并发布
+- 常用标签：`main`，以及版本 tag（如 `v1.0.0`）
 
-若拉取 GHCR 私有镜像需要登录：
+若 GHCR 拉取需要登录：
 
 ```bash
 echo <GITHUB_TOKEN> | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
