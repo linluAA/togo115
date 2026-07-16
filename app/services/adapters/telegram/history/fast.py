@@ -67,7 +67,7 @@ class TelegramFastSearchMixin:
         if not dialogs:
             return []
         dialogs = state.filter_dialogs(dialogs)
-        queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=6), limit=2)
+        queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=6))
         if not queries:
             return []
         if not state.force_remote:

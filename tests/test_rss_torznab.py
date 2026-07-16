@@ -1024,6 +1024,57 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([group["source"]["name"] for group in groups], ["坏源", "好源"])
 
 
+
+    def test_priority_search_queries_are_compact(self) -> None:
+        adapter = RssTorznabAdapter()
+        queries = adapter._priority_search_queries("南部档案 2024", ["1080p", "WEB-DL", "特长关键词组合"])
+        self.assertLessEqual(len(queries), 2)
+        self.assertTrue(any("南部档案" in item for item in queries))
+
+    async def test_priority_wave_cancels_lower_priority_after_match(self) -> None:
+        adapter = RssTorznabAdapter()
+        config = {
+            "sources": [
+                {"name": "高A", "url": "https://a.example/rss", "priority": 10, "enabled": True},
+                {"name": "高B", "url": "https://b.example/rss", "priority": 10, "enabled": True},
+                {"name": "低", "url": "https://c.example/rss", "priority": 1, "enabled": True},
+            ]
+        }
+        calls: list[str] = []
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def fake_fetch(source: dict, queries: list[str], query_context=None):
+            calls.append(source["name"])
+            if source["name"] == "高B":
+                started.set()
+                await release.wait()
+                return [SearchResult(title="南部档案 S01E01", url="magnet:?xt=urn:btih:b", source="rss:高B", priority=10)]
+            if source["name"] == "高A":
+                await started.wait()
+                return [SearchResult(title="南部档案 S01E01", url="magnet:?xt=urn:btih:a", source="rss:高A", priority=10)]
+            return [SearchResult(title="南部档案 S01E01", url="magnet:?xt=urn:btih:c", source="rss:低", priority=1)]
+
+        async def run():
+            with patch("app.services.integrations.get_setting", return_value=config):
+                with patch.object(adapter, "_fetch_source_for_queries", side_effect=fake_fetch):
+                    task = asyncio.create_task(
+                        adapter.search_history_by_priority_until_match(
+                            "南部档案",
+                            ["1080p"],
+                            lambda result: "南部档案" in result.title,
+                        )
+                    )
+                    await started.wait()
+                    release.set()
+                    return await task
+
+        groups = await run()
+        names = [group["source"]["name"] for group in groups]
+        self.assertIn("高A", names + calls)  # at least high tier touched
+        self.assertNotIn("低", calls)
+
+
     async def test_source_query_results_are_cached(self) -> None:
         adapter = RssTorznabAdapter()
         adapter._search_cache.clear()

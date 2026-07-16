@@ -40,13 +40,16 @@ class RssTorznabCacheMixin:
         if not source_queries:
             return []
         async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True) as client:
-            for query in source_queries:
+            for index, query in enumerate(source_queries):
                 cached = self._cached_source_results(source, query)
                 if cached is not None:
                     results.extend(cached)
-                    continue
-                fetched = await self._fetch_source(source, query, client, query_context) if query_context else await self._fetch_source(source, query, client)
-                self._store_source_results_cache(source, query, fetched)
-                results.extend(fetched)
+                else:
+                    fetched = await self._fetch_source(source, query, client, query_context) if query_context else await self._fetch_source(source, query, client)
+                    self._store_source_results_cache(source, query, fetched)
+                    results.extend(fetched)
+                # First non-empty query is usually enough for fallback recall; skip extra variants.
+                if results and index + 1 < len(source_queries):
+                    break
         return self._dedupe_results(results)
 
