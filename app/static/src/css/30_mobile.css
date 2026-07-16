@@ -666,9 +666,27 @@
   }
 
   .search-metrics {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .search-metrics .metrics-group {
+    padding: 9px 10px 10px;
+  }
+
+  .search-metrics .metrics-group-title {
+    margin-bottom: 7px;
+    font-size: 10px;
+  }
+
+  .search-metrics .metrics-grid,
+  .search-metrics .metrics-grid-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    margin-bottom: 10px;
+  }
+
+  .search-metrics .metric-card-wide {
+    grid-column: span 2;
   }
 
   .search-metrics .metric-card {
@@ -679,13 +697,18 @@
   }
 
   .search-metrics .metric-label {
-    font-size: 11px;
+    font-size: 10.5px;
     line-height: 1.3;
   }
 
   .search-metrics .metric-value {
     font-size: 13px;
     line-height: 1.35;
+  }
+
+  .search-metrics .metric-value-stack {
+    gap: 5px 8px;
+    font-size: 12px;
   }
 
   .mobile-bottom-nav button {
