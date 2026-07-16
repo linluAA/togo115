@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram.rate_limit import TelegramRequestGate
-from app.services.search_metrics import clear_metrics, metrics_snapshot, record_telegram_search, record_115_validation
+from app.services.search_metrics import clear_metrics, metrics_snapshot, record_telegram_search, record_115_validation, record_attach_outcome
 from app.services.subscription.search import all as search_all_module
 
 
@@ -54,6 +54,68 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
         # Search should have started before emby finished.
         self.assertLess(started.index("search"), started.index("emby_done"))
 
+
+
+
+    def test_metrics_p95_and_attach_outcomes(self) -> None:
+        clear_metrics()
+        for total in (10, 20, 30, 40, 100):
+            record_telegram_search({
+                "title": "x",
+                "resolve_ms": total // 4,
+                "search_ms": total // 2,
+                "extract_ms": total // 5,
+                "total_ms": total,
+                "index_hits": 1,
+            })
+        record_115_validation({"id": 1, "115_ms": 12, "checked_115": 2, "expired_115": 1, "recheck_115": 0})
+        record_115_validation({"id": 2, "115_ms": 80, "checked_115": 1, "expired_115": 0, "recheck_115": 1})
+        record_attach_outcome({"id": 1, "created": 1, "duplicates": 0, "expired_115": 0, "save_failed": 0, "raw_matched": 1, "candidates": 2})
+        record_attach_outcome({"id": 2, "created": 0, "duplicates": 2, "expired_115": 1, "save_failed": 0, "raw_matched": 2, "candidates": 3})
+        record_attach_outcome({"id": 3, "created": 0, "duplicates": 0, "expired_115": 0, "save_failed": 0, "raw_matched": 0, "candidates": 4})
+        snap = metrics_snapshot()
+        self.assertEqual(snap["telegram"]["searches"], 5)
+        self.assertGreaterEqual(snap["telegram"]["p95_total_ms"], snap["telegram"]["p50_total_ms"])
+        self.assertEqual(snap["telegram"]["p95_total_ms"], 100.0)
+        self.assertEqual(snap["share_115"]["checks"], 3)
+        self.assertGreaterEqual(snap["share_115"]["p95_ms"], snap["share_115"]["p50_ms"])
+        self.assertEqual(snap["attach"]["created"], 1)
+        self.assertEqual(snap["attach"]["duplicates"], 2)
+        self.assertEqual(snap["attach"]["expired"], 1)
+        self.assertEqual(snap["attach"]["mismatch"], 1)
+        clear_metrics()
+
+    async def test_telegram_source_lock_is_stable_per_source(self) -> None:
+        a1 = runtime.telegram_source_lock("channel-a")
+        a2 = runtime.telegram_source_lock("channel-a")
+        b1 = runtime.telegram_source_lock("channel-b")
+        self.assertIs(a1, a2)
+        self.assertIsNot(a1, b1)
+
+    async def test_search_semaphore_adapts_to_floodwait_pressure(self) -> None:
+        runtime.subscription_search_semaphore = None
+        runtime.subscription_search_semaphore_loop = None
+        from app.services.adapters.telegram.rate_limit import telegram_request_gate
+
+        original = float(telegram_request_gate._current_interval)
+        try:
+            telegram_request_gate._current_interval = 1.0
+            sem = runtime.search_semaphore()
+            self.assertEqual(sem._value, 1)
+            runtime.subscription_search_semaphore = None
+            runtime.subscription_search_semaphore_loop = None
+            telegram_request_gate._current_interval = 0.3
+            sem2 = runtime.search_semaphore()
+            self.assertEqual(sem2._value, 2)
+            runtime.subscription_search_semaphore = None
+            runtime.subscription_search_semaphore_loop = None
+            telegram_request_gate._current_interval = 0.05
+            sem3 = runtime.search_semaphore()
+            self.assertEqual(sem3._value, runtime.SUBSCRIPTION_SEARCH_CONCURRENCY)
+        finally:
+            telegram_request_gate._current_interval = original
+            runtime.subscription_search_semaphore = None
+            runtime.subscription_search_semaphore_loop = None
 
 
 

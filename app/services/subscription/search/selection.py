@@ -19,6 +19,7 @@ from app.services.subscription.search.selection_fallback import (
     attach_first_fallback_result,
     match_fallback_groups,
 )
+from app.services.search_metrics import record_115_validation, record_attach_outcome
 from app.services.subscription.search.selection_logs import (
     log_unmatched_fallback_groups,
     log_unmatched_results,
@@ -163,6 +164,30 @@ async def attach_telegram_results(
         },
     )
     _log_telegram_attach_summary(subscription_id, summary)
+    record_115_validation(
+        {
+            "id": subscription_id,
+            "115_ms": summary.get("115_ms", 0),
+            "checked_115": summary.get("checked_115", 0),
+            "expired_115": summary.get("expired_115", 0),
+            "recheck_115": summary.get("recheck_115", 0),
+            "created": summary.get("created", 0),
+            "from_index": summary.get("from_index", False),
+        }
+    )
+    record_attach_outcome(
+        {
+            "id": subscription_id,
+            "created": summary.get("created", 0),
+            "duplicates": summary.get("duplicates", 0),
+            "expired_115": summary.get("expired_115", 0),
+            "save_failed": summary.get("save_failed", 0),
+            "recheck_115": summary.get("recheck_115", 0),
+            "raw_matched": summary.get("raw_matched", 0),
+            "candidates": len(results),
+            "from_index": summary.get("from_index", False),
+        }
+    )
     if results and not created:
         add_log(
             "info",

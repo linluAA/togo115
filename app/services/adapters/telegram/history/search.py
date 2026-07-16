@@ -9,6 +9,7 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
+import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram.history.config import build_history_options, server_search_queries
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.history.metrics import TelegramSearchMetrics
@@ -193,19 +194,21 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         async def search_one(dialog: dict[str, Any]) -> tuple[list[SearchResult], int]:
             if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
                 return [], 0
-            async with semaphore:
-                if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
-                    return [], 0
-                await telegram_request_gate.wait()
-                return await self._search_dialog_history(
-                    client,
-                    dialog,
-                    queries,
-                    options,
-                    budget,
-                    incremental=incremental,
-                    shared_state=state,
-                )
+            source_key = str(dialog.get("canonical") or dialog.get("source") or "")
+            async with runtime.telegram_source_lock(source_key):
+                async with semaphore:
+                    if budget.exhausted() or len(all_results) >= TELEGRAM_HISTORY_RETURN_TARGET:
+                        return [], 0
+                    await telegram_request_gate.wait()
+                    return await self._search_dialog_history(
+                        client,
+                        dialog,
+                        queries,
+                        options,
+                        budget,
+                        incremental=incremental,
+                        shared_state=state,
+                    )
 
         tasks = [asyncio.create_task(search_one(dialog)) for dialog in dialogs]
         pending: set[asyncio.Task] = set(tasks)

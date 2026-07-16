@@ -116,12 +116,15 @@ function renderSearchMetrics(metrics) {
   const prewarm = metrics.prewarm || {};
   const msgCache = cache.message_extract || {};
   const pageCache = cache.external_page || {};
+  const attach = metrics.attach || {};
   return `
     <section class="search-metrics">
       <div class="metric-card"><div class="metric-label">TG 搜索次数</div><div class="metric-value">${tg.searches || 0}</div></div>
       <div class="metric-card"><div class="metric-label">平均 resolve/search/extract</div><div class="metric-value">${tg.avg_resolve_ms || 0}/${tg.avg_search_ms || 0}/${tg.avg_extract_ms || 0} ms</div></div>
+      <div class="metric-card"><div class="metric-label">p50/p95 total</div><div class="metric-value">${tg.p50_total_ms || 0}/${tg.p95_total_ms || 0} ms</div></div>
       <div class="metric-card"><div class="metric-label">索引命中 / 远程命中</div><div class="metric-value">${tg.index_hits || 0} / ${tg.remote_hits || 0}</div></div>
-      <div class="metric-card"><div class="metric-label">115 平均 / 失效 / 复检</div><div class="metric-value">${share.avg_ms || 0} ms / ${share.expired || 0} / ${share.recheck || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">115 平均/p95 / 失效 / 复检</div><div class="metric-value">${share.avg_ms || 0}/${share.p95_ms || 0} ms / ${share.expired || 0} / ${share.recheck || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">Attach 创建/重复/失效/失败/未命中</div><div class="metric-value">${attach.created || 0}/${attach.duplicates || 0}/${attach.expired || 0}/${attach.save_failed || 0}/${attach.mismatch || 0}</div></div>
       <div class="metric-card"><div class="metric-label">缓存 hits</div><div class="metric-value">${msgCache.hits || 0}/${pageCache.hits || 0}</div></div>
       <div class="metric-card"><div class="metric-label">TG gate / Flood</div><div class="metric-value">${gate.interval || 0}s / ${gate.flood_events || 0}</div></div>
       <div class="metric-card"><div class="metric-label">索引预热</div><div class="metric-value">${prewarm.runs || 0} 次 / ${prewarm.indexed || 0} 条</div></div>

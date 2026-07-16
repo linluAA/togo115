@@ -7,6 +7,7 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
+import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
 from app.services.adapters.telegram.models import TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
@@ -132,10 +133,12 @@ class TelegramFastSearchMixin:
         *,
         shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
-        async with semaphore:
-            if budget.exhausted() or shared_results:
-                return []
-            return await self._search_dialog_fast(client, dialog, query, budget, shared_state=shared_state)
+        source_key = str(dialog.get("canonical") or dialog.get("source") or "")
+        async with runtime.telegram_source_lock(source_key):
+            async with semaphore:
+                if budget.exhausted() or shared_results:
+                    return []
+                return await self._search_dialog_fast(client, dialog, query, budget, shared_state=shared_state)
 
     def _collect_fast_dialog_results(self, done: set[asyncio.Task], results: list[SearchResult]) -> None:
         for task in done:
@@ -221,9 +224,14 @@ class TelegramFastSearchMixin:
         queries: list[str],
     ) -> list[SearchResult]:
         texts = [telegram_message_text(message)]
-        texts.extend(await self._fast_neighbor_texts(client, entity, message))
-        link_contexts = self._fast_link_contexts("\n".join(text for text in texts if text))
-        link_contexts.update(await self._fast_button_link_contexts(message, client, entity, texts))
+        # Prefer current message first; only scan neighbors if no direct 115 link.
+        link_contexts = self._fast_link_contexts(texts[0] if texts else "")
+        if not link_contexts:
+            texts.extend(await self._fast_neighbor_texts(client, entity, message))
+            link_contexts = self._fast_link_contexts("\n".join(text for text in texts if text))
+        # Button click is relatively expensive; only try when still no direct share link.
+        if not link_contexts:
+            link_contexts.update(await self._fast_button_link_contexts(message, client, entity, texts))
         return self._search_results_from_contexts(message, source, link_contexts)
 
     async def _fast_neighbor_texts(self, client: TelegramClient, entity: Any, message: Any) -> list[str]:
