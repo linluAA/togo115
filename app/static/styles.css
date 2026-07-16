@@ -1642,6 +1642,14 @@ a:hover { text-decoration: underline; }
   transform: rotate(90deg);
 }
 
+.resource-title-cell {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
 .resource-item summary strong {
   min-width: 0;
   overflow: hidden;
@@ -1711,7 +1719,7 @@ a:hover { text-decoration: underline; }
 .resource-group-count {
   flex: 0 0 auto;
   min-width: 20px;
-  min-height: 20px;
+  height: 20px;
   padding: 0 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, .1);
@@ -1720,6 +1728,7 @@ a:hover { text-decoration: underline; }
   font-weight: 800;
   line-height: 20px;
   text-align: center;
+  white-space: nowrap;
 }
 
 /* source: static/src/css/03_pages.css */

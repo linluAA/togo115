@@ -1338,7 +1338,7 @@ function resourceTable() {
           <summary>
             ${state.resourceDeleteMode ? `<label class="resource-select" onclick="event.stopPropagation()"><input type="checkbox" data-select-resource="${item.id}" ${checked} /><span></span></label>` : ""}
             <span class="resource-source">${resourceSourceHtml(item.source)}</span>
-            <strong>${escapeHtml(title)}</strong>${groupCount > 1 ? `<span class="resource-group-count">${groupCount}</span>` : ""}
+            <span class="resource-title-cell"><strong>${escapeHtml(title)}</strong>${groupCount > 1 ? `<span class="resource-group-count">${groupCount}</span>` : ""}</span>
             <span class="resource-status ${statusClass}">${escapeHtml(status)}</span>
           </summary>
           <div class="resource-details">
