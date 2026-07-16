@@ -128,6 +128,53 @@ async function renderSubscriptions() {
     const res = await api(`/api/subscriptions/${btn.dataset.search}/search`, { method: "POST" });
     toast(res.running ? "订阅搜索已进入后台，请查看日志进度" : `搜索完成，新增 ${res.count || 0} 条资源`);
   }));
+  document.querySelectorAll("[data-status-menu]").forEach((btn) => btn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const id = String(btn.dataset.statusMenu || "");
+    const menu = document.querySelector(`[data-status-dropdown="${CSS.escape(id)}"]`);
+    if (!menu) return;
+    const open = !menu.classList.contains("hidden");
+    document.querySelectorAll("[data-status-dropdown]").forEach((el) => {
+      el.classList.add("hidden");
+      const trigger = document.querySelector(`[data-status-menu="${CSS.escape(el.dataset.statusDropdown || "")}"]`);
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    });
+    if (!open) {
+      menu.classList.remove("hidden");
+      btn.setAttribute("aria-expanded", "true");
+    }
+  }));
+  document.querySelectorAll("[data-set-status]").forEach((btn) => btn.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const id = Number(btn.dataset.setStatus);
+    const status = String(btn.dataset.status || "");
+    if (!id || !status) return;
+    document.querySelectorAll("[data-status-dropdown]").forEach((el) => el.classList.add("hidden"));
+    try {
+      if (status === "completed") {
+        await api(`/api/subscriptions/${id}`, { method: "DELETE" });
+        toast("已标记完结并移除订阅");
+      } else {
+        await api(`/api/subscriptions/${id}`, { method: "PUT", body: JSON.stringify({ status }) });
+        toast(status === "paused" ? "已暂停订阅" : "已恢复订阅中");
+      }
+      await refreshSubscriptionData();
+      renderSubscriptions();
+    } catch (error) {
+      toast(`状态更新失败：${error.message}`);
+    }
+  }));
+  if (!window.__subscriptionStatusMenuBound) {
+    window.__subscriptionStatusMenuBound = true;
+    document.addEventListener("click", () => {
+      document.querySelectorAll("[data-status-dropdown]").forEach((el) => {
+        el.classList.add("hidden");
+        const trigger = document.querySelector(`[data-status-menu="${CSS.escape(el.dataset.statusDropdown || "")}"]`);
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
+      });
+    });
+  }
+
   document.querySelectorAll("[data-edit]").forEach((btn) => btn.addEventListener("click", async () => {
     const id = btn.dataset.edit;
     const keywords = prompt("输入新的关键词，多个用逗号分隔");

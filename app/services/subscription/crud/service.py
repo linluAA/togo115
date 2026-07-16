@@ -28,6 +28,9 @@ def update_subscription(subscription_id: int, payload: SubscriptionUpdate) -> di
         data["quality_rules"] = json_dumps(normalized_rules)
     if data.get("status") in ("active", "paused"):
         data["completed_at"] = None
+    if data.get("status") == "completed":
+        delete_subscription(subscription_id)
+        return {"ok": True, "deleted": True, "id": subscription_id}
     if not data:
         return current
     sets = ", ".join(f"{key} = ?" for key in data)

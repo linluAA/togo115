@@ -44,7 +44,17 @@ function subscriptionCards() {
         <div class="subscription-info">
           <div class="subscription-title-row">
             <h3>${escapeHtml(item.title)}</h3>
-            <span class="subscription-status-chip ${statusClass}">${statusText}</span>
+            <div class="subscription-status-menu">
+              <button type="button" class="subscription-status-chip ${statusClass}" data-status-menu="${item.id}" aria-expanded="false" title="更改订阅状态">
+                ${statusText}
+                <span class="subscription-status-caret" aria-hidden="true"></span>
+              </button>
+              <div class="subscription-status-dropdown hidden" data-status-dropdown="${item.id}">
+                <button type="button" class="subscription-status-option ${!completed && item.status === "active" ? "is-current" : ""}" data-set-status="${item.id}" data-status="active">订阅中</button>
+                <button type="button" class="subscription-status-option ${!completed && item.status === "paused" ? "is-current" : ""}" data-set-status="${item.id}" data-status="paused">已暂停</button>
+                <button type="button" class="subscription-status-option is-finish" data-set-status="${item.id}" data-status="completed">已完结</button>
+              </div>
+            </div>
           </div>
           <div class="subscription-meta-row">
             <span>${escapeHtml(library)}</span>
