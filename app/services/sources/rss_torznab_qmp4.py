@@ -51,8 +51,10 @@ class RssTorznabQmp4Mixin:
             add_log("debug", "rss", "QMP4 搜索接口未返回可用详情页", {"source": source.get("name") or "订阅源", "url": source_url})
             return []
         detail_contexts = {url: context for url, context in detail_candidates}
+        parsed = urlparse(source_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}/" if parsed.scheme and parsed.netloc else source_url
         pages = await asyncio.gather(
-            *(self._fetch_magnet_web_detail(client, url, source_url) for url, _ in detail_candidates),
+            *(self._fetch_magnet_web_detail(client, url, origin) for url, _ in detail_candidates),
             return_exceptions=True,
         )
         results: list[SearchResult] = []

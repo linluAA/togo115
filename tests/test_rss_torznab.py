@@ -1111,6 +1111,21 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         url = adapter._source_url(source, "Game of Thrones")
         self.assertEqual(url, "https://bt1207to.cc/search?keyword=Game+of+Thrones")
 
+    def test_qmp4_url_wins_over_generic_plugin(self) -> None:
+        adapter = RssTorznabAdapter()
+        source = {
+            "name": "QMP4 / 七味",
+            "type": "site_plugin",
+            "plugin": "generic_magnet",
+            "url": "https://www.qmp4.com/",
+            "enabled": True,
+        }
+        self.assertEqual(adapter._site_plugin_id(source), "qmp4")
+        self.assertEqual(
+            adapter._source_url(source, "新警察故事"),
+            "https://www.qmp4.com/index.php/ajax/suggest?mid=1&wd=%E6%96%B0%E8%AD%A6%E5%AF%9F%E6%95%85%E4%BA%8B",
+        )
+
     async def test_qmp4_root_url_uses_ajax_suggest_search(self) -> None:
         adapter = RssTorznabAdapter()
         source = {"name": "QMP4", "type": "site_plugin", "plugin": "qmp4", "url": "https://www.qmp4.com/", "enabled": True}

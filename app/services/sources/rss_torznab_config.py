@@ -27,15 +27,17 @@ class RssTorznabConfigMixin:
         return source_type or "rss"
 
     def _site_plugin_id(self, source: dict[str, Any]) -> str:
-        raw = str(source.get("plugin") or source.get("site_plugin") or "").strip().lower()
-        plugin_id = self.SITE_PLUGIN_ALIASES.get(raw)
-        if plugin_id:
-            return plugin_id
         url = str(source.get("url") or "")
+        # Known hosts win over a mis-set plugin (e.g. generic_magnet on qmp4.com).
+        # Otherwise the suggest JSON API is opened but parsed as HTML search results.
         if self._is_qmp4_url(url):
             return "qmp4"
         if self._is_bt1207_url(url):
             return "bt1207"
+        raw = str(source.get("plugin") or source.get("site_plugin") or "").strip().lower()
+        plugin_id = self.SITE_PLUGIN_ALIASES.get(raw)
+        if plugin_id:
+            return plugin_id
         source_type = str(source.get("type") or "").strip().lower()
         if source_type in self.LEGACY_SITE_PLUGIN_TYPES:
             return "generic_magnet"

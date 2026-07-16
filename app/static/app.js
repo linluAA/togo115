@@ -1653,12 +1653,12 @@ function normalizeRssSourceType(type) {
 }
 
 function normalizeSitePlugin(source) {
+  const url = String(source?.url || "").toLowerCase();
+  if (url.includes("qmp4.com")) return "qmp4";
+  if (url.includes("bt1207")) return "bt1207";
   const raw = String(source?.plugin || source?.site_plugin || "").toLowerCase();
   if (["bt1207", "bt1207_magnet"].includes(raw)) return "bt1207";
   if (["qmp4", "qiwei", "qmp4_magnet"].includes(raw)) return "qmp4";
-  const url = String(source?.url || "").toLowerCase();
-  if (url.includes("bt1207")) return "bt1207";
-  if (url.includes("qmp4.com")) return "qmp4";
   return "generic_magnet";
 }
 

@@ -114,13 +114,26 @@ class RssTorznabTestMixin:
             return {}
         if res is None:
             return {}
+        plugin_id = self._site_plugin_id(source)
         diagnostic = {
             "message": "已成功打开搜索页，但没有从页面或详情页解析到磁力链接。",
             "final_url": str(res.url),
             "page_title": _html_page_title(res.text, ""),
+            "plugin": plugin_id,
         }
-        if self._site_plugin_id(source) != "qmp4":
-            diagnostic["detail_candidates"] = len(self._magnet_web_detail_candidates(url, res.text, self._query_release_year(query)))
+        if plugin_id == "qmp4":
+            candidates = self._qmp4_detail_candidates(url, res.text)
+            diagnostic["detail_candidates"] = len(candidates)
+            if candidates:
+                diagnostic["message"] = (
+                    f"已找到 {len(candidates)} 个详情候选，但详情页未解析到磁力链接。"
+                )
+            elif "list" not in str(res.text or ""):
+                diagnostic["message"] = "QMP4 搜索接口未返回可用结果列表。"
+        else:
+            diagnostic["detail_candidates"] = len(
+                self._magnet_web_detail_candidates(url, res.text, self._query_release_year(query))
+            )
         return diagnostic
 
     def _source_test_success_payload(
