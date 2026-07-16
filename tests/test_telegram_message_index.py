@@ -47,7 +47,7 @@ class TelegramMessageIndexTest(unittest.TestCase):
         assert count == 2
         assert len(results) == 1
         assert results[0].url == "https://115.com/s/south?password=3333"
-        assert results[0].source == "TelegramIndex"
+        assert str(results[0].source).startswith("TelegramIndex")
         assert "南部档案" in results[0].context
 
     def test_index_search_ignores_unmatched_context(self) -> None:

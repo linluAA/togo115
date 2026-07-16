@@ -176,7 +176,8 @@ class TelegramFastSearchMixin:
         seen_messages = state.seen_messages_for(source)
         for message in messages[:2]:
             hits = await self._extract_fast_message_hits(client, dialog["entity"], source, message, query, budget)
-            if hits and not self._pipeline_seen_or_mark(message, seen_messages, TelegramPipelineStats()):
+            if hits and not self._pipeline_is_seen(message, seen_messages, TelegramPipelineStats()):
+                self._pipeline_mark_seen(message, seen_messages)
                 add_log("debug", "telegram", "Telegram 快速搜索单来源命中", {"dialog": source, "query": query, "messages": len(messages), "links": len(hits), "read_ms": read_ms, "extract_ms": _elapsed_ms(extract_started)})
                 return hits
         add_log("debug", "telegram", "Telegram 快速搜索单来源无结果", {"dialog": source, "query": query, "messages": len(messages), "read_ms": read_ms, "extract_ms": _elapsed_ms(extract_started)})

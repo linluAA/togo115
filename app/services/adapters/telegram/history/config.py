@@ -49,13 +49,15 @@ def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
     if not cleaned:
         return []
 
-    def sort_key(item: str) -> tuple[int, int, int, int]:
+    def sort_key(item: str) -> tuple[int, int, int, int, int]:
         compact = _compact_search_text(item) or ""
         has_year = 1 if years_from_text(item) else 0
-        # Prefer bare titles without whitespace/keyword combos.
-        has_space = 1 if any(ch.isspace() for ch in item) else 0
+        # Prefer year queries first. Among year queries prefer latin transliterations
+        # with more tokens (title + year) because they usually hit TG search better.
         token_count = max(1, len([part for part in item.split() if part]))
-        return (has_year, has_space, token_count, len(compact))
+        has_cjk = 1 if any("\u3400" <= ch <= "\u9fff" for ch in item) else 0
+        # Ascending: year first, then non-CJK, more tokens, then shorter compact form.
+        return (-has_year, has_cjk, -token_count, len(compact), len(item))
 
     candidates = sorted(cleaned, key=sort_key)
     selected: list[str] = []

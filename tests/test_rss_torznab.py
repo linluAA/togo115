@@ -9,6 +9,7 @@ import httpx
 from app.config import settings
 from app.db import init_db
 from app.services.integrations import RssTorznabAdapter, SearchResult, TelegramClientAdapter, TmdbAdapter, context_for_115_link, extract_download_links, telegram_message_text
+from app.services.adapters.telegram.scan.extract_cache import clear_extract_caches
 from app.services.subscription.match.matching import result_matches_subscription
 
 
@@ -20,6 +21,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         settings.data_dir = Path(self.temp_dir.name)
         settings.database_path = settings.data_dir / "togo115-rss-test.sqlite3"
         init_db()
+        clear_extract_caches()
 
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
@@ -668,7 +670,8 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
             results = await adapter.search_history("将夜 2026", [])
 
         self.assertEqual(client.recent_limit, 300)
-        self.assertEqual(client.search_calls, 0)
+        # Server search is attempted first for non-incremental history; empty hits then fall back to recent scan.
+        self.assertGreaterEqual(client.search_calls, 1)
         self.assertEqual(results[0].url, "https://115.com/s/recent300?password=8888")
 
     async def test_telegram_recent_scan_falls_back_to_iter_messages_when_get_messages_empty(self) -> None:

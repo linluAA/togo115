@@ -241,7 +241,8 @@ class TelegramRecentScanMixin(TelegramPipelineMixin, TelegramCursorMixin):
         message = recent_messages[index]
         window_messages = self._recent_window_messages(recent_messages, index)
         window_texts = self._recent_window_texts(window_messages, message)
-        matched_queries = self._matched_recent_queries_in_text("\n".join([telegram_message_text(message), *window_texts]), queries)
+        base_text = telegram_message_text(message)
+        matched_queries = self._matched_recent_queries_in_text("\n".join([base_text, *window_texts]), queries)
         if not matched_queries:
             return []
         pipeline_stats.title_matched += 1
@@ -251,13 +252,16 @@ class TelegramRecentScanMixin(TelegramPipelineMixin, TelegramCursorMixin):
             return []
         pipeline_stats.link_windows += 1
         stats["fallback"] += 1
+        # Keep the matched title text even when the extract anchor is a nearby
+        # link-only message; otherwise query filters drop the share.
+        extra_texts = self._recent_extract_extra_texts(message, anchor, window_texts)
         return await self._pipeline_extract_message_links(
             client,
             entity,
             source,
             anchor,
             matched_queries,
-            window_texts,
+            extra_texts,
             seen_messages,
             pipeline_stats,
             stage="recent_title_window",
@@ -305,13 +309,14 @@ class TelegramRecentScanMixin(TelegramPipelineMixin, TelegramCursorMixin):
             if not anchor:
                 continue
             link_windows += 1
+            extra_texts = self._recent_extract_extra_texts(message, anchor, window_texts)
             hits = await self._pipeline_extract_message_links(
                 client,
                 entity,
                 source,
                 anchor,
                 [],
-                window_texts,
+                extra_texts,
                 seen_messages,
                 active_stats,
                 stage="recent_link_window_fallback",
@@ -325,6 +330,18 @@ class TelegramRecentScanMixin(TelegramPipelineMixin, TelegramCursorMixin):
                 {"dialog": source, "link_windows": link_windows, "links": len(results)},
             )
         return results, link_windows
+
+    def _recent_extract_extra_texts(self, message: Any, anchor: Any, window_texts: list[str]) -> list[str]:
+        """Preserve title text when extraction anchors on a nearby link-only message."""
+        texts: list[str] = []
+        seen: set[str] = set()
+        for value in (telegram_message_text(message), telegram_message_text(anchor), *window_texts):
+            item = str(value or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            texts.append(item)
+        return texts
 
     def _matched_recent_queries(self, message: Any, queries: list[str]) -> list[str]:
         return self._matched_recent_queries_in_text(telegram_message_text(message), queries)

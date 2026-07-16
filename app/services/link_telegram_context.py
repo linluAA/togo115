@@ -66,13 +66,36 @@ def _context_start_line(lines: list[str], index: int, share_code: str) -> int:
         for line_index in range(segment_start, index + 1)
         if _resource_title_line_score(lines[line_index]) > 0
     ]
-    if not title_markers:
-        return fallback_start
-    # Walk upward from the link and stop at the closest strong title.
-    for line_index, score in reversed(title_markers):
-        if score >= 2:
+    if title_markers:
+        # Walk upward from the link and stop at the closest strong title.
+        for line_index, score in reversed(title_markers):
+            if score >= 2:
+                return line_index
+        return title_markers[-1][0]
+
+    # Many TG cards put a plain title line ("将夜 2026 S01E01") above a link-only
+    # share without a "电视剧：" label. Keep a short unlabeled title window.
+    for line_index in range(index - 1, max(segment_start, index - 4) - 1, -1):
+        if _looks_like_plain_title_line(lines[line_index]):
             return line_index
-    return title_markers[-1][0]
+    return fallback_start
+
+
+def _looks_like_plain_title_line(line: str | None) -> bool:
+    value = str(line or "").strip()
+    if not value or len(value) < 2 or len(value) > 120:
+        return False
+    # Ignore scraped HTML/markup lines so external page URLs above a share stay in context.
+    if "<" in value or ">" in value or value.casefold().startswith("http"):
+        return False
+    if "115.com/s/" in value or "115cdn.com/s/" in value or value.casefold().startswith("magnet:?"):
+        return False
+    if re.search(r"(提取码|访问码|密码|链接|复制|下载|文件大小|文件数量)", value, re.I):
+        return False
+    has_year = bool(years_from_text(value))
+    has_episode = bool(re.search(r"(S\d{1,2}E\d{1,3}|第\s*\d{1,3}\s*[集话話])", value, re.I))
+    has_cjk = bool(re.search(r"[\u3400-\u9fff]", value))
+    return has_cjk and (has_year or has_episode)
 
 
 

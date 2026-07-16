@@ -51,14 +51,17 @@ class TelegramPipelineMixin:
     def _pipeline_message_id(self, message: Any) -> int:
         return int(getattr(message, "id", 0) or 0)
 
-    def _pipeline_seen_or_mark(self, message: Any, seen_messages: set[int], stats: TelegramPipelineStats) -> bool:
+    def _pipeline_is_seen(self, message: Any, seen_messages: set[int], stats: TelegramPipelineStats) -> bool:
         message_id = self._pipeline_message_id(message)
         if message_id and message_id in seen_messages:
             stats.duplicate_messages += 1
             return True
+        return False
+
+    def _pipeline_mark_seen(self, message: Any, seen_messages: set[int]) -> None:
+        message_id = self._pipeline_message_id(message)
         if message_id:
             seen_messages.add(message_id)
-        return False
 
     async def _pipeline_extract_message_links(
         self,
@@ -73,12 +76,15 @@ class TelegramPipelineMixin:
         *,
         stage: str,
     ) -> list[SearchResult]:
-        if self._pipeline_seen_or_mark(message, seen_messages, stats):
+        if self._pipeline_is_seen(message, seen_messages, stats):
             return []
         started = time.perf_counter()
         hits = await self._links_from_message(client, message, source, entity, match_queries, extra_texts)
         stats.bump(f"{stage}_extract_ms", _elapsed_ms(started))
         if hits:
+            # Mark only after a successful extract so a failed title-window pass
+            # can still be retried by the link-window fallback with better context.
+            self._pipeline_mark_seen(message, seen_messages)
             stats.extracted_links += len(hits)
         else:
             stats.no_link += 1

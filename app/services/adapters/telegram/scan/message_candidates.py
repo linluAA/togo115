@@ -4,6 +4,7 @@ from typing import Any
 
 from app.services.link_parser import (
     _looks_like_context_message,
+    _looks_like_link_only_message,
     context_for_115_link,
     extract_115_links,
     telegram_message_text,
@@ -29,6 +30,11 @@ def telegram_candidate_link_contexts(messages: list[Any], extra_texts: list[str]
         _merge_link_contexts(contexts, block)
 
     if contexts:
+        # When callers already pass nearby title text (recent title/link windows),
+        # prefer a title-first block so query filtering does not drop link-only shares.
+        title_first = _title_first_context_block(contexts, extra_texts)
+        if title_first:
+            return title_first
         return contexts
 
     fallback = _combined_text([telegram_message_text(item) for item in ordered], extra_texts)
@@ -73,7 +79,8 @@ def telegram_candidate_context_text(
         elif same_group or not anchor_has_link:
             after.append(text)
 
-    return _combined_text([*before[-3:], anchor_text, *after[:2]], extra_texts)
+    title_extras, other_extras = _split_title_extras(extra_texts)
+    return _combined_text([*title_extras, *before[-3:], anchor_text, *after[:2], *other_extras], None)
 
 
 def _merge_link_contexts(contexts: dict[str, str], text: str) -> None:
@@ -126,3 +133,43 @@ def _message_id(message: Any) -> int:
         return int(getattr(message, "id", 0) or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _split_title_extras(extra_texts: list[str] | None) -> tuple[list[str], list[str]]:
+    titles: list[str] = []
+    others: list[str] = []
+    for text in extra_texts or []:
+        value = str(text or "").strip()
+        if not value:
+            continue
+        if extract_115_links(value) and _looks_like_link_only_message(value):
+            others.append(value)
+            continue
+        if _looks_like_context_message(value) or not extract_115_links(value):
+            titles.append(value)
+        else:
+            others.append(value)
+    return titles, others
+
+
+def _title_first_context_block(contexts: dict[str, str], extra_texts: list[str] | None) -> dict[str, str] | None:
+    title_extras, _other = _split_title_extras(extra_texts)
+    if not title_extras or not contexts:
+        return None
+    improved: dict[str, str] = {}
+    for link, context in contexts.items():
+        if any(_title_blob_in_context(context, title) for title in title_extras):
+            improved[link] = context
+            continue
+        combined = _combined_text([*title_extras, context], None)
+        improved[link] = context_for_115_link(combined, link, max(len(contexts), 1)) or combined
+    return improved
+
+
+def _title_blob_in_context(context: str, title: str) -> bool:
+    compact_title = "".join(ch for ch in title if not ch.isspace())
+    compact_context = "".join(ch for ch in context if not ch.isspace())
+    if not compact_title:
+        return False
+    return compact_title[:12] in compact_context or compact_context[:12] in compact_title
+
