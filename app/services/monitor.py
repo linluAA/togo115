@@ -8,6 +8,7 @@ from app.services.adapters.telegram import TelegramBotAdapter, TelegramClientAda
 from app.services.subscription import (
     list_subscriptions,
     recheck_pending_115_resources,
+    retry_failed_resources,
     schedule_search_all_active_subscriptions,
     sync_subscription_list_with_emby,
 )
@@ -21,6 +22,7 @@ class MonitorService:
         self._last_recheck = 0.0
         self._last_index_prewarm = 0.0
         self._last_subscription_rescan = 0.0
+        self._last_failed_retry = 0.0
         self._bot = TelegramBotAdapter()
 
     def start(self) -> None:
@@ -49,6 +51,16 @@ class MonitorService:
                 if now - self._last_recheck > 120:
                     await recheck_pending_115_resources()
                     self._last_recheck = now
+                if now - self._last_failed_retry > 300:
+                    result = await retry_failed_resources(12)
+                    if int(result.get("retried") or 0):
+                        add_log(
+                            "info",
+                            "monitor",
+                            "失败任务智能重试完成",
+                            result,
+                        )
+                    self._last_failed_retry = now
                 if now - self._last_index_prewarm > 900:
                     try:
                         await telegram.prewarm_message_index()

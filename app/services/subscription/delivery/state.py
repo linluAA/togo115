@@ -79,29 +79,51 @@ def _update_resource_delivery_status(resource_id: int, ok: bool, error_message: 
 
 
 def delivery_failed_status(error_message: str) -> str:
+    kind = classify_delivery_failure(error_message)
+    if kind in {"recheck"}:
+        return "pending_recheck"
+    if kind == "invalid":
+        return "link_invalid"
+    if kind in {"timeout", "network", "rate", "temporary", "auth", "flood"}:
+        return "delivery_failed_retryable"
+    return "delivery_failed_final"
+
+
+def classify_delivery_failure(error_message: str) -> str:
+    """Classify delivery errors for backoff / UI.
+
+    Returns one of:
+    recheck | auth | flood | invalid | timeout | network | rate | temporary | final
+    """
     text = str(error_message or "").casefold()
+    if not text.strip():
+        return "temporary"
+    if any(word in text for word in ("flood", "floodwait", "too many requests", "slowmode", "peer flood")):
+        return "flood"
     if any(
         word in text
         for word in (
             "待复检",
-            "待複檢",
             "recheck",
             "unknown",
             "cookie",
             "auth_required",
-            "rate_limited",
             "未配置",
             "请先登录",
+            "login required",
+            "unauthorized",
+            "401",
+            "403",
         )
     ):
-        return "pending_recheck"
+        if any(word in text for word in ("cookie", "auth", "login", "未配置", "请先登录", "unauthorized", "401", "403")):
+            return "auth"
+        return "recheck"
     if any(
         word in text
         for word in (
             "格式无效",
-            "格式無效",
             "链接为空",
-            "鏈接為空",
             "失效",
             "不可用",
             "invalid",
@@ -110,9 +132,17 @@ def delivery_failed_status(error_message: str) -> str:
             "not_found",
             "expired",
             "cancelled",
+            "已失效",
+            "分享链接已失效",
         )
     ):
-        return "link_invalid"
-    if any(word in text for word in ("timeout", "timed out", "network", "connection", "proxy", "tls", "ssl", "temporar", "rate", "429", "500", "502", "503", "504")):
-        return "delivery_failed_retryable"
-    return "delivery_failed_final"
+        return "invalid"
+    if any(word in text for word in ("timeout", "timed out", "time out", "超时")):
+        return "timeout"
+    if any(word in text for word in ("rate_limited", "rate limit", "429", "限流")):
+        return "rate"
+    if any(word in text for word in ("network", "connection", "proxy", "tls", "ssl")):
+        return "network"
+    if any(word in text for word in ("temporar", "500", "502", "503", "504", "busy", "locked")):
+        return "temporary"
+    return "final"

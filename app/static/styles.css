@@ -1707,6 +1707,21 @@ a:hover { text-decoration: underline; }
   background: var(--ok);
 }
 
+
+.resource-group-count {
+  flex: 0 0 auto;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .1);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+
 /* source: static/src/css/03_pages.css */
 .resource-status.danger {
   color: #fff;

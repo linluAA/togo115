@@ -223,7 +223,7 @@ async function renderSubscriptions() {
       const res = await api("/api/tasks/retry-failed", { method: "POST" });
       await refreshSubscriptionData();
       renderSubscriptions();
-      toast(`已重试 ${res.retried || 0} 个，成功 ${res.delivered || 0} 个`);
+      toast(`已重试 ${res.retried || 0} 个，成功 ${res.delivered || 0} 个${res.skipped ? `，跳过 ${res.skipped}` : ""}`);
     } catch (error) {
       button.disabled = false;
       button.textContent = "重试全部";
