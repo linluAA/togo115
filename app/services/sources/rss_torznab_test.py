@@ -19,7 +19,7 @@ class RssTorznabTestMixin:
 
         started = time.perf_counter()
         try:
-            async with httpx.AsyncClient(proxy=self._source_proxy(normalized), timeout=25, follow_redirects=True) as client:
+            async with httpx.AsyncClient(proxy=self._source_proxy(normalized), timeout=45, follow_redirects=True) as client:
                 url, res, results = await self._test_source_with_client(normalized, url, query_value, client, started)
             diagnostic = self._source_test_diagnostic(normalized, url, res, results, query_value)
             return self._source_test_success_payload(name, url, res, query_value, started, results, diagnostic)
@@ -39,6 +39,17 @@ class RssTorznabTestMixin:
         normalized = dict(source)
         normalized.setdefault("enabled", True)
         normalized.setdefault("type", "rss")
+        # Keep source tests responsive: limit detail page crawling.
+        if self._source_type(normalized) == "site_plugin":
+            plugin_id = self._site_plugin_id(normalized)
+            if plugin_id == "bt1207":
+                normalized.setdefault("_fast_detail_limit", 2)
+                normalized.setdefault("_bt1207_detail_delay", 0.15)
+                normalized.setdefault("_parallel_details", True)
+            elif plugin_id == "qmp4":
+                normalized.setdefault("_fast_detail_limit", 2)
+            else:
+                normalized.setdefault("_fast_detail_limit", 3)
         return normalized
 
     async def _test_source_with_client(

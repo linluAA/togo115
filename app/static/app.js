@@ -2021,6 +2021,7 @@ async function testRssSource(event) {
     const data = await api("/api/rss-sources/test", {
       method: "POST",
       body: JSON.stringify({ source, query: rssSourceTestQuery(source) }),
+      timeoutMs: 60000,
     });
     if (data.ok) {
       const sample = Array.isArray(data.sample) && data.sample.length
