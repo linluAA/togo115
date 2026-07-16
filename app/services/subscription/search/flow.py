@@ -27,11 +27,45 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
         )
         if created:
             return created, matches, summary
+        # Fast stage already resolved the library state for this subscription.
+        # Skip full TG search when there is nothing new to fetch remotely.
+        if _telegram_should_skip_full_after_fast(summary):
+            add_log(
+                "info",
+                "subscription",
+                "TG 快速搜索已足够，跳过完整历史搜索",
+                {
+                    "id": subscription.get("id"),
+                    "title": subscription.get("title"),
+                    "raw_matched": summary.get("raw_matched", 0),
+                    "duplicates": summary.get("duplicates", 0),
+                    "expired_115": summary.get("expired_115", 0),
+                    "from_index": summary.get("from_index", False),
+                },
+            )
+            return created, matches, summary
         if summary.get("raw_matched") and not _telegram_summary_needs_full_retry(summary):
             return created, matches, summary
-        # Full stage should re-validate remotely when index hits failed to produce a save.
+        # Targeted remote recheck only for sources that produced index hits.
         if summary.get("from_index") and not summary.get("created"):
             shared_state.force_remote = True
+            shared_state.set_preferred_sources_from_results(matches or [])
+            # If attach never saw matched results, fall back to any recent index hits
+            # recorded in shared state via seen sources is unavailable; prefer full
+            # force_remote across all dialogs only when no preferred source known.
+            if not shared_state.preferred_sources:
+                # matches empty: use summary samples not available; keep force_remote global.
+                pass
+            add_log(
+                "debug",
+                "subscription",
+                "TG 索引命中未形成新投递，改为定点远程复核",
+                {
+                    "id": subscription.get("id"),
+                    "preferred_sources": list(shared_state.preferred_sources),
+                    "force_remote": True,
+                },
+            )
     return await _run_telegram_search_stage(
         subscription,
         search_title,
@@ -57,13 +91,47 @@ async def _run_telegram_search_stage(
         fast=fast,
         shared_state=shared_state,
     )
+    # Remember which dialogs produced index hits for later targeted recheck.
+    if shared_state is not None and telegram_results:
+        shared_state.set_preferred_sources_from_results(telegram_results)
     created, telegram_matches, summary = await attach_telegram_results(None, subscription, telegram_results)
     _log_telegram_stage_result(subscription, created, telegram_matches, summary, fast=fast)
     return created, telegram_matches, summary
 
 
+def _telegram_should_skip_full_after_fast(summary: dict[str, Any]) -> bool:
+    """Skip full TG history when fast stage already settled the outcome.
+
+    Cases:
+    - matched only duplicates (already in library)
+    - no candidates at all is NOT skipped (full may still find remote posts)
+    - expired/recheck/save_failed still need full or fallback path
+    """
+    if int(summary.get("created") or 0) > 0:
+        return True
+    if int(summary.get("expired_115") or 0) > 0:
+        return False
+    if int(summary.get("recheck_115") or 0) > 0:
+        return False
+    if int(summary.get("save_failed") or 0) > 0:
+        return False
+    available = int(summary.get("available_matched") or 0)
+    duplicates = int(summary.get("duplicates") or 0)
+    raw_matched = int(summary.get("raw_matched") or 0)
+    # All matched candidates are already known resources.
+    if raw_matched > 0 and duplicates >= raw_matched:
+        return True
+    if available > 0 and duplicates >= available and int(summary.get("created") or 0) == 0:
+        return True
+    return False
+
+
 def _telegram_summary_needs_full_retry(summary: dict[str, Any]) -> bool:
+    # Index hits that failed to create still deserve a targeted remote recheck.
     if summary.get("from_index") and not summary.get("created"):
+        # But pure duplicates do not need remote recheck.
+        if _telegram_should_skip_full_after_fast(summary):
+            return False
         return True
     return bool(summary.get("expired_115") or summary.get("recheck_115") or summary.get("save_failed"))
 

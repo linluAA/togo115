@@ -188,7 +188,7 @@ class TelegramSearchP1Test(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.adapters.telegram.history.search._expanded_search_queries", return_value=["将夜"]):
             results = await harness.search_history("将夜", [])
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].source, "TelegramIndex")
+        self.assertTrue(str(results[0].source).startswith("TelegramIndex"))
         self.assertEqual(harness.remote_calls, 0)
 
     async def test_full_search_force_remote_skips_index(self) -> None:
@@ -219,6 +219,148 @@ class TelegramSearchP1Test(unittest.IsolatedAsyncioTestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+
+class TargetedForceRemoteTest(unittest.IsolatedAsyncioTestCase):
+    def test_preferred_sources_filter_dialogs(self) -> None:
+        from app.services.adapters.telegram.models import TelegramSearchSharedState
+
+        state = TelegramSearchSharedState(force_remote=True, preferred_sources=["-1002"])
+        dialogs = [
+            {"canonical": "-1001", "source": "-1001"},
+            {"canonical": "-1002", "source": "-1002"},
+            {"canonical": "-1003", "source": "-1003"},
+        ]
+        narrowed = state.filter_dialogs(dialogs)
+        self.assertEqual([d["canonical"] for d in narrowed], ["-1002"])
+
+    def test_set_preferred_sources_from_index_results(self) -> None:
+        from app.services.adapters.telegram.models import TelegramSearchSharedState
+
+        state = TelegramSearchSharedState()
+        results = [
+            SearchResult(title="a", url="https://115.com/s/a", source="TelegramIndex:-1009", message_id="1"),
+            SearchResult(title="b", url="https://115.com/s/b", source="TelegramIndex:-1009", message_id="2"),
+            SearchResult(title="c", url="https://115.com/s/c", source="TelegramIndex:-1010", message_id="3"),
+        ]
+        state.set_preferred_sources_from_results(results)
+        self.assertEqual(state.preferred_sources, ["-1009", "-1010"])
+
+    async def test_force_remote_with_preferred_sources_limits_dialogs(self) -> None:
+        from app.services.adapters.telegram.models import TelegramSearchSharedState
+
+        class Harness(IndexEarlyReturnHarness):
+            def __init__(self):
+                super().__init__()
+                self.seen_dialogs = []
+
+            async def _search_dialogs_concurrently(self, client, dialogs, queries, options, budget, *, incremental=False, shared_state=None):
+                self.seen_dialogs = [str(d.get("canonical")) for d in dialogs]
+                self.remote_calls += 1
+                return [SearchResult(title="remote", url="https://115.com/s/remote?password=1111", source="tg")], {"extract_ms": 1, "cancelled": 0}
+
+            async def _resolve_dialogs(self, client, sources):
+                return [
+                    {"entity": "e1", "source": "-1001", "canonical": "-1001"},
+                    {"entity": "e2", "source": "-1002", "canonical": "-1002"},
+                ]
+
+        harness = Harness()
+        state = TelegramSearchSharedState(force_remote=True, preferred_sources=["-1002"])
+        with patch("app.services.adapters.telegram.history.search._expanded_search_queries", return_value=["将夜"]):
+            await harness.search_history("将夜", [], shared_state=state)
+        self.assertEqual(harness.remote_calls, 1)
+        self.assertEqual(harness.seen_dialogs, ["-1002"])
+
+
+class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
+    def test_skip_full_after_fast_duplicates(self) -> None:
+        from app.services.subscription.search.flow import _telegram_should_skip_full_after_fast, _telegram_summary_needs_full_retry
+
+        summary = {
+            "created": 0,
+            "raw_matched": 2,
+            "available_matched": 0,
+            "duplicates": 2,
+            "expired_115": 0,
+            "recheck_115": 0,
+            "save_failed": 0,
+            "from_index": True,
+        }
+        self.assertTrue(_telegram_should_skip_full_after_fast(summary))
+        self.assertFalse(_telegram_summary_needs_full_retry(summary))
+
+    def test_index_mismatch_still_needs_full_retry(self) -> None:
+        from app.services.subscription.search.flow import _telegram_should_skip_full_after_fast, _telegram_summary_needs_full_retry
+
+        summary = {
+            "created": 0,
+            "raw_matched": 0,
+            "available_matched": 0,
+            "duplicates": 0,
+            "expired_115": 0,
+            "recheck_115": 0,
+            "save_failed": 0,
+            "from_index": True,
+        }
+        self.assertFalse(_telegram_should_skip_full_after_fast(summary))
+        self.assertTrue(_telegram_summary_needs_full_retry(summary))
+
+    async def test_search_telegram_first_skips_full_on_duplicates(self) -> None:
+        from app.services.subscription.search import flow as flow_mod
+
+        calls = []
+
+        async def fake_stage(subscription, search_title, *, fast, incremental=False, shared_state=None):
+            calls.append(fast)
+            return [], [], {
+                "created": 0,
+                "raw_matched": 1,
+                "available_matched": 0,
+                "duplicates": 1,
+                "expired_115": 0,
+                "recheck_115": 0,
+                "save_failed": 0,
+                "from_index": True,
+            }
+
+        with patch.object(flow_mod, "_run_telegram_search_stage", side_effect=fake_stage):
+            created, matches, summary = await flow_mod._search_telegram_first({"id": 1, "title": "x", "status": "active"}, False)
+        self.assertEqual(calls, [True])  # only fast
+        self.assertEqual(summary["duplicates"], 1)
+
+    async def test_search_telegram_first_targets_force_remote(self) -> None:
+        from app.services.subscription.search import flow as flow_mod
+        from app.services.types import SearchResult
+
+        states = []
+
+        async def fake_stage(subscription, search_title, *, fast, incremental=False, shared_state=None):
+            states.append((fast, shared_state.force_remote if shared_state else None, list(getattr(shared_state, "preferred_sources", []) or [])))
+            if fast:
+                results = [SearchResult(title="i", url="https://115.com/s/i", source="TelegramIndex:-1007", message_id="9")]
+                if shared_state is not None:
+                    shared_state.set_preferred_sources_from_results(results)
+                return [], results, {
+                    "created": 0,
+                    "raw_matched": 0,
+                    "available_matched": 0,
+                    "duplicates": 0,
+                    "expired_115": 1,
+                    "recheck_115": 0,
+                    "save_failed": 0,
+                    "from_index": True,
+                }
+            return [], [], {"created": 0, "raw_matched": 0, "from_index": False}
+
+        with patch.object(flow_mod, "_run_telegram_search_stage", side_effect=fake_stage):
+            await flow_mod._search_telegram_first({"id": 1, "title": "x", "status": "active"}, False)
+        self.assertEqual(len(states), 2)
+        self.assertEqual(states[0][0], True)
+        self.assertEqual(states[1][0], False)
+        self.assertTrue(states[1][1])  # force_remote on full
+        self.assertEqual(states[1][2], ["-1007"])
 
 class TelegramExtractCacheTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:

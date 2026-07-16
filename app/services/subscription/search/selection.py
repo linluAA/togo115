@@ -145,7 +145,11 @@ async def attach_telegram_results(
         "duplicates": duplicate_count,
         "save_failed": save_failed_count,
         "recheck_saved": recheck_saved_count,
-        "from_index": any(getattr(result, "source", "") == "TelegramIndex" for result in results),
+        "from_index": any(
+            str(getattr(result, "source", "") or "") == "TelegramIndex"
+            or str(getattr(result, "source", "") or "").startswith("TelegramIndex:")
+            for result in results
+        ),
         **validation_report,
     }
     add_log(

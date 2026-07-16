@@ -31,6 +31,23 @@ class TelegramSearchBudget:
         return max(0.05, min(cap, self.remaining))
 
 
+def index_origin_source(value: Any) -> str:
+    """Extract dialog source from TelegramIndex / TelegramIndex:<id> labels."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text == "TelegramIndex":
+        return ""
+    if text.startswith("TelegramIndex:"):
+        return text.split(":", 1)[1].strip()
+    return ""
+
+
+def is_telegram_index_source(value: Any) -> bool:
+    text = str(value or "").strip()
+    return text == "TelegramIndex" or text.startswith("TelegramIndex:")
+
+
 @dataclass
 class TelegramSearchSharedState:
     """Reusable state shared between Telegram fast and full search stages."""
@@ -39,6 +56,8 @@ class TelegramSearchSharedState:
     seen_message_ids: dict[str, set[int]] = field(default_factory=dict)
     seen_urls: set[str] = field(default_factory=set)
     force_remote: bool = False
+    # When set, remote search only touches these dialogs (targeted recheck).
+    preferred_sources: list[str] = field(default_factory=list)
 
     def seen_messages_for(self, source: str) -> set[int]:
         key = str(source or "")
@@ -64,9 +83,37 @@ class TelegramSearchSharedState:
             kept.append(result)
             message_id = getattr(result, "message_id", None)
             source = str(getattr(result, "source", "") or "")
-            if message_id and source and source != "TelegramIndex":
+            origin = index_origin_source(source) or (source if source and not is_telegram_index_source(source) else "")
+            if message_id and origin:
                 try:
-                    self.seen_messages_for(source).add(int(message_id))
+                    self.seen_messages_for(origin).add(int(message_id))
                 except (TypeError, ValueError):
                     pass
         return kept
+
+    def set_preferred_sources_from_results(self, results: list[Any]) -> None:
+        """Record dialog sources that produced index hits for targeted remote recheck."""
+        preferred: list[str] = []
+        seen: set[str] = set()
+        for result in results or []:
+            origin = index_origin_source(getattr(result, "source", ""))
+            if not origin or origin in seen:
+                continue
+            seen.add(origin)
+            preferred.append(origin)
+        if preferred:
+            self.preferred_sources = preferred
+
+    def filter_dialogs(self, dialogs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Optionally narrow dialogs to preferred sources during force_remote recheck."""
+        if not self.force_remote or not self.preferred_sources:
+            return dialogs
+        wanted = {str(item).strip() for item in self.preferred_sources if str(item).strip()}
+        if not wanted:
+            return dialogs
+        narrowed = [
+            dialog
+            for dialog in dialogs
+            if str(dialog.get("canonical") or dialog.get("source") or "").strip() in wanted
+        ]
+        return narrowed or dialogs

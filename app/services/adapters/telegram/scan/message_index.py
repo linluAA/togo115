@@ -319,7 +319,9 @@ def _row_to_result(row: dict[str, Any], url: str, context: str, matched_query: s
         safe_context = f"{title}\n{url}"
     elif title and not str(title).startswith("Telegram "):
         safe_context = context_for_115_link(context, url, 2) or context
-    return SearchResult(title=title, url=url, source="TelegramIndex", message_id=message_id, context=safe_context, priority=30)
+    origin = str(row.get("source") or "").strip()
+    source_label = f"TelegramIndex:{origin}" if origin else "TelegramIndex"
+    return SearchResult(title=title, url=url, source=source_label, message_id=message_id, context=safe_context, priority=30)
 
 
 def _title_from_context(context: str, matched_query: str) -> str:

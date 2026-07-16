@@ -70,6 +70,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
         if not dialogs:
             add_log("warning", "telegram", "Telegram 群组/频道解析失败或无可用来源", {"sources": len(source_values), "resolve_ms": resolve_ms})
             return []
+        dialogs = state.filter_dialogs(dialogs)
         queries = _expanded_search_queries(title, keywords, max_queries=6)
         if not queries:
             return []
@@ -87,6 +88,7 @@ class TelegramHistorySearchMixin(TelegramFastSearchMixin, TelegramRecentScanMixi
                 "budget": options.total_budget,
                 "resolve_ms": resolve_ms,
                 "force_remote": state.force_remote,
+                "preferred_sources": list(state.preferred_sources),
                 "shared_seen_urls": len(state.seen_urls),
             },
         )

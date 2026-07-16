@@ -66,6 +66,7 @@ class TelegramFastSearchMixin:
         resolve_ms = _elapsed_ms(resolve_started)
         if not dialogs:
             return []
+        dialogs = state.filter_dialogs(dialogs)
         queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=6), limit=2)
         if not queries:
             return []
