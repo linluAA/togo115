@@ -19,13 +19,29 @@
 ghcr.io/linluaa/togo115-app:main
 ```
 
-### 1. 准备文件
+两种方式任选其一：
 
-在服务器上创建目录，写入 `docker-compose.yml`：
+1. **Docker Compose**（推荐，配置可复用）
+2. **docker run**（无需 compose 文件）
+
+访问地址均为：
+
+```text
+http://localhost:8000
+```
+
+- 默认账号：`admin` / `admin123`（登录后请到「设置 / 账号安全」修改）
+- 数据建议挂载到宿主机目录，例如 `./data`
+
+### 方式一：Docker Compose
+
+#### 1. 准备文件
 
 ```bash
 mkdir -p togo115/data && cd togo115
 ```
+
+写入 `docker-compose.yml`：
 
 ```yaml
 services:
@@ -48,23 +64,14 @@ services:
 
 部署前请把 `TOGO115_SECRET_KEY` 改成随机长字符串；端口可按需改成 `宿主机端口:8000`。
 
-### 2. 拉取并启动
+#### 2. 拉取并启动
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-访问：
-
-```text
-http://localhost:8000
-```
-
-- 默认账号：`admin` / `admin123`（登录后请到「设置 / 账号安全」修改）
-- 数据持久化在宿主机 `./data` 目录
-
-### 3. 更新 / 运维
+#### 3. 更新 / 运维
 
 ```bash
 # 更新到最新 main 镜像
@@ -78,15 +85,72 @@ docker compose logs -f togo115
 docker compose down
 ```
 
-### 4. 环境变量
+### 方式二：docker run（不使用 Compose）
+
+适合没有安装 Compose、或只想一条命令启动的场景。
+
+#### 1. 准备数据目录
+
+```bash
+mkdir -p /opt/togo115/data
+```
+
+路径可按自己习惯修改，后面的挂载参数保持一致即可。
+
+#### 2. 拉取镜像
+
+```bash
+docker pull ghcr.io/linluaa/togo115-app:main
+```
+
+#### 3. 启动容器
+
+```bash
+docker run -d \
+  --name togo115 \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -e TOGO115_SECRET_KEY="please-change-this-secret" \
+  -e TOGO115_MONITOR_INTERVAL_SECONDS=60 \
+  -e TOGO115_SUBSCRIPTION_RESCAN_INTERVAL_SECONDS=1800 \
+  -v /opt/togo115/data:/data \
+  ghcr.io/linluaa/togo115-app:main
+```
+
+说明：
+
+- 请把 `TOGO115_SECRET_KEY` 改成随机长字符串
+- `-p 8000:8000` 可改成 `宿主机端口:8000`
+- `-v /opt/togo115/data:/data` 用于持久化数据库、Cookie、会话等数据
+
+#### 4. 更新 / 运维
+
+```bash
+# 查看日志
+docker logs -f togo115
+
+# 更新到最新镜像
+docker pull ghcr.io/linluaa/togo115-app:main
+docker stop togo115
+docker rm togo115
+# 然后重新执行上面的 docker run 命令（数据目录不变即可保留配置）
+
+# 停止 / 删除容器（保留数据目录）
+docker stop togo115
+docker rm togo115
+```
+
+### 环境变量
 
 | 变量 | 说明 | 默认 |
 |------|------|------|
-| `TOGO115_SECRET_KEY` | 应用密钥，生产环境务必修改 | compose 示例占位值 |
+| `TOGO115_SECRET_KEY` | 应用密钥，生产环境务必修改 | 示例占位值 |
 | `TOGO115_MONITOR_INTERVAL_SECONDS` | 监控心跳间隔（秒） | `60` |
 | `TOGO115_SUBSCRIPTION_RESCAN_INTERVAL_SECONDS` | 全部活跃订阅定时重搜间隔（秒）；`0` 关闭 | `1800` |
+| `TOGO115_DATA_DIR` | 容器内数据目录 | `/data` |
+| `TOGO115_DATABASE_PATH` | SQLite 路径 | `/data/togo115.sqlite3` |
 
-### 5. 镜像说明
+### 镜像说明
 
 - 镜像：`ghcr.io/linluaa/togo115-app`
 - `main` 分支推送后由 GitHub Actions 自动构建并发布
