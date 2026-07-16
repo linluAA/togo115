@@ -175,6 +175,72 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
 
 
 
+    def test_server_search_queries_prefers_franchise_base(self) -> None:
+        from app.services.adapters.telegram.history.config import server_search_queries
+
+        selected = server_search_queries(
+            ["新攻壳机动队 2026", "攻壳机动队", "攻壳机动队 关键词超长组合"],
+            limit=2,
+        )
+        self.assertTrue(selected)
+        self.assertTrue(any("攻壳" in item for item in selected))
+        # Year decoration should not beat bare franchise base.
+        self.assertFalse(all("2026" in item for item in selected))
+
+    def test_max_indexed_message_id_reads_table(self) -> None:
+        import sqlite3
+        from unittest.mock import patch
+        from app.services.adapters.telegram.scan import message_index as index_mod
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            """
+            CREATE TABLE telegram_message_index (
+                source TEXT, message_id INTEGER, text TEXT, context TEXT, search_blob TEXT,
+                has_115 INTEGER, has_link_hint INTEGER, message_date TEXT, indexed_at TEXT,
+                PRIMARY KEY(source, message_id)
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO telegram_message_index VALUES (?,?,?,?,?,?,?,?,?)",
+            ("-1001", 10, "a", "a", "a", 1, 1, None, "t"),
+        )
+        conn.execute(
+            "INSERT INTO telegram_message_index VALUES (?,?,?,?,?,?,?,?,?)",
+            ("-1001", 42, "b", "b", "b", 1, 1, None, "t"),
+        )
+
+        class _CM:
+            def __enter__(self_inner):
+                return conn
+            def __exit__(self_inner, *args):
+                return False
+
+        with patch.object(index_mod, "db", return_value=_CM()):
+            self.assertEqual(index_mod.max_indexed_message_id("-1001"), 42)
+            self.assertEqual(index_mod.max_indexed_message_id("missing"), 0)
+        conn.close()
+
+    def test_fast_extract_cache_roundtrip(self) -> None:
+        from app.services.adapters.telegram.scan.extract_cache import (
+            clear_extract_caches,
+            get_cached_message_extract,
+            set_cached_message_extract,
+        )
+        from app.services.types import SearchResult
+
+        clear_extract_caches()
+        results = [SearchResult(title="t", url="https://115.com/s/x", source="Telegram", message_id="1", context="攻壳机动队")]
+        set_cached_message_extract("-100", 99, results)
+        cached = get_cached_message_extract("-100", 99)
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached[0].url, "https://115.com/s/x")
+        clear_extract_caches()
+
+
+
 class IndexAnd115CacheOptimizationTest(unittest.TestCase):
     def test_index_prefilter_terms_drop_years_and_keep_alias(self) -> None:
         from app.services.adapters.telegram.scan.message_index import _index_prefilter_terms

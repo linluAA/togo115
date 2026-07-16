@@ -9,6 +9,10 @@ from telethon import TelegramClient
 from app.db import add_log
 import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
+from app.services.adapters.telegram.scan.extract_cache import (
+    get_cached_message_extract,
+    set_cached_message_extract,
+)
 from app.services.adapters.telegram.models import TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
 from app.services.link_parser import (
@@ -223,6 +227,11 @@ class TelegramFastSearchMixin:
         message: Any,
         queries: list[str],
     ) -> list[SearchResult]:
+        message_id = getattr(message, "id", None)
+        cached = get_cached_message_extract(source, message_id)
+        if cached is not None:
+            return self._filter_cached_results_by_query(list(cached), queries)
+
         texts = [telegram_message_text(message)]
         # Prefer current message first; only scan neighbors if no direct 115 link.
         link_contexts = self._fast_link_contexts(texts[0] if texts else "")
@@ -232,7 +241,32 @@ class TelegramFastSearchMixin:
         # Button click is relatively expensive; only try when still no direct share link.
         if not link_contexts:
             link_contexts.update(await self._fast_button_link_contexts(message, client, entity, texts))
-        return self._search_results_from_contexts(message, source, link_contexts)
+
+        # Cache unfiltered extract; query filtering is applied per search.
+        unfiltered = self._search_results_from_contexts(message, source, link_contexts)
+        set_cached_message_extract(source, message_id, unfiltered)
+        if not queries:
+            return unfiltered
+        filtered = self._filter_cached_results_by_query(unfiltered, queries)
+        return filtered
+
+    def _filter_cached_results_by_query(self, results: list[SearchResult], queries: list[str] | None) -> list[SearchResult]:
+        if not queries:
+            return results
+        filtered = [
+            result
+            for result in results
+            if any(self._local_text_matches_query_safe(result.context or result.title, query) for query in queries)
+        ]
+        return filtered or results
+
+    def _local_text_matches_query_safe(self, text: str | None, query: str | None) -> bool:
+        try:
+            from app.services.link_parser import _local_text_matches_query
+
+            return bool(_local_text_matches_query(text, query))
+        except Exception:
+            return True
 
     async def _fast_neighbor_texts(self, client: TelegramClient, entity: Any, message: Any) -> list[str]:
         message_id = int(getattr(message, "id", 0) or 0)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from app.services.adapters.telegram.models import TelegramHistoryOptions
@@ -8,9 +7,6 @@ from app.services.link_parser import (
     TELEGRAM_HISTORY_DEFAULT_FALLBACK_LIMIT,
     TELEGRAM_HISTORY_DEFAULT_MESSAGES_PER_QUERY,
     TELEGRAM_HISTORY_MAX_FALLBACK_LIMIT,
-    TELEGRAM_HISTORY_QUERY_BUDGET_SECONDS,
-    TELEGRAM_HISTORY_RECENT_BUDGET_SECONDS,
-    TELEGRAM_HISTORY_TOTAL_BUDGET_SECONDS,
     _bounded_float,
     _bounded_int,
     _compact_search_text,
@@ -48,23 +44,29 @@ def build_history_options(config: dict[str, Any]) -> TelegramHistoryOptions:
 
 
 def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
-    candidates = sorted(
-        queries,
-        key=lambda item: (
-            0 if not years_from_text(item) else 1,
-            0 if re.search(r"\s", item.strip()) else 1,
-            -len(_compact_search_text(item)),
-        ),
-    )
+    """Pick the best remote Telegram search queries."""
+    cleaned = [str(item or "").strip() for item in queries if str(item or "").strip()]
+    if not cleaned:
+        return []
+
+    def sort_key(item: str) -> tuple[int, int, int, int]:
+        compact = _compact_search_text(item) or ""
+        has_year = 1 if years_from_text(item) else 0
+        # Prefer bare titles without whitespace/keyword combos.
+        has_space = 1 if any(ch.isspace() for ch in item) else 0
+        token_count = max(1, len([part for part in item.split() if part]))
+        return (has_year, has_space, token_count, len(compact))
+
+    candidates = sorted(cleaned, key=sort_key)
     selected: list[str] = []
     seen: set[str] = set()
     for query in candidates:
-        key = _compact_search_text(query)
+        key = _compact_search_text(query) or ""
         if not key or key in seen:
             continue
-        # Prefer unique franchise bases; year decorations of the same base are lower priority.
         seen.add(key)
         selected.append(query)
         if len(selected) >= limit:
             break
     return selected
+

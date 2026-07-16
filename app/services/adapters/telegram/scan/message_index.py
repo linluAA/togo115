@@ -91,6 +91,33 @@ def index_telegram_messages(source: str, messages: list[Any]) -> int:
     return len(items)
 
 
+
+def max_indexed_message_id(source: str) -> int:
+    """Highest message_id already indexed for a Telegram source, or 0."""
+    key = str(source or "").strip()
+    if not key:
+        return 0
+    try:
+        with db() as conn:
+            row = conn.execute(
+                "SELECT MAX(message_id) AS max_id FROM telegram_message_index WHERE source = ?",
+                (key,),
+            ).fetchone()
+    except sqlite3.OperationalError as exc:
+        if _index_table_missing(exc):
+            return 0
+        raise
+    if not row:
+        return 0
+    try:
+        return int(row["max_id"] if isinstance(row, sqlite3.Row) else row[0] or 0)
+    except Exception:
+        try:
+            return int(dict(row).get("max_id") or 0)
+        except Exception:
+            return 0
+
+
 def search_telegram_message_index(sources: list[str], queries: list[str], limit: int) -> list[SearchResult]:
     if not sources or not queries or limit <= 0:
         return []
