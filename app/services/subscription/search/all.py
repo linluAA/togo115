@@ -12,17 +12,23 @@ from app.services.subscription.library.snapshot import library_snapshot_or_none
 
 async def search_all_active_subscriptions() -> dict:
     subscriptions = active_subscriptions()
+    wave_size = runtime.search_all_wave_size()
     add_log(
         "info",
         "subscription",
         "搜索全部活跃订阅开始",
-        {"active": len(subscriptions), "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY},
+        {
+            "active": len(subscriptions),
+            "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY,
+            "wave_size": wave_size,
+            "desired_concurrency": runtime.desired_search_concurrency(),
+        },
     )
     snapshot = await library_snapshot_or_none()
     # Emby sync is useful, but must not block the first subscription search.
     emby_task = asyncio.create_task(_sync_emby_in_background(list(subscriptions), snapshot))
     try:
-        outcomes = await asyncio.gather(*(_search_one(subscription, snapshot) for subscription in subscriptions))
+        outcomes = await _search_subscriptions_in_waves(list(subscriptions), snapshot)
     finally:
         try:
             await asyncio.wait_for(asyncio.shield(emby_task), timeout=max(1.0, EMBY_SYNC_TIMEOUT_SECONDS))
@@ -43,6 +49,42 @@ async def search_all_active_subscriptions() -> dict:
         {"active": len(subscriptions), "searched": searched, "created": total, "failed": failed},
     )
     return {"ok": True, "searched": searched, "count": total, "failed": failed}
+
+
+async def _search_subscriptions_in_waves(subscriptions: list[dict], snapshot) -> list[tuple[int, int, int]]:
+    """Launch subscriptions in adaptive waves instead of one giant gather.
+
+    This keeps the same total work order (stable list order) while limiting how
+    many subscription searches become runnable at once under FloodWait pressure.
+    """
+    if not subscriptions:
+        return []
+    outcomes: list[tuple[int, int, int]] = []
+    index = 0
+    wave_no = 0
+    while index < len(subscriptions):
+        wave_size = max(1, runtime.search_all_wave_size())
+        wave = subscriptions[index : index + wave_size]
+        wave_no += 1
+        add_log(
+            "debug",
+            "subscription",
+            "搜索全部活跃订阅分波启动",
+            {
+                "wave": wave_no,
+                "wave_size": len(wave),
+                "remaining": max(0, len(subscriptions) - index - len(wave)),
+                "desired_concurrency": runtime.desired_search_concurrency(),
+            },
+        )
+        wave_outcomes = await asyncio.gather(*(_search_one(subscription, snapshot) for subscription in wave))
+        outcomes.extend(wave_outcomes)
+        index += len(wave)
+        if index < len(subscriptions):
+            stagger = float(getattr(runtime, "SEARCH_ALL_WAVE_STAGGER_SECONDS", 0.05) or 0.0)
+            if stagger > 0:
+                await asyncio.sleep(stagger)
+    return outcomes
 
 
 async def _sync_emby_in_background(subscriptions: list[dict], snapshot) -> None:

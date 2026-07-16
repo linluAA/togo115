@@ -128,7 +128,7 @@ function renderSearchMetrics(metrics) {
       <div class="metric-card"><div class="metric-label">缓存 hits</div><div class="metric-value">${msgCache.hits || 0}/${pageCache.hits || 0}</div></div>
       <div class="metric-card"><div class="metric-label">TG gate / Flood</div><div class="metric-value">${gate.interval || 0}s / ${gate.flood_events || 0}</div></div>
       <div class="metric-card"><div class="metric-label">索引预热</div><div class="metric-value">${prewarm.runs || 0} 次 / ${prewarm.indexed || 0} 条</div></div>
-      <div class="metric-card"><div class="metric-label">并发上限</div><div class="metric-value">${metrics.concurrency || 0}</div></div>
+      <div class="metric-card"><div class="metric-label">并发上限 / 当前</div><div class="metric-value">${metrics.concurrency || 0} / ${metrics.desired_concurrency || metrics.semaphore_limit || 0}</div></div>
     </section>
   `;
 }

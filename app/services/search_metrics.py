@@ -172,8 +172,14 @@ def metrics_snapshot() -> dict[str, Any]:
             "total_ms": _sample_stats("total_ms"),
             "115_ms": _sample_stats("115_ms"),
         }
+    try:
+        desired_concurrency = runtime.desired_search_concurrency()
+    except Exception:
+        desired_concurrency = runtime.SUBSCRIPTION_SEARCH_CONCURRENCY
     return {
         "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY,
+        "desired_concurrency": desired_concurrency,
+        "semaphore_limit": int(getattr(runtime, "subscription_search_semaphore_limit", 0) or 0),
         "telegram": {
             "searches": int(counters["telegram_searches"]),
             "avg_resolve_ms": round(int(counters["resolve_ms_sum"]) / searches, 1),

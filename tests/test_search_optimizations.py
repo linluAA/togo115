@@ -95,6 +95,7 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
     async def test_search_semaphore_adapts_to_floodwait_pressure(self) -> None:
         runtime.subscription_search_semaphore = None
         runtime.subscription_search_semaphore_loop = None
+        runtime.subscription_search_semaphore_limit = 0
         from app.services.adapters.telegram.rate_limit import telegram_request_gate
 
         original = float(telegram_request_gate._current_interval)
@@ -104,11 +105,13 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sem._value, 1)
             runtime.subscription_search_semaphore = None
             runtime.subscription_search_semaphore_loop = None
+            runtime.subscription_search_semaphore_limit = 0
             telegram_request_gate._current_interval = 0.3
             sem2 = runtime.search_semaphore()
             self.assertEqual(sem2._value, 2)
             runtime.subscription_search_semaphore = None
             runtime.subscription_search_semaphore_loop = None
+            runtime.subscription_search_semaphore_limit = 0
             telegram_request_gate._current_interval = 0.05
             sem3 = runtime.search_semaphore()
             self.assertEqual(sem3._value, runtime.SUBSCRIPTION_SEARCH_CONCURRENCY)
@@ -116,6 +119,59 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
             telegram_request_gate._current_interval = original
             runtime.subscription_search_semaphore = None
             runtime.subscription_search_semaphore_loop = None
+            runtime.subscription_search_semaphore_limit = 0
+
+
+
+    async def test_search_all_runs_in_waves(self) -> None:
+        started: list[int] = []
+        max_inflight = {"value": 0}
+        inflight = {"value": 0}
+
+        async def slow_search(sub, snapshot):
+            sid = int(sub["id"])
+            started.append(sid)
+            inflight["value"] += 1
+            max_inflight["value"] = max(max_inflight["value"], inflight["value"])
+            await asyncio.sleep(0.05)
+            inflight["value"] -= 1
+            return (1, 0, 0)
+
+        subs = [{"id": i, "title": f"t{i}", "status": "active"} for i in range(1, 7)]
+        with patch.object(search_all_module, "active_subscriptions", return_value=subs), \
+             patch.object(search_all_module, "library_snapshot_or_none", AsyncMock(return_value={"ok": True})), \
+             patch.object(search_all_module, "sync_subscriptions_with_emby_snapshot", AsyncMock(return_value=None)), \
+             patch.object(search_all_module, "_search_one", side_effect=slow_search), \
+             patch.object(runtime, "search_all_wave_size", return_value=2), \
+             patch.object(runtime, "SEARCH_ALL_WAVE_STAGGER_SECONDS", 0.0):
+            result = await search_all_module.search_all_active_subscriptions()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["searched"], 6)
+        self.assertEqual(started, [1, 2, 3, 4, 5, 6])
+        self.assertLessEqual(max_inflight["value"], 2)
+
+    async def test_search_semaphore_refreshes_when_idle(self) -> None:
+        runtime.subscription_search_semaphore = None
+        runtime.subscription_search_semaphore_loop = None
+        runtime.subscription_search_semaphore_limit = 0
+        from app.services.adapters.telegram.rate_limit import telegram_request_gate
+
+        original = float(telegram_request_gate._current_interval)
+        try:
+            telegram_request_gate._current_interval = 0.05
+            first = runtime.search_semaphore()
+            self.assertEqual(runtime.subscription_search_semaphore_limit, runtime.SUBSCRIPTION_SEARCH_CONCURRENCY)
+            telegram_request_gate._current_interval = 1.0
+            # Idle semaphore (full permits) can rebuild to a tighter limit.
+            second = runtime.search_semaphore()
+            self.assertEqual(runtime.subscription_search_semaphore_limit, 1)
+            self.assertIsNot(first, second)
+            self.assertEqual(second._value, 1)
+        finally:
+            telegram_request_gate._current_interval = original
+            runtime.subscription_search_semaphore = None
+            runtime.subscription_search_semaphore_loop = None
+            runtime.subscription_search_semaphore_limit = 0
 
 
 
