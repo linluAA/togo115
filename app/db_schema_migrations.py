@@ -18,6 +18,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     ensure_columns(conn, "subscriptions", _SUBSCRIPTION_COLUMNS)
     ensure_columns(conn, "resources", _RESOURCE_COLUMNS)
     _ensure_telegram_message_index(conn)
+    _ensure_telegram_message_index_columns(conn)
     _ensure_telegram_dialog_entities(conn)
     _merge_duplicate_tmdb_subscriptions(conn)
     _delete_duplicate_resources(conn)
@@ -135,6 +136,7 @@ def _ensure_telegram_message_index(conn: sqlite3.Connection) -> None:
             message_id INTEGER NOT NULL,
             text TEXT NOT NULL,
             context TEXT NOT NULL DEFAULT '',
+            search_blob TEXT NOT NULL DEFAULT '',
             has_115 INTEGER NOT NULL DEFAULT 0,
             has_link_hint INTEGER NOT NULL DEFAULT 0,
             message_date TEXT,
@@ -144,6 +146,13 @@ def _ensure_telegram_message_index(conn: sqlite3.Connection) -> None:
         """
     )
 
+
+
+
+def _ensure_telegram_message_index_columns(conn: sqlite3.Connection) -> None:
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(telegram_message_index)").fetchall()}
+    if "search_blob" not in columns:
+        conn.execute("ALTER TABLE telegram_message_index ADD COLUMN search_blob TEXT NOT NULL DEFAULT ''")
 
 def _ensure_indexes(conn: sqlite3.Connection) -> None:
     conn.executescript(
@@ -174,6 +183,11 @@ def _ensure_indexes(conn: sqlite3.Connection) -> None:
             ON telegram_dialog_entities(updated_at);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_source_id
             ON telegram_message_index(source, message_id DESC);
+        CREATE INDEX IF NOT EXISTS idx_telegram_message_index_source_has115
+            ON telegram_message_index(source, has_115, message_id DESC);
+        -- search_blob is filtered with LIKE; composite source/has_115 already prunes rows first.
+        CREATE INDEX IF NOT EXISTS idx_resources_subscription_status
+            ON resources(subscription_id, status);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_indexed_at
             ON telegram_message_index(indexed_at);
         CREATE INDEX IF NOT EXISTS idx_background_jobs_kind_status

@@ -5,7 +5,8 @@ from typing import Any
 
 from app.db import add_log, db, utc_now
 from app.services.sources.rss_torznab import SearchResult
-from app.services.adapters.pan115 import PAN115_URL_RE, SHARE_UNAVAILABLE, SHARE_UNKNOWN, Pan115Adapter
+from app.services.adapters.pan115 import PAN115_URL_RE, SHARE_UNAVAILABLE, SHARE_UNKNOWN
+from app.services.subscription.search.share115_cache import process_115_cache
 from app.services.subscription.resource.ops import (
     existing_resource_rows,
     fallback_result_candidates,
@@ -66,12 +67,12 @@ async def attach_telegram_results(
     recheck_saved_count = 0
     with db() as conn:
         existing_rows = existing_resource_rows(conn, subscription_id)
-        adapter = Pan115Adapter() if ordered else None
+        share_cache = process_115_cache() if ordered else None
         for result in ordered:
             url = str(getattr(result, "url", "") or "")
             mark_recheck = False
-            if adapter is not None and PAN115_URL_RE.match(url):
-                state = await adapter.share_availability(url)
+            if share_cache is not None and PAN115_URL_RE.match(url):
+                state = await share_cache.availability(url)
                 validation_report["checked_115"] += 1
                 if state == SHARE_UNAVAILABLE:
                     validation_report["expired_115"] += 1

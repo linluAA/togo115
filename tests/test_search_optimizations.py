@@ -55,5 +55,63 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
         self.assertLess(started.index("search"), started.index("emby_done"))
 
 
+
+
+class IndexAnd115CacheOptimizationTest(unittest.TestCase):
+    def test_index_prefilter_terms_drop_years_and_keep_alias(self) -> None:
+        from app.services.adapters.telegram.scan.message_index import _index_prefilter_terms
+
+        terms = _index_prefilter_terms(["新攻壳机动队 2026", "攻壳机动队"])
+        self.assertTrue(any("攻壳" in term or "机动" in term for term in terms))
+        self.assertFalse(any(term.isdigit() for term in terms))
+
+    def test_index_negative_cache_short_circuits_empty_queries(self) -> None:
+        from app.services.adapters.telegram.scan import message_index as index_mod
+
+        index_mod._NEGATIVE_INDEX_CACHE.clear()
+        sources = ["-100999"]
+        queries = ["肯定不存在的剧名XYZABC"]
+        first = index_mod.search_telegram_message_index(sources, queries, 5)
+        self.assertEqual(first, [])
+        # Second call should hit negative cache without needing DB content.
+        key = index_mod._negative_cache_key(sources, queries)
+        self.assertIn(key, index_mod._NEGATIVE_INDEX_CACHE)
+        second = index_mod.search_telegram_message_index(sources, queries, 5)
+        self.assertEqual(second, [])
+
+    def test_candidate_rows_use_like_prefilter_when_terms_present(self) -> None:
+        import sqlite3
+        from app.services.adapters.telegram.scan.message_index import _candidate_rows, _search_blob_for
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            """
+            CREATE TABLE telegram_message_index (
+                source TEXT, message_id INTEGER, text TEXT, context TEXT, search_blob TEXT,
+                has_115 INTEGER, has_link_hint INTEGER, message_date TEXT, indexed_at TEXT,
+                PRIMARY KEY(source, message_id)
+            )
+            """
+        )
+        rows_data = [
+            ("-1", 1, "其他剧 https://115.com/s/a", "其他剧", 1, 1, None, "t"),
+            ("-1", 2, "攻殻機動隊 https://115.com/s/b", "剧集：攻殻機動隊(2026)", 1, 1, None, "t"),
+            ("-1", 3, "野狗骨头 https://115.com/s/c", "野狗骨头", 1, 1, None, "t"),
+        ]
+        for source, mid, text, context, has115, hint, date, idx in rows_data:
+            conn.execute(
+                "INSERT INTO telegram_message_index VALUES (?,?,?,?,?,?,?,?,?)",
+                (source, mid, text, context, _search_blob_for(text, context), has115, hint, date, idx),
+            )
+        rows = _candidate_rows(conn, ["-1"], ["攻壳机动队"])
+        texts = [row["context"] + row["text"] for row in rows]
+        self.assertTrue(any("攻殻" in text or "攻壳" in text for text in texts))
+        self.assertGreaterEqual(len(rows), 1)
+        # Should not need full fallback noise if blob matched.
+        self.assertTrue(all("野狗" not in text for text in texts) or len(rows) == 1)
+        conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

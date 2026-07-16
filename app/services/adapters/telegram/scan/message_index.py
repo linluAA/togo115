@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 import sqlite3
 from typing import Any
 
 from app.db import db, row_to_dict, utc_now
 from app.services.adapters.telegram.scan.message_links import _telegram_resource_title
+from app.services.link_search_utils import _compact_search_text, years_from_text
+from app.services.text_cjk import query_match_aliases
 from app.services.link_parser import (
     _local_text_matches_query,
     _message_has_link_button_hint,
@@ -19,6 +22,41 @@ from app.services.types import SearchResult
 TELEGRAM_INDEX_WINDOW = 4
 TELEGRAM_INDEX_MAX_PER_SOURCE = 2500
 TELEGRAM_INDEX_QUERY_LIMIT = 600
+TELEGRAM_INDEX_NEGATIVE_TTL_SECONDS = 120.0
+_NEGATIVE_INDEX_CACHE: dict[str, float] = {}
+
+
+def _negative_cache_key(sources: list[str], queries: list[str]) -> str:
+    source_key = ",".join(sorted(str(item) for item in sources))
+    query_key = "|".join(str(item) for item in queries)
+    return source_key + "::" + query_key
+
+
+def _negative_cache_hit(sources: list[str], queries: list[str]) -> bool:
+    import time as _time
+    key = _negative_cache_key(sources, queries)
+    expires = _NEGATIVE_INDEX_CACHE.get(key)
+    if expires is None:
+        return False
+    if expires <= _time.monotonic():
+        _NEGATIVE_INDEX_CACHE.pop(key, None)
+        return False
+    return True
+
+
+def _negative_cache_store(sources: list[str], queries: list[str]) -> None:
+    import time as _time
+    key = _negative_cache_key(sources, queries)
+    _NEGATIVE_INDEX_CACHE[key] = _time.monotonic() + TELEGRAM_INDEX_NEGATIVE_TTL_SECONDS
+    if len(_NEGATIVE_INDEX_CACHE) > 512:
+        now = _time.monotonic()
+        expired = [item for item, exp in _NEGATIVE_INDEX_CACHE.items() if exp <= now]
+        for item in expired:
+            _NEGATIVE_INDEX_CACHE.pop(item, None)
+        if len(_NEGATIVE_INDEX_CACHE) > 512:
+            oldest = sorted(_NEGATIVE_INDEX_CACHE.items(), key=lambda pair: pair[1])[:128]
+            for item, _ in oldest:
+                _NEGATIVE_INDEX_CACHE.pop(item, None)
 
 
 def index_telegram_messages(source: str, messages: list[Any]) -> int:
@@ -31,12 +69,13 @@ def index_telegram_messages(source: str, messages: list[Any]) -> int:
             conn.executemany(
                 """
                 INSERT INTO telegram_message_index
-                    (source, message_id, text, context, has_115, has_link_hint, message_date, indexed_at)
+                    (source, message_id, text, context, search_blob, has_115, has_link_hint, message_date, indexed_at)
                 VALUES
-                    (:source, :message_id, :text, :context, :has_115, :has_link_hint, :message_date, :indexed_at)
+                    (:source, :message_id, :text, :context, :search_blob, :has_115, :has_link_hint, :message_date, :indexed_at)
                 ON CONFLICT(source, message_id) DO UPDATE SET
                     text = excluded.text,
                     context = excluded.context,
+                    search_blob = excluded.search_blob,
                     has_115 = excluded.has_115,
                     has_link_hint = excluded.has_link_hint,
                     message_date = excluded.message_date,
@@ -55,14 +94,16 @@ def index_telegram_messages(source: str, messages: list[Any]) -> int:
 def search_telegram_message_index(sources: list[str], queries: list[str], limit: int) -> list[SearchResult]:
     if not sources or not queries or limit <= 0:
         return []
+    if _negative_cache_hit(sources, queries):
+        return []
     results: list[SearchResult] = []
     seen_urls: set[str] = set()
+    prefilter_terms = _index_prefilter_terms(queries)
     try:
         with db() as conn:
-            for row in _candidate_rows(conn, sources):
+            for row in _candidate_rows(conn, sources, prefilter_terms):
                 text = str(row.get("text") or "")
                 context = str(row.get("context") or text)
-                # Only attach links that appear on this message itself. Neighbor links stay on their own rows.
                 links = extract_115_links(text)
                 if not links:
                     continue
@@ -72,7 +113,6 @@ def search_telegram_message_index(sources: list[str], queries: list[str], limit:
                 for url in links:
                     if url in seen_urls:
                         continue
-                    # Always scope to the local segment so nearby titles cannot claim this share.
                     scoped = context_for_115_link(context, url, max(len(links), 2))
                     if not _local_text_matches_query(scoped, matched_query):
                         continue
@@ -87,7 +127,53 @@ def search_telegram_message_index(sources: list[str], queries: list[str], limit:
         if _index_table_missing(exc):
             return []
         raise
+    if not results:
+        _negative_cache_store(sources, queries)
     return results
+
+
+def _search_blob_for(text: str, context: str) -> str:
+    raw = f"{context}\n{text}"
+    # Compact + simplified form for SQL LIKE against subscription query stems.
+    return _compact_search_text(raw)
+
+
+def _index_prefilter_terms(queries: list[str]) -> list[str]:
+    """Extract short stems used for SQL LIKE prefiltering.
+
+    Uses both original and simplified/prefix-stripped aliases so traditional
+    cards (攻殻機動隊) and simplified subscriptions (新攻壳机动队) can hit.
+    """
+    terms: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str | None) -> None:
+        text = str(value or "").strip()
+        if len(text) < 2:
+            return
+        # Strip years and whitespace for broader LIKE stems.
+        text = re.sub(r"(?<!\d)(?:19|20)\d{2}(?!\d)", " ", text)
+        text = re.sub(r"\s+", "", text)
+        if len(text) < 2:
+            return
+        if len(text) > 24:
+            text = text[:24]
+        key = text.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        terms.append(text)
+
+    for query in queries:
+        for alias in query_match_aliases(query) or [str(query or "").strip()]:
+            add(alias)
+            # Also keep a compact simplified form for punctuation-free rows.
+            compact = _compact_search_text(alias)
+            if compact:
+                add(compact)
+            if len(terms) >= 12:
+                return terms
+    return terms
 
 
 def _index_rows(source: str, messages: list[Any]) -> list[dict[str, Any]]:
@@ -105,6 +191,7 @@ def _index_rows(source: str, messages: list[Any]) -> list[dict[str, Any]]:
                 "message_id": message_id,
                 "text": text,
                 "context": context,
+                "search_blob": _search_blob_for(text, context),
                 "has_115": 1 if extract_115_links(text) else 0,
                 "has_link_hint": 1 if _has_link_hint(message, context) else 0,
                 "message_date": _message_date(message),
@@ -148,19 +235,49 @@ def _message_date(message: Any) -> str | None:
     return str(value) if value else None
 
 
-def _candidate_rows(conn: Any, sources: list[str]) -> list[dict[str, Any]]:
+def _candidate_rows(conn: Any, sources: list[str], prefilter_terms: list[str] | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    terms = [str(term).strip() for term in (prefilter_terms or []) if str(term).strip()]
+    # Prefer compact/simplified stems for search_blob matching.
+    compact_terms = []
+    seen = set()
+    for term in terms:
+        compact = _compact_search_text(term)
+        if compact and compact not in seen:
+            seen.add(compact)
+            compact_terms.append(compact)
     for source in sources:
-        fetched = conn.execute(
+        fetched = []
+        if compact_terms:
+            like_clauses = []
+            params: list[Any] = [source]
+            for term in compact_terms:
+                like_clauses.append("search_blob LIKE ?")
+                params.append(f"%{term}%")
+            where_like = " OR ".join(like_clauses)
+            sql = f"""
+                SELECT source, message_id, text, context
+                FROM telegram_message_index
+                WHERE source = ? AND has_115 = 1 AND ({where_like})
+                ORDER BY message_id DESC
+                LIMIT ?
             """
-            SELECT source, message_id, text, context
-            FROM telegram_message_index
-            WHERE source = ? AND has_115 = 1
-            ORDER BY message_id DESC
-            LIMIT ?
-            """,
-            (source, TELEGRAM_INDEX_QUERY_LIMIT),
-        ).fetchall()
+            params.append(min(TELEGRAM_INDEX_QUERY_LIMIT, 200))
+            try:
+                fetched = conn.execute(sql, params).fetchall()
+            except Exception:
+                fetched = []
+        if not fetched:
+            fetched = conn.execute(
+                """
+                SELECT source, message_id, text, context
+                FROM telegram_message_index
+                WHERE source = ? AND has_115 = 1
+                ORDER BY message_id DESC
+                LIMIT ?
+                """,
+                (source, TELEGRAM_INDEX_QUERY_LIMIT),
+            ).fetchall()
         rows.extend(row_to_dict(row) or {} for row in fetched)
     return rows
 
