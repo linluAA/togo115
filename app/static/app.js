@@ -882,6 +882,18 @@ function embyGrid(items, empty, kind) {
 }
 
 /* source: static/src/js/40_subscriptions_view.js */
+function closeSubscriptionStatusMenus() {
+  document.querySelectorAll("[data-status-dropdown]").forEach((el) => {
+    el.classList.add("hidden");
+    el.style.left = "";
+    el.style.top = "";
+    el.style.right = "";
+    const trigger = document.querySelector(`[data-status-menu="${CSS.escape(el.dataset.statusDropdown || "")}"]`);
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+  });
+  document.querySelectorAll(".subscription-card.is-status-open").forEach((card) => card.classList.remove("is-status-open"));
+}
+
 async function renderSubscriptions() {
   if (!state.subscriptionsEmbySynced) {
     state.subscriptionsEmbySynced = true;
@@ -1018,22 +1030,25 @@ async function renderSubscriptions() {
     const menu = document.querySelector(`[data-status-dropdown="${CSS.escape(id)}"]`);
     if (!menu) return;
     const open = !menu.classList.contains("hidden");
-    document.querySelectorAll("[data-status-dropdown]").forEach((el) => {
-      el.classList.add("hidden");
-      const trigger = document.querySelector(`[data-status-menu="${CSS.escape(el.dataset.statusDropdown || "")}"]`);
-      if (trigger) trigger.setAttribute("aria-expanded", "false");
-    });
-    if (!open) {
-      menu.classList.remove("hidden");
-      btn.setAttribute("aria-expanded", "true");
-    }
+    closeSubscriptionStatusMenus();
+    if (open) return;
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = Math.max(112, menu.offsetWidth || 112);
+    const left = Math.min(window.innerWidth - menuWidth - 8, Math.max(8, rect.right - menuWidth));
+    const top = Math.min(window.innerHeight - 8, rect.bottom + 6);
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.right = "auto";
+    menu.classList.remove("hidden");
+    btn.setAttribute("aria-expanded", "true");
+    btn.closest(".subscription-card")?.classList.add("is-status-open");
   }));
   document.querySelectorAll("[data-set-status]").forEach((btn) => btn.addEventListener("click", async (event) => {
     event.stopPropagation();
     const id = Number(btn.dataset.setStatus);
     const status = String(btn.dataset.status || "");
     if (!id || !status) return;
-    document.querySelectorAll("[data-status-dropdown]").forEach((el) => el.classList.add("hidden"));
+    closeSubscriptionStatusMenus();
     try {
       if (status === "completed") {
         await api(`/api/subscriptions/${id}`, { method: "DELETE" });
@@ -1050,13 +1065,9 @@ async function renderSubscriptions() {
   }));
   if (!window.__subscriptionStatusMenuBound) {
     window.__subscriptionStatusMenuBound = true;
-    document.addEventListener("click", () => {
-      document.querySelectorAll("[data-status-dropdown]").forEach((el) => {
-        el.classList.add("hidden");
-        const trigger = document.querySelector(`[data-status-menu="${CSS.escape(el.dataset.statusDropdown || "")}"]`);
-        if (trigger) trigger.setAttribute("aria-expanded", "false");
-      });
-    });
+    document.addEventListener("click", () => closeSubscriptionStatusMenus());
+    window.addEventListener("resize", () => closeSubscriptionStatusMenus());
+    window.addEventListener("scroll", () => closeSubscriptionStatusMenus(), true);
   }
 
   document.querySelectorAll("[data-edit]").forEach((btn) => btn.addEventListener("click", async () => {
