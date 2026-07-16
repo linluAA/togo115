@@ -666,48 +666,21 @@
   }
 
   .search-metrics {
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 5px;
+    margin-bottom: 8px;
+    padding: 7px 8px;
   }
 
-  .search-metrics .metrics-group {
-    padding: 9px 10px 10px;
-  }
-
-  .search-metrics .metrics-group-title {
-    margin-bottom: 7px;
-    font-size: 10px;
-  }
-
-  .search-metrics .metrics-grid,
-  .search-metrics .metrics-grid-4 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .search-metrics .metric-card-wide {
-    grid-column: span 2;
-  }
-
-  .search-metrics .metric-card {
-    padding: 9px 10px;
-    border-color: var(--line);
-    border-radius: var(--radius);
-    background: rgba(255, 255, 255, .045);
+  .search-metrics .metric-chip {
+    padding: 3px 7px;
+    gap: 4px;
   }
 
   .search-metrics .metric-label {
     font-size: 10.5px;
-    line-height: 1.3;
   }
 
   .search-metrics .metric-value {
-    font-size: 13px;
-    line-height: 1.35;
-  }
-
-  .search-metrics .metric-value-stack {
-    gap: 5px 8px;
     font-size: 12px;
   }
 
