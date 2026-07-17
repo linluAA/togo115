@@ -36,9 +36,6 @@ function subscriptionCards() {
         ${state.subscriptionCancelMode ? `<label class="subscription-select"><input type="checkbox" data-select-subscription="${item.id}" ${checked} /><span></span></label>` : ""}
         <div class="subscription-poster">
           <img src="${escapeHtml(poster)}" alt="${escapeHtml(item.title)}" />
-          <div class="subscription-badges">
-            <span class="subscription-badge">${item.media_type === "tv" ? "电视剧" : "电影"}</span>
-          </div>
           <div class="subscription-progress" title="${escapeHtml(library)}"><span style="width: ${progressPercent}%"></span></div>
         </div>
         <div class="subscription-info">
@@ -58,6 +55,7 @@ function subscriptionCards() {
           </div>
           <div class="subscription-meta-row">
             <span>${escapeHtml(library)}</span>
+            <span class="subscription-badge media-type">${item.media_type === "tv" ? "电视剧" : "电影"}</span>
             ${keywordTags ? `<div class="subscription-keywords">${keywordTags}</div>` : ""}
             ${ruleTags ? `<div class="subscription-rules">${ruleTags}</div>` : ""}
           </div>

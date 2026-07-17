@@ -368,14 +368,6 @@
   object-fit: cover;
 }
 
-.subscription-badges {
-  position: absolute;
-  inset: 8px 8px auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .subscription-badge.active {
   color: #071d1a;
   border-color: transparent;
@@ -535,6 +527,12 @@
 .subscription-meta-row > span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.subscription-meta-row > span.subscription-badge {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .subscription-card-actions {
