@@ -202,6 +202,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, .10);
   border-radius: 22px;
@@ -211,9 +214,10 @@
 
 .subscription-control-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(108px, 1fr));
+  grid-template-columns: repeat(3, minmax(108px, 120px));
   gap: 8px;
-  width: min(100%, 420px);
+  width: max-content;
+  max-width: 100%;
   align-items: stretch;
 }
 

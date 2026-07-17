@@ -318,8 +318,9 @@
   .subscription-toolbar {
     position: static;
     min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, .8fr);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 26px;
     padding: 30px;
     background:
@@ -333,32 +334,24 @@
   }
 
   .subscription-controls {
-    align-content: center;
-    align-items: center;
-    justify-content: flex-end;
-    justify-items: end;
-  }
-
-  .subscription-controls,
-  .control-group {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .subscription-controls {
-    flex-direction: row;
+    flex: 0 0 auto;
+    align-self: center;
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
   }
 
   .subscription-control-grid {
-    flex: 0 0 auto;
-    width: auto;
+    width: max-content;
+    max-width: 100%;
+    grid-template-columns: repeat(3, minmax(108px, 120px));
   }
 
   .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
-    width: auto;
-    flex: 0 0 auto;
-    min-height: 34px;
+    width: 100%;
+    min-height: 36px;
+    height: 36px;
     border-radius: 999px;
   }
 

@@ -193,28 +193,21 @@
     font-size: 42px;
   }
 
-  .subscription-controls,
-  .control-group,
-  .action-group,
-  .filter-group {
+  .subscription-controls {
     width: 100%;
-    align-items: stretch;
-    justify-items: stretch;
+    max-width: 100%;
+    margin-left: 0;
   }
 
-  .subscription-controls,
-  .control-group {
-    display: grid;
-  }
-
-  .filter-group select,
-  .subscription-controls button {
+  .subscription-control-grid {
     width: 100%;
+    max-width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
-    width: auto;
+    width: 100%;
   }
 
   .subscription-grid {

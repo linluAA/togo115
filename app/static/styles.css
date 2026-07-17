@@ -1110,6 +1110,9 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, .10);
   border-radius: 22px;
@@ -1119,9 +1122,10 @@ a:hover { text-decoration: underline; }
 
 .subscription-control-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(108px, 1fr));
+  grid-template-columns: repeat(3, minmax(108px, 120px));
   gap: 8px;
-  width: min(100%, 420px);
+  width: max-content;
+  max-width: 100%;
   align-items: stretch;
 }
 
@@ -2768,28 +2772,21 @@ legend {
     font-size: 42px;
   }
 
-  .subscription-controls,
-  .control-group,
-  .action-group,
-  .filter-group {
+  .subscription-controls {
     width: 100%;
-    align-items: stretch;
-    justify-items: stretch;
+    max-width: 100%;
+    margin-left: 0;
   }
 
-  .subscription-controls,
-  .control-group {
-    display: grid;
-  }
-
-  .filter-group select,
-  .subscription-controls button {
+  .subscription-control-grid {
     width: 100%;
+    max-width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
-    width: auto;
+    width: 100%;
   }
 
   .subscription-grid {
@@ -3217,22 +3214,19 @@ legend {
   }
 
   .subscription-controls {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
     align-items: stretch;
-    gap: 8px;
-    justify-items: stretch;
     padding: 8px;
     border-color: rgba(255, 255, 255, .08);
   }
 
   .subscription-control-grid {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
     width: 100%;
-    padding: 0 0 2px;
-    border-bottom: 0;
-    border-right: 0;
-    scrollbar-width: none;
+    max-width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
   
@@ -3863,8 +3857,9 @@ legend {
   .subscription-toolbar {
     position: static;
     min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, .8fr);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 26px;
     padding: 30px;
     background:
@@ -3878,32 +3873,24 @@ legend {
   }
 
   .subscription-controls {
-    align-content: center;
-    align-items: center;
-    justify-content: flex-end;
-    justify-items: end;
-  }
-
-  .subscription-controls,
-  .control-group {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .subscription-controls {
-    flex-direction: row;
+    flex: 0 0 auto;
+    align-self: center;
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
   }
 
   .subscription-control-grid {
-    flex: 0 0 auto;
-    width: auto;
+    width: max-content;
+    max-width: 100%;
+    grid-template-columns: repeat(3, minmax(108px, 120px));
   }
 
   .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
-    width: auto;
-    flex: 0 0 auto;
-    min-height: 34px;
+    width: 100%;
+    min-height: 36px;
+    height: 36px;
     border-radius: 999px;
   }
 

@@ -397,22 +397,19 @@
   }
 
   .subscription-controls {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
     align-items: stretch;
-    gap: 8px;
-    justify-items: stretch;
     padding: 8px;
     border-color: rgba(255, 255, 255, .08);
   }
 
   .subscription-control-grid {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
     width: 100%;
-    padding: 0 0 2px;
-    border-bottom: 0;
-    border-right: 0;
-    scrollbar-width: none;
+    max-width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
   
