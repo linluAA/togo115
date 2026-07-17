@@ -90,6 +90,20 @@ def metrics_snapshot() -> dict[str, Any]:
             "runs": int(counters["prewarm_runs"]),
             "indexed": int(counters["prewarm_indexed"]),
         },
+        "magnet": {
+            "searches": int(counters.get("magnet_searches", 0) or 0),
+            "early_stops": int(counters.get("magnet_early_stops", 0) or 0),
+            "cache_hits": int(counters.get("magnet_cache_hits", 0) or 0),
+            "avg_ms": round(int(counters.get("magnet_ms_sum", 0) or 0) / max(1, int(counters.get("magnet_searches", 0) or 0)), 1),
+            "p50_ms": latency.get("magnet_ms", {}).get("p50", 0) if isinstance(latency.get("magnet_ms"), dict) else 0,
+            "p95_ms": latency.get("magnet_ms", {}).get("p95", 0) if isinstance(latency.get("magnet_ms"), dict) else 0,
+        },
+        "index": {
+            "queries": int(counters.get("index_queries", 0) or 0),
+            "fts_hits": int(counters.get("index_fts_hits", 0) or 0),
+            "like_hits": int(counters.get("index_like_hits", 0) or 0),
+            "recent_hits": int(counters.get("index_recent_hits", 0) or 0),
+        },
         "recent": recent,
     }
 

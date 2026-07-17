@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from app.services.http_client import shared_async_client
 from app.services.types import SearchResult
 
 
@@ -43,7 +44,7 @@ class RssTorznabCacheMixin:
         source_queries = self._source_queries(source, queries)
         if not source_queries:
             return []
-        async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True) as client:
+        async with shared_async_client(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True) as client:
             for index, query in enumerate(source_queries):
                 cached = self._cached_source_results(source, query)
                 if cached is not None:

@@ -5,7 +5,9 @@ from __future__ import annotations
 from app.services.metrics.record import (
     record_115_validation,
     record_attach_outcome,
+    record_index_query,
     record_job_event,
+    record_magnet_search,
     record_prewarm,
     record_telegram_search,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "record_attach_outcome",
     "record_prewarm",
     "record_job_event",
+    "record_magnet_search",
+    "record_index_query",
     "metrics_snapshot",
     "clear_metrics",
     "_COUNTERS",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import sqlite3
 from importlib import import_module
 
@@ -21,6 +22,8 @@ async def create_subscription(payload: SubscriptionCreate) -> dict:
     await _sync_created_subscription_with_emby(subscription_id)
     add_log("info", "subscription", "创建订阅，历史消息搜索已进入后台", {"title": payload.title})
     _schedule_subscription_search(subscription_id)
+    from app.services.subscription.crud.rows import invalidate_subscription_list_cache as _inv_sub_list
+    _inv_sub_list()
     return get_subscription(subscription_id) or {}
 
 

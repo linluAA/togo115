@@ -123,3 +123,34 @@ def record_job_event(payload: dict[str, Any]) -> None:
                 "ts": time.time(),
             }
         )
+
+
+def record_magnet_search(payload: dict[str, Any]) -> None:
+    event = {
+        "ts": time.time(),
+        "kind": "magnet_search",
+        "title": str(payload.get("title") or "")[:120],
+        "total_ms": int(payload.get("total_ms") or 0),
+        "candidates": int(payload.get("candidates") or 0),
+        "matched": int(payload.get("matched") or 0),
+        "early_stop": bool(payload.get("early_stop") or False),
+        "cache_hit": bool(payload.get("cache_hit") or False),
+    }
+    with _LOCK:
+        _EVENTS.appendleft(event)
+        _COUNTERS["magnet_searches"] = int(_COUNTERS.get("magnet_searches", 0) or 0) + 1
+        _COUNTERS["magnet_ms_sum"] = int(_COUNTERS.get("magnet_ms_sum", 0) or 0) + event["total_ms"]
+        if event["early_stop"]:
+            _COUNTERS["magnet_early_stops"] = int(_COUNTERS.get("magnet_early_stops", 0) or 0) + 1
+        if event["cache_hit"]:
+            _COUNTERS["magnet_cache_hits"] = int(_COUNTERS.get("magnet_cache_hits", 0) or 0) + 1
+        _SAMPLES.setdefault("magnet_ms", __import__("collections").deque(maxlen=120)).append(event["total_ms"])
+
+
+def record_index_query(payload: dict[str, Any]) -> None:
+    path = str(payload.get("path") or "recent")
+    with _LOCK:
+        _COUNTERS["index_queries"] = int(_COUNTERS.get("index_queries", 0) or 0) + 1
+        key = {"fts": "index_fts_hits", "like": "index_like_hits"}.get(path, "index_recent_hits")
+        _COUNTERS[key] = int(_COUNTERS.get(key, 0) or 0) + 1
+        _EVENTS.appendleft({"ts": time.time(), "kind": "index_query", "path": path, "count": int(payload.get("count") or 0)})

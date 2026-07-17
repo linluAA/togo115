@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import asyncio
 from typing import Any
 
@@ -11,14 +13,28 @@ from app.services.http_client import shared_async_client
 
 
 class EmbyDashboardMixin:
+    _dashboard_cache: dict[str, tuple[float, dict]] = {}
+    EMBY_DASHBOARD_CACHE_TTL = 20.0
     async def dashboard(self) -> dict[str, Any]:
         config = get_setting("emby")
         api_key = config.get("api_key")
         base_url = self._base_url(config)
         if not base_url or not api_key:
             return {"media_count": 0, "libraries": [], "users": [], "history": []}
+        cache_key = f"{base_url}|{api_key}"
+        cached = type(self)._dashboard_cache.get(cache_key)
+        if cached is not None:
+            expires_at, payload = cached
+            if expires_at > time.monotonic() and not payload.get("error"):
+                return dict(payload)
+            type(self)._dashboard_cache.pop(cache_key, None)
         try:
-            return await self._fetch_dashboard(base_url, api_key, module_proxy("emby"))
+            payload = await self._fetch_dashboard(base_url, api_key, module_proxy("emby"))
+            type(self)._dashboard_cache[cache_key] = (
+                time.monotonic() + float(getattr(type(self), "EMBY_DASHBOARD_CACHE_TTL", 20.0)),
+                dict(payload),
+            )
+            return payload
         except Exception as exc:
             add_log("error", "emby", "Emby 看板数据获取失败", {"error": str(exc), "server_url": base_url})
             return {"media_count": 0, "libraries": [], "users": [], "history": [], "error": str(exc)}

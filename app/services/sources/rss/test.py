@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from app.services.http_client import shared_async_client
+
 from app.services.link import html_page_title
 
 

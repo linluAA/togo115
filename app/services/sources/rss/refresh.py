@@ -4,6 +4,8 @@ import time
 
 import httpx
 
+from app.services.http_client import shared_async_client
+
 from app.db import add_log
 from app.services.link import expanded_search_queries
 from app.services.sources.rss.refresh_state import RssTorznabRefreshStateMixin

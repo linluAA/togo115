@@ -18,6 +18,7 @@ from app.services.subscription.delivery.state import (
     classify_delivery_failure,
 )
 from app.services.subscription.resource.guard import SKIP_REASONS, resource_allowed_for_subscription
+from app.services.resource_queries import invalidate_recent_resources_cache
 from app.services.subscription.resource.resources import resource_dedupe_key
 
 

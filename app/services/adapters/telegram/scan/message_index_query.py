@@ -83,13 +83,26 @@ def candidate_rows(
 
     fts_rows = _candidate_rows_fts(conn, clean_sources, compact_terms)
     if fts_rows:
+        _note_index_path("fts", len(fts_rows))
         return fts_rows
 
     like_rows = _candidate_rows_like(conn, clean_sources, compact_terms)
     if like_rows:
+        _note_index_path("like", len(like_rows))
         return like_rows
 
-    return _candidate_rows_recent(conn, clean_sources)
+    recent_rows = _candidate_rows_recent(conn, clean_sources)
+    _note_index_path("recent", len(recent_rows))
+    return recent_rows
+
+
+def _note_index_path(path: str, count: int) -> None:
+    try:
+        from app.services.metrics import record_index_query
+
+        record_index_query({"path": path, "count": int(count or 0)})
+    except Exception:
+        pass
 
 
 def _candidate_rows_fts(conn: Any, sources: list[str], compact_terms: list[str]) -> list[dict[str, Any]]:
@@ -161,16 +174,36 @@ def _candidate_rows_recent(conn: Any, sources: list[str]) -> list[dict[str, Any]
 
 
 def _fts_match_query(terms: list[str]) -> str:
+    """Build an FTS5 MATCH expression with CJK bi-gram expansion."""
     parts: list[str] = []
     for term in terms:
         cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", str(term or ""), flags=re.UNICODE).strip()
         if len(cleaned) < 2:
             continue
-        token = cleaned.replace('"', " ")
+        token = cleaned.replace('"', " ").strip()
+        if not token:
+            continue
         parts.append(f'"{token}"')
+        for gram in _cjk_ngrams(token, size=2):
+            parts.append(f'"{gram}"')
+        if len(parts) >= 12:
+            break
     if not parts:
         return ""
-    return " OR ".join(parts[:4])
+    uniq = list(dict.fromkeys(parts))
+    return " OR ".join(uniq[:12])
+
+
+def _cjk_ngrams(text: str, *, size: int = 2) -> list[str]:
+    compact = re.sub(r"\s+", "", str(text or ""))
+    cjk_chunks = re.findall(r"[\u4e00-\u9fff]+", compact)
+    grams: list[str] = []
+    for chunk in cjk_chunks:
+        if len(chunk) < size:
+            continue
+        for index in range(0, len(chunk) - size + 1):
+            grams.append(chunk[index : index + size])
+    return grams
 
 
 def row_to_result(row: dict[str, Any], url: str, context: str, matched_query: str) -> SearchResult:

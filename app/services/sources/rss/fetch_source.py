@@ -35,7 +35,7 @@ class RssTorznabFetchSourceMixin:
             source_key=source_key,
         )
         owns_client = client is None
-        active_client = client or httpx.AsyncClient(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True)
+        active_client = client or shared_async_client(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True)
         try:
             results = await self._fetch_source_results(source, context, active_client, query, query_context)
             for result in results:

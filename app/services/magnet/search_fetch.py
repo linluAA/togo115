@@ -7,11 +7,12 @@ from typing import Any
 from app.db import add_log
 from app.services.sources.rss_torznab import RssTorznabAdapter, SearchResult
 from app.services.magnet.constants import (
+    TG_BOT_MAGNET_GOOD_SCORE,
     TG_BOT_MAGNET_SOURCE_CONCURRENCY,
     TG_BOT_MAGNET_SOURCE_QUERY_LIMIT,
     TG_BOT_MAGNET_SOURCE_TIMEOUT_SECONDS,
 )
-from app.services.magnet.ranking import _is_magnet_result, _rank_magnet_results
+from app.services.magnet.ranking import _is_magnet_result, _rank_magnet_results, _result_score
 from app.services.magnet.search_queries import _fast_source_options
 
 
@@ -54,9 +55,16 @@ async def _fetch_priority_sources_until_ranked(
                 return candidates, searched_sources, False
             searched_sources += await _merge_completed_magnet_sources(done, candidates)
             required_matches = max(1, min_matches or limit)
-            if len(_rank_magnet_results(subscription, [*(existing_candidates or []), *candidates])) >= required_matches:
-                await _cancel_pending_magnet_sources(pending)
-                return candidates, searched_sources, True
+            ranked = _rank_magnet_results(subscription, [*(existing_candidates or []), *candidates])
+            if ranked:
+                top = ranked[: max(1, required_matches)]
+                good_enough = any(_result_score(subscription, item) >= TG_BOT_MAGNET_GOOD_SCORE for item in top)
+                if len(ranked) >= required_matches and good_enough:
+                    await _cancel_pending_magnet_sources(pending)
+                    return candidates, searched_sources, True
+                if len(ranked) >= max(required_matches, limit):
+                    await _cancel_pending_magnet_sources(pending)
+                    return candidates, searched_sources, True
         return candidates, searched_sources, False
     finally:
         await _cancel_pending_magnet_sources(pending)

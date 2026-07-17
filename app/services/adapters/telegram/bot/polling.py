@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from app.services.http_client import shared_async_client
+
 from app.db import add_log
 from app.services.integration_state import get_flow, module_proxy, save_flow
 
@@ -57,7 +59,7 @@ class TelegramBotPollingMixin:
         while True:
             proxy = module_proxy("telegram")
             try:
-                async with httpx.AsyncClient(proxy=proxy or None, timeout=35, follow_redirects=True) as client:
+                async with shared_async_client(proxy=proxy or None, timeout=35, follow_redirects=True) as client:
                     while True:
                         try:
                             offset = await self._poll_once(client, token, offset)

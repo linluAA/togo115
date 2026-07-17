@@ -16,6 +16,7 @@ _SAMPLES: dict[str, deque[int]] = {
     "total_ms": deque(maxlen=_SAMPLE_LIMIT),
     "115_ms": deque(maxlen=_SAMPLE_LIMIT),
     "job_ms": deque(maxlen=_SAMPLE_LIMIT),
+    "magnet_ms": deque(maxlen=_SAMPLE_LIMIT),
 }
 _COUNTERS: dict[str, float | int] = {
     "telegram_searches": 0,
@@ -43,6 +44,14 @@ _COUNTERS: dict[str, float | int] = {
     "attach_save_failed": 0,
     "attach_mismatch": 0,
     "attach_recheck": 0,
+    "magnet_searches": 0,
+    "magnet_early_stops": 0,
+    "magnet_cache_hits": 0,
+    "magnet_ms_sum": 0,
+    "index_queries": 0,
+    "index_fts_hits": 0,
+    "index_like_hits": 0,
+    "index_recent_hits": 0,
 }
 
 

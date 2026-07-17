@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from app.db import add_log, db, json_dumps, utc_now
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
 from app.services.subscription.crud.create import create_subscription
@@ -38,12 +39,17 @@ def update_subscription(subscription_id: int, payload: SubscriptionUpdate) -> di
     with db() as conn:
         conn.execute(f"UPDATE subscriptions SET {sets}, updated_at = ? WHERE id = ?", values)
     add_log("info", "subscription", "订阅已更新", {"id": subscription_id})
+    from app.services.subscription.crud.rows import invalidate_subscription_list_cache as _inv_sub_list
+    _inv_sub_list()
     return get_subscription(subscription_id) or {}
 
 def delete_subscription(subscription_id: int) -> None:
     with db() as conn:
         conn.execute("DELETE FROM subscriptions WHERE id = ?", (subscription_id,))
     add_log("info", "subscription", "订阅已取消", {"id": subscription_id})
+
+    from app.services.subscription.crud.rows import invalidate_subscription_list_cache as _inv_sub_list
+    _inv_sub_list()
 
 def delete_subscriptions(subscription_ids: list[int]) -> int:
     ids = [int(item) for item in subscription_ids if item]
@@ -54,6 +60,8 @@ def delete_subscriptions(subscription_ids: list[int]) -> int:
         cursor = conn.execute(f"DELETE FROM subscriptions WHERE id IN ({placeholders})", ids)
     deleted = cursor.rowcount if cursor.rowcount is not None else 0
     add_log("info", "subscription", "批量取消订阅", {"ids": ids, "deleted": deleted})
+    from app.services.subscription.crud.rows import invalidate_subscription_list_cache as _inv_sub_list
+    _inv_sub_list()
     return deleted
 
 def delete_subscription_by_title(title: str) -> int:

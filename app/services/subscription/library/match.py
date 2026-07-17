@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from app.db import db, utc_now
 from app.services.integration_state import get_setting
 from app.services.sources.rss_torznab import SearchResult
@@ -95,6 +96,9 @@ def mark_completed_subscription(subscription: dict) -> None:
         )
 
 
+
+    from app.services.subscription.crud.rows import invalidate_subscription_list_cache as _inv_sub_list
+    _inv_sub_list()
 
 def _emby_configured() -> bool:
     config = get_setting("emby")

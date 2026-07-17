@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import time
+
 from app.db import db, json_loads, row_to_dict, utc_now
 from app.services.subscription.library.service import enrich_subscriptions_with_health, subscription_should_hide
 from app.services.subscription.match.matching import normalize_quality_rules, subscription_release_year
+
+SUBSCRIPTION_LIST_CACHE_TTL = 6.0
+_subscription_list_cache: dict[bool, tuple[float, list[dict]]] = {}
 
 
 def normalize_subscription(row) -> dict:
@@ -18,12 +23,28 @@ def normalize_subscription(row) -> dict:
 
 
 def list_subscriptions(include_completed: bool = False) -> list[dict]:
+    flag = bool(include_completed)
+    cached = _subscription_list_cache.get(flag)
+    if cached is not None:
+        expires_at, payload = cached
+        if expires_at > time.monotonic():
+            return [dict(item) for item in payload]
+        _subscription_list_cache.pop(flag, None)
     with db() as conn:
         rows = conn.execute("SELECT * FROM subscriptions ORDER BY created_at DESC").fetchall()
     subscriptions = [normalize_subscription(row) for row in rows]
     if not include_completed:
         subscriptions = [item for item in subscriptions if not subscription_should_hide(item)]
-    return enrich_subscriptions_with_health(subscriptions)
+    result = enrich_subscriptions_with_health(subscriptions)
+    _subscription_list_cache[flag] = (
+        time.monotonic() + SUBSCRIPTION_LIST_CACHE_TTL,
+        [dict(item) for item in result],
+    )
+    return result
+
+
+def invalidate_subscription_list_cache() -> None:
+    _subscription_list_cache.clear()
 
 
 def get_subscription(subscription_id: int) -> dict | None:

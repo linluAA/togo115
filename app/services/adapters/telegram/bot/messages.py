@@ -4,6 +4,8 @@ from typing import Any
 
 import httpx
 
+from app.services.http_client import shared_async_client
+
 from app.db import add_log, json_dumps
 from app.services.adapters.media import TmdbAdapter
 from app.services.integration_state import get_setting, module_proxy
@@ -33,7 +35,7 @@ class TelegramBotMessageMixin:
             return
         results = await TmdbAdapter().search(query, media_type)
         proxy = module_proxy("telegram")
-        async with httpx.AsyncClient(proxy=proxy or None, timeout=25, follow_redirects=True) as client:
+        async with shared_async_client(proxy=proxy or None, timeout=25, follow_redirects=True) as client:
             if not results:
                 await self._send_bot_message(client, token, chat_id, f"\u6ca1\u6709\u641c\u7d22\u5230\uff1a{query}")
                 return
@@ -67,7 +69,7 @@ class TelegramBotMessageMixin:
             return
         results = await tmdb_search_choices(query)
         proxy = module_proxy("telegram")
-        async with httpx.AsyncClient(proxy=proxy or None, timeout=25, follow_redirects=True) as client:
+        async with shared_async_client(proxy=proxy or None, timeout=25, follow_redirects=True) as client:
             if not results:
                 await self._send_bot_message(client, token, chat_id, f"\u6ca1\u6709\u641c\u7d22\u5230\uff1a{query}")
                 return
