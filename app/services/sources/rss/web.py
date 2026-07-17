@@ -11,7 +11,7 @@ from app.db import add_log
 from app.services.link import (
     BT1207_DETAIL_DELAY_SECONDS,
     BT1207_DETAIL_RETRIES,
-    _html_page_title,
+    html_page_title,
 )
 
 
@@ -75,7 +75,7 @@ class RssTorznabWebMixin:
         final_path = final.path.rstrip("/") or "/"
         if final_path == requested_path:
             return False
-        title = _html_page_title(html_text or "", "")
+        title = html_page_title(html_text or "", "")
         return final_path == "/" or title == "BT1207 - 好用的磁力链接搜索引擎"
 
     async def _solve_bt1207_challenge(self, client: httpx.AsyncClient, url: str) -> bool:
@@ -133,7 +133,7 @@ class RssTorznabWebMixin:
                 res = await client.get(url, headers=self._magnet_web_headers(request_referer))
                 res.raise_for_status()
                 if self._is_bt1207_home_fallback(url, str(res.url), res.text):
-                    add_log("warning", "rss", "BT1207 页面重试后仍返回首页", {"url": url, "final_url": str(res.url), "title": _html_page_title(res.text, "")})
+                    add_log("warning", "rss", "BT1207 页面重试后仍返回首页", {"url": url, "final_url": str(res.url), "title": html_page_title(res.text, "")})
                     if not self._is_bt1207_search_url(url):
                         raise RuntimeError("BT1207 detail page returned home page")
         return res

@@ -21,7 +21,7 @@ from app.services.adapters.telegram.history.recent import TelegramRecentScanMixi
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
 from app.services.link import (
     TELEGRAM_HISTORY_MAX_RESULTS,
-    _expanded_search_queries,
+    expanded_search_queries as _expanded_search_queries,
 )
 from app.services.types import SearchResult
 from app.services.adapters.telegram.rate_limit import telegram_request_gate

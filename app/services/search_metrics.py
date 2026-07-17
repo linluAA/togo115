@@ -15,6 +15,7 @@ _SAMPLES: dict[str, deque[int]] = {
     "extract_ms": deque(maxlen=_SAMPLE_LIMIT),
     "total_ms": deque(maxlen=_SAMPLE_LIMIT),
     "115_ms": deque(maxlen=_SAMPLE_LIMIT),
+    "job_ms": deque(maxlen=_SAMPLE_LIMIT),
 }
 _COUNTERS: dict[str, float | int] = {
     "telegram_searches": 0,
@@ -33,6 +34,10 @@ _COUNTERS: dict[str, float | int] = {
     "prewarm_indexed": 0,
     "attach_runs": 0,
     "attach_created": 0,
+    "jobs_done": 0,
+    "jobs_failed": 0,
+    "jobs_requeued": 0,
+    "jobs_duration_ms_sum": 0,
     "attach_duplicates": 0,
     "attach_expired": 0,
     "attach_save_failed": 0,
@@ -155,7 +160,36 @@ def record_prewarm(payload: dict[str, Any]) -> None:
         _EVENTS.appendleft({"ts": time.time(), "kind": "prewarm", **{k: payload.get(k) for k in ("sources", "dialogs", "indexed", "elapsed_ms")}})
 
 
+def record_job_event(payload: dict[str, Any]) -> None:
+    status = str(payload.get("status") or "")
+    duration = int(payload.get("duration_ms") or 0)
+    count = int(payload.get("count") or 0)
+    with _LOCK:
+        if status == "done":
+            _COUNTERS["jobs_done"] = int(_COUNTERS.get("jobs_done", 0)) + 1
+            if duration > 0:
+                _COUNTERS["jobs_duration_ms_sum"] = int(_COUNTERS.get("jobs_duration_ms_sum", 0)) + duration
+                _SAMPLES["job_ms"].append(duration)
+        elif status == "failed":
+            _COUNTERS["jobs_failed"] = int(_COUNTERS.get("jobs_failed", 0)) + 1
+            if duration > 0:
+                _SAMPLES["job_ms"].append(duration)
+        elif status == "requeued":
+            _COUNTERS["jobs_requeued"] = int(_COUNTERS.get("jobs_requeued", 0)) + max(1, count)
+        _EVENTS.appendleft(
+            {
+                "type": "job",
+                "kind": payload.get("kind"),
+                "status": status,
+                "duration_ms": duration,
+                "count": count,
+                "ts": time.time(),
+            }
+        )
+
+
 def metrics_snapshot() -> dict[str, Any]:
+
     from app.services.adapters.telegram.rate_limit import telegram_request_gate
     from app.services.adapters.telegram.scan.extract_cache import extract_cache_stats
     import app.services.subscription.runtime as runtime
@@ -176,10 +210,24 @@ def metrics_snapshot() -> dict[str, Any]:
         desired_concurrency = runtime.desired_search_concurrency()
     except Exception:
         desired_concurrency = runtime.SUBSCRIPTION_SEARCH_CONCURRENCY
+    queue_stats = {}
+    try:
+        from app.services.jobs import job_queue_stats
+
+        queue_stats = job_queue_stats()
+    except Exception:
+        queue_stats = {}
     return {
         "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY,
         "desired_concurrency": desired_concurrency,
         "semaphore_limit": int(getattr(runtime, "subscription_search_semaphore_limit", 0) or 0),
+        "jobs": {
+            "done": int(counters.get("jobs_done", 0) or 0),
+            "failed": int(counters.get("jobs_failed", 0) or 0),
+            "requeued": int(counters.get("jobs_requeued", 0) or 0),
+            "queue": queue_stats,
+            "latency": _sample_stats("job_ms") if "job_ms" in _SAMPLES or True else {},
+        },
         "telegram": {
             "searches": int(counters["telegram_searches"]),
             "avg_resolve_ms": round(int(counters["resolve_ms_sum"]) / searches, 1),

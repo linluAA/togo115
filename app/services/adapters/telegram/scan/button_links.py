@@ -26,9 +26,9 @@ from app.services.link import (
     TELEGRAM_HISTORY_MAX_RESULTS,
     TELEGRAM_LINK_BUTTON_WORDS,
     TELEGRAM_MESSAGE_FETCH_TIMEOUT_SECONDS,
-    _clean_download_link,
-    _html_hrefs,
-    _message_button_values,
+    clean_download_link,
+    html_hrefs,
+    message_button_values,
     extract_115_links,
     telegram_message_text,
 )
@@ -139,7 +139,7 @@ class TelegramButtonLinkMixin:
         urls: list[str] = []
         seen: set[str] = set()
         for raw_url in HTTP_URL_RE.findall(unescape(text)):
-            url = _clean_download_link(raw_url)
+            url = clean_download_link(raw_url)
             # 115 share links are direct resources, not third-party pages to scrape.
             if extract_115_links(url):
                 continue
@@ -199,7 +199,7 @@ class TelegramButtonLinkMixin:
         for value in (html_text, unquote(html_text)):
             collect(value, page_label)
             found.extend(extract_115_links(value))
-        for href in _html_hrefs(html_text):
+        for href in html_hrefs(html_text):
             absolute = urljoin(str(response.url), href)
             for value in (absolute, unquote(absolute)):
                 collect(value, page_label)
@@ -217,7 +217,7 @@ class TelegramButtonLinkMixin:
             try:
                 refreshed = await asyncio.wait_for(client.get_messages(peer, ids=int(message.id)), timeout=TELEGRAM_MESSAGE_FETCH_TIMEOUT_SECONDS)
                 collect(telegram_message_text(refreshed), label)
-                for value in _message_button_values(refreshed):
+                for value in message_button_values(refreshed):
                     collect(value, label)
                 return
             except Exception:

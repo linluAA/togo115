@@ -22,6 +22,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     _ensure_telegram_dialog_entities(conn)
     _merge_duplicate_tmdb_subscriptions(conn)
     _delete_duplicate_resources(conn)
+    _ensure_background_jobs(conn)
     _ensure_indexes(conn)
 
 
@@ -153,6 +154,16 @@ def _ensure_telegram_message_index_columns(conn: sqlite3.Connection) -> None:
     columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(telegram_message_index)").fetchall()}
     if "search_blob" not in columns:
         conn.execute("ALTER TABLE telegram_message_index ADD COLUMN search_blob TEXT NOT NULL DEFAULT ''")
+
+
+def _ensure_background_jobs(conn: sqlite3.Connection) -> None:
+    ensure_columns(
+        conn,
+        "background_jobs",
+        {
+            "heartbeat_at": "TEXT",
+        },
+    )
 
 def _ensure_indexes(conn: sqlite3.Connection) -> None:
     conn.executescript(

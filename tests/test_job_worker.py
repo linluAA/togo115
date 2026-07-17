@@ -5,7 +5,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from app.db import db
+from app.db import db, init_db
 from app.services.job_worker import JobWorker
 from app.services.jobs import claim_next_job, create_job, list_jobs, requeue_stale_running_jobs
 from app.services.subscription.search import tasks as subscription_tasks
@@ -13,6 +13,7 @@ from app.services.subscription.search import tasks as subscription_tasks
 
 class JobWorkerTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
+        init_db()
         with db() as conn:
             conn.execute("DELETE FROM background_jobs")
 
@@ -31,8 +32,8 @@ class JobWorkerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(claimed)
         with db() as conn:
             conn.execute(
-                "UPDATE background_jobs SET started_at = ?, updated_at = ? WHERE id = ?",
-                ("2000-01-01T00:00:00+00:00", "2000-01-01T00:00:00+00:00", job_id),
+                "UPDATE background_jobs SET started_at = ?, heartbeat_at = ?, updated_at = ? WHERE id = ?",
+                ("2000-01-01T00:00:00+00:00", "2000-01-01T00:00:00+00:00", "2000-01-01T00:00:00+00:00", job_id),
             )
         count = requeue_stale_running_jobs(max_age_seconds=60)
         self.assertEqual(count, 1)
@@ -85,6 +86,39 @@ class JobWorkerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.get("job_id"), second.get("job_id"))
         jobs = [j for j in list_jobs() if j.get("kind") == "retry_failed_resources"]
         self.assertEqual(len(jobs), 1)
+
+
+    def test_touch_heartbeat_and_stale_requeue(self) -> None:
+        from app.services.jobs import claim_next_job, create_job, list_jobs, requeue_stale_running_jobs, touch_job_heartbeat
+
+        job_id = create_job("subscription_search_all")
+        claimed = claim_next_job(["subscription_search_all"])
+        self.assertIsNotNone(claimed)
+        touch_job_heartbeat(job_id)
+        # Fresh heartbeat should not requeue.
+        self.assertEqual(requeue_stale_running_jobs(max_age_seconds=60), 0)
+        with db() as conn:
+            conn.execute(
+                "UPDATE background_jobs SET heartbeat_at = ?, started_at = ?, updated_at = ? WHERE id = ?",
+                ("2000-01-01T00:00:00+00:00", "2000-01-01T00:00:00+00:00", "2000-01-01T00:00:00+00:00", job_id),
+            )
+        self.assertEqual(requeue_stale_running_jobs(max_age_seconds=60), 1)
+        jobs = list_jobs(status="queued")
+        self.assertEqual(len(jobs), 1)
+
+    def test_job_queue_stats_and_metrics(self) -> None:
+        from app.services.jobs import create_job, job_queue_stats
+        from app.services.search_metrics import clear_metrics, metrics_snapshot, record_job_event
+
+        clear_metrics()
+        create_job("subscription_search_all")
+        stats = job_queue_stats()
+        self.assertGreaterEqual(stats.get("queued", 0), 1)
+        record_job_event({"kind": "subscription_search_all", "status": "done", "duration_ms": 12})
+        snap = metrics_snapshot()
+        self.assertIn("jobs", snap)
+        self.assertGreaterEqual(int(snap["jobs"]["done"]), 1)
+        clear_metrics()
 
 
 if __name__ == "__main__":

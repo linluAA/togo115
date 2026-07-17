@@ -58,6 +58,35 @@ def mark_job_failed(job_id: int, error: str, result: dict[str, Any] | None = Non
         )
 
 
+def touch_job_heartbeat(job_id: int) -> None:
+    """Refresh heartbeat for a long-running job (multi-instance liveness)."""
+    now = utc_now()
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE background_jobs
+            SET heartbeat_at = ?, updated_at = ?
+            WHERE id = ? AND status = 'running'
+            """,
+            (now, now, int(job_id)),
+        )
+
+
+def job_queue_stats() -> dict[str, int]:
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS c FROM background_jobs GROUP BY status"
+        ).fetchall()
+    counts = {"queued": 0, "running": 0, "done": 0, "failed": 0}
+    for row in rows:
+        key = str(row["status"] if hasattr(row, "keys") else row[0])
+        val = int(row["c"] if hasattr(row, "keys") else row[1])
+        if key in counts:
+            counts[key] = val
+    counts["total"] = sum(counts.values())
+    return counts
+
+
 def latest_job(kind: str, target_id: int | None = None) -> dict[str, Any] | None:
     with db() as conn:
         if target_id is None:
@@ -127,37 +156,40 @@ def claim_next_job(kinds: list[str] | None = None) -> dict[str, Any] | None:
         updated = conn.execute(
             """
             UPDATE background_jobs
-            SET status = 'running', started_at = COALESCE(started_at, ?), updated_at = ?
+            SET status = 'running',
+                started_at = COALESCE(started_at, ?),
+                heartbeat_at = ?,
+                updated_at = ?
             WHERE id = ? AND status = 'queued'
             """,
-            (now, now, item["id"]),
+            (now, now, now, item["id"]),
         )
         if updated.rowcount != 1:
             return None
         item["status"] = "running"
         item["started_at"] = item.get("started_at") or now
+        item["heartbeat_at"] = now
         item["updated_at"] = now
         return item
 
 
 def requeue_stale_running_jobs(max_age_seconds: int = 1800) -> int:
-    """Requeue long-running jobs that likely died with the process."""
-    # SQLite stores UTC ISO-ish strings via utc_now(); compare in Python for safety.
+    """Requeue long-running jobs whose heartbeat stopped (worker likely died)."""
     now = utc_now()
     with db() as conn:
         rows = conn.execute(
-            "SELECT id, started_at, updated_at FROM background_jobs WHERE status = 'running'"
+            "SELECT id, started_at, heartbeat_at, updated_at FROM background_jobs WHERE status = 'running'"
         ).fetchall()
         count = 0
         for row in rows:
-            started = str(row["started_at"] or row["updated_at"] or "")
-            # If timestamp parsing fails, skip.
+            stamp = str(row["heartbeat_at"] or row["started_at"] or row["updated_at"] or "")
             try:
                 from datetime import datetime, timezone
-                started_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
-                if started_dt.tzinfo is None:
-                    started_dt = started_dt.replace(tzinfo=timezone.utc)
-                age = (datetime.now(timezone.utc) - started_dt).total_seconds()
+
+                stamp_dt = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                if stamp_dt.tzinfo is None:
+                    stamp_dt = stamp_dt.replace(tzinfo=timezone.utc)
+                age = (datetime.now(timezone.utc) - stamp_dt).total_seconds()
             except Exception:
                 continue
             if age < max_age_seconds:
@@ -165,10 +197,11 @@ def requeue_stale_running_jobs(max_age_seconds: int = 1800) -> int:
             conn.execute(
                 """
                 UPDATE background_jobs
-                SET status = 'queued', started_at = NULL, error = COALESCE(error, ?), updated_at = ?
+                SET status = 'queued', started_at = NULL, heartbeat_at = NULL,
+                    error = COALESCE(error, ?), updated_at = ?
                 WHERE id = ? AND status = 'running'
                 """,
-                ("stale running job requeued", now, int(row["id"])),
+                ("stale running job requeued (heartbeat timeout)", now, int(row["id"])),
             )
             count += 1
         return count

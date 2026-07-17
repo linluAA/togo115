@@ -7,9 +7,9 @@ from app.services.link import (
     TELEGRAM_HISTORY_DEFAULT_FALLBACK_LIMIT,
     TELEGRAM_HISTORY_DEFAULT_MESSAGES_PER_QUERY,
     TELEGRAM_HISTORY_MAX_FALLBACK_LIMIT,
-    _bounded_float,
-    _bounded_int,
-    _compact_search_text,
+    bounded_float,
+    bounded_int,
+    compact_search_text,
     years_from_text,
 )
 
@@ -20,14 +20,14 @@ TELEGRAM_FAST_RECENT_BUDGET_SECONDS = 4.0
 
 
 def build_history_options(config: dict[str, Any]) -> TelegramHistoryOptions:
-    history_limit = _bounded_int(config.get("history_limit"), TELEGRAM_HISTORY_DEFAULT_FALLBACK_LIMIT, 1, TELEGRAM_HISTORY_MAX_FALLBACK_LIMIT)
-    fallback_limit = _bounded_int(
+    history_limit = bounded_int(config.get("history_limit"), TELEGRAM_HISTORY_DEFAULT_FALLBACK_LIMIT, 1, TELEGRAM_HISTORY_MAX_FALLBACK_LIMIT)
+    fallback_limit = bounded_int(
         config.get("fallback_scan_limit"),
         history_limit,
         20,
         TELEGRAM_HISTORY_MAX_FALLBACK_LIMIT,
     )
-    messages_per_query = _bounded_int(
+    messages_per_query = bounded_int(
         config.get("messages_per_query"),
         min(history_limit, TELEGRAM_HISTORY_DEFAULT_MESSAGES_PER_QUERY),
         1,
@@ -37,9 +37,9 @@ def build_history_options(config: dict[str, Any]) -> TelegramHistoryOptions:
         history_limit=history_limit,
         fallback_scan_limit=fallback_limit,
         messages_per_query=messages_per_query,
-        total_budget=_bounded_float(config.get("history_timeout"), TELEGRAM_FAST_TOTAL_BUDGET_SECONDS, 0.1, TELEGRAM_FAST_TOTAL_BUDGET_SECONDS),
-        query_budget=_bounded_float(config.get("history_query_timeout"), TELEGRAM_FAST_QUERY_BUDGET_SECONDS, 0.05, TELEGRAM_FAST_QUERY_BUDGET_SECONDS),
-        recent_budget=_bounded_float(config.get("history_fallback_timeout"), TELEGRAM_FAST_RECENT_BUDGET_SECONDS, 0.05, TELEGRAM_FAST_RECENT_BUDGET_SECONDS),
+        total_budget=bounded_float(config.get("history_timeout"), TELEGRAM_FAST_TOTAL_BUDGET_SECONDS, 0.1, TELEGRAM_FAST_TOTAL_BUDGET_SECONDS),
+        query_budget=bounded_float(config.get("history_query_timeout"), TELEGRAM_FAST_QUERY_BUDGET_SECONDS, 0.05, TELEGRAM_FAST_QUERY_BUDGET_SECONDS),
+        recent_budget=bounded_float(config.get("history_fallback_timeout"), TELEGRAM_FAST_RECENT_BUDGET_SECONDS, 0.05, TELEGRAM_FAST_RECENT_BUDGET_SECONDS),
     )
 
 
@@ -50,7 +50,7 @@ def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
         return []
 
     def sort_key(item: str) -> tuple[int, int, int, int, int]:
-        compact = _compact_search_text(item) or ""
+        compact = compact_search_text(item) or ""
         has_year = 1 if years_from_text(item) else 0
         # Prefer year queries first. Among year queries prefer latin transliterations
         # with more tokens (title + year) because they usually hit TG search better.
@@ -63,7 +63,7 @@ def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
     selected: list[str] = []
     seen: set[str] = set()
     for query in candidates:
-        key = _compact_search_text(query) or ""
+        key = compact_search_text(query) or ""
         if not key or key in seen:
             continue
         seen.add(key)

@@ -11,7 +11,14 @@ import asyncio
 from typing import Any
 
 from app.db import add_log
-from app.services.jobs import claim_next_job, mark_job_done, mark_job_failed, requeue_stale_running_jobs
+from app.services.jobs import (
+    claim_next_job,
+    mark_job_done,
+    mark_job_failed,
+    requeue_stale_running_jobs,
+    touch_job_heartbeat,
+)
+from app.services.search_metrics import record_job_event
 
 
 SUPPORTED_KINDS = (
@@ -48,8 +55,15 @@ class JobWorker:
 
     async def _run(self) -> None:
         requeue_stale_running_jobs()
+        last_requeue = 0.0
         while not self._stopping.is_set():
             try:
+                now = asyncio.get_running_loop().time()
+                if now - last_requeue > 60:
+                    requeued = requeue_stale_running_jobs()
+                    if requeued:
+                        record_job_event({"kind": "requeue", "status": "requeued", "count": requeued})
+                    last_requeue = now
                 job = claim_next_job(list(SUPPORTED_KINDS))
                 if not job:
                     await asyncio.sleep(self.poll_seconds)
@@ -69,17 +83,44 @@ class JobWorker:
     async def _execute(self, job: dict[str, Any]) -> None:
         job_id = int(job["id"])
         kind = str(job.get("kind") or "")
+        started = asyncio.get_running_loop().time()
+        heartbeat = asyncio.create_task(self._heartbeat_loop(job_id), name=f"job-heartbeat-{job_id}")
         try:
             result = await asyncio.to_thread(self._dispatch_blocking, kind, job)
             mark_job_done(job_id, result if isinstance(result, dict) else {"ok": True})
+            record_job_event(
+                {
+                    "kind": kind,
+                    "status": "done",
+                    "duration_ms": int((asyncio.get_running_loop().time() - started) * 1000),
+                }
+            )
         except Exception as exc:
             mark_job_failed(job_id, str(exc))
+            record_job_event(
+                {
+                    "kind": kind,
+                    "status": "failed",
+                    "duration_ms": int((asyncio.get_running_loop().time() - started) * 1000),
+                }
+            )
             add_log(
                 "error",
                 "jobs",
-                '后台任务执行失败',
+                "????????",
                 {"id": job_id, "kind": kind, "error": str(exc), "error_type": type(exc).__name__},
             )
+        finally:
+            heartbeat.cancel()
+            try:
+                await heartbeat
+            except asyncio.CancelledError:
+                pass
+
+    async def _heartbeat_loop(self, job_id: int, interval: float = 15.0) -> None:
+        while True:
+            touch_job_heartbeat(job_id)
+            await asyncio.sleep(interval)
 
     def _dispatch_blocking(self, kind: str, job: dict[str, Any]) -> dict[str, Any]:
         return asyncio.run(self._dispatch(kind, job))

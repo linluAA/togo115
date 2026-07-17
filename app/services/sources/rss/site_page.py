@@ -7,10 +7,10 @@ from urllib.parse import urlparse
 
 from app.db import add_log
 from app.services.link import (
-    _html_page_title,
-    _link_context_from_html,
-    _strip_html,
-    _title_from_link_context,
+    html_page_title,
+    link_context_from_html,
+    strip_html,
+    title_from_link_context,
     extract_download_links,
 )
 from app.services.link.downloads import is_115_share_link, is_valid_download_link
@@ -21,8 +21,8 @@ class RssTorznabSitePageMixin:
     def _parse_magnet_web_page(self, source: dict[str, Any], page_url: str, html_text: str, source_context: str = "") -> list[SearchResult]:
         name = str(source.get("name") or "\u8ba2\u9605\u6e90").strip()
         normalized_html = unescape(html_text or "")
-        page_title = _html_page_title(normalized_html, name)
-        page_text = _strip_html(normalized_html)
+        page_title = html_page_title(normalized_html, name)
+        page_text = strip_html(normalized_html)
         links = self._site_plugin_links(normalized_html, page_text)
         self._log_bt1207_no_links(page_url, links, page_title, normalized_html, page_text)
 
@@ -54,10 +54,10 @@ class RssTorznabSitePageMixin:
         results: list[SearchResult] = []
         filtered = 0
         for link in links:
-            context = _link_context_from_html(normalized_html, link) or page_text[:1200]
+            context = link_context_from_html(normalized_html, link) or page_text[:1200]
             size_context = _magnet_size_context(page_text, source_context, context)
             title_context = "\n".join(part for part in (source_context, context, size_context) if part)
-            title = _title_from_link_context(title_context, page_title)
+            title = title_from_link_context(title_context, page_title)
             text = "\n".join(part for part in (title, page_title, source_context, context, size_context) if part)
             if not self._source_matches_filters(source, text):
                 filtered += 1

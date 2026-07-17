@@ -16,7 +16,7 @@ from app.services.adapters.telegram.scan.extract_cache import (
     set_cached_message_extract,
 )
 from app.services.link import (
-    _local_text_matches_query,
+    local_text_matches_query,
     context_for_115_link,
     extract_115_links,
     telegram_message_text,
@@ -151,9 +151,9 @@ class TelegramMessageLinkMixin:
         for link, context in link_contexts.items():
             scoped = context_for_115_link(context, link, max(len(link_contexts), 2)) or context
             title = _telegram_resource_title(scoped)
-            if not any(_local_text_matches_query(scoped, query) for query in match_queries):
+            if not any(local_text_matches_query(scoped, query) for query in match_queries):
                 continue
-            if title and not str(title).startswith("Telegram ") and not any(_local_text_matches_query(title, query) for query in match_queries):
+            if title and not str(title).startswith("Telegram ") and not any(local_text_matches_query(title, query) for query in match_queries):
                 continue
             filtered[link] = scoped
         return filtered

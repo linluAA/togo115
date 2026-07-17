@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.link import (
-    _looks_like_context_message,
-    _looks_like_link_only_message,
+    looks_like_context_message,
+    looks_like_link_only_message,
     context_for_115_link,
     extract_115_links,
     telegram_message_text,
@@ -72,7 +72,7 @@ def telegram_candidate_context_text(
             continue
         if extract_115_links(text) and not same_group:
             continue
-        if not same_group and not _looks_like_context_message(text) and len(text) > 160:
+        if not same_group and not looks_like_context_message(text) and len(text) > 160:
             continue
         if _message_id(message) and anchor_id and _message_id(message) < anchor_id:
             before.append(text)
@@ -142,10 +142,10 @@ def _split_title_extras(extra_texts: list[str] | None) -> tuple[list[str], list[
         value = str(text or "").strip()
         if not value:
             continue
-        if extract_115_links(value) and _looks_like_link_only_message(value):
+        if extract_115_links(value) and looks_like_link_only_message(value):
             others.append(value)
             continue
-        if _looks_like_context_message(value) or not extract_115_links(value):
+        if looks_like_context_message(value) or not extract_115_links(value):
             titles.append(value)
         else:
             others.append(value)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.services.link.downloads import _download_link_key as download_link_key, is_valid_download_link
+from app.services.link import download_link_key, is_valid_download_link
 from app.services.sources.rss_torznab import SearchResult
 from app.services.resource_match import (
     compact_match_text,

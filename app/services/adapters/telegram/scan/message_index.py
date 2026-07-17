@@ -7,12 +7,12 @@ from typing import Any
 
 from app.db import db, row_to_dict, utc_now
 from app.services.adapters.telegram.scan.message_titles import _telegram_resource_title
-from app.services.link.search_utils import _compact_search_text as compact_search_text, years_from_text
+from app.services.link import compact_search_text, years_from_text
 from app.services.text_cjk import query_match_aliases
 from app.services.link import (
-    _local_text_matches_query,
-    _message_has_link_button_hint,
-    _text_has_external_resource_page_hint,
+    local_text_matches_query,
+    message_has_link_button_hint,
+    text_has_external_resource_page_hint,
     context_for_115_link,
     extract_115_links,
     telegram_message_text,
@@ -133,17 +133,17 @@ def search_telegram_message_index(sources: list[str], queries: list[str], limit:
                 links = extract_115_links(text)
                 if not links:
                     continue
-                matched_query = next((query for query in queries if _local_text_matches_query(context, query)), "")
+                matched_query = next((query for query in queries if local_text_matches_query(context, query)), "")
                 if not matched_query:
                     continue
                 for url in links:
                     if url in seen_urls:
                         continue
                     scoped = context_for_115_link(context, url, max(len(links), 2))
-                    if not _local_text_matches_query(scoped, matched_query):
+                    if not local_text_matches_query(scoped, matched_query):
                         continue
                     title = _telegram_resource_title(scoped)
-                    if title and not str(title).startswith("Telegram ") and not _local_text_matches_query(title, matched_query):
+                    if title and not str(title).startswith("Telegram ") and not local_text_matches_query(title, matched_query):
                         continue
                     seen_urls.add(url)
                     results.append(_row_to_result(row, url, scoped, matched_query))
@@ -251,7 +251,7 @@ def _message_context(messages: list[Any], index: int) -> str:
 
 
 def _has_link_hint(message: Any, context: str) -> bool:
-    return bool(extract_115_links(context) or _text_has_external_resource_page_hint(context) or _message_has_link_button_hint(message))
+    return bool(extract_115_links(context) or text_has_external_resource_page_hint(context) or message_has_link_button_hint(message))
 
 
 def _message_date(message: Any) -> str | None:
@@ -328,7 +328,7 @@ def _title_from_context(context: str, matched_query: str) -> str:
     if title and not str(title).startswith("Telegram "):
         return title[:160]
     for line in context.splitlines():
-        if matched_query and _local_text_matches_query(line, matched_query):
+        if matched_query and local_text_matches_query(line, matched_query):
             return line.strip()[:160]
     return matched_query or "Telegram 索引命中"
 

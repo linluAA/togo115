@@ -9,8 +9,8 @@ from app.services.link import (
     HTML_ANCHOR_RE,
     HTML_HREF_RE,
     MAGNET_WEB_DETAIL_LIMIT,
-    _html_container_fragment,
-    _strip_html,
+    html_container_fragment,
+    strip_html,
     years_from_text,
 )
 
@@ -68,7 +68,7 @@ class RssTorznabDetailCandidateMixin:
             if not href_match:
                 continue
             href = unescape((href_match.group("href") or href_match.group("bare") or "").strip())
-            label = _strip_html(anchor.group("label") or "")
+            label = strip_html(anchor.group("label") or "")
             nearby = self._nearby_text_for_anchor(html_text or "", anchor.start(), anchor.end())
             candidates.append((href, label, nearby, years_from_text("\n".join([label, nearby]))))
         return candidates
@@ -84,12 +84,12 @@ class RssTorznabDetailCandidateMixin:
         return score
 
     def _nearby_text_for_anchor(self, html_text: str, anchor_start: int, anchor_end: int) -> str:
-        container = _html_container_fragment(html_text, anchor_start)
+        container = html_container_fragment(html_text, anchor_start)
         if container:
-            return _strip_html(container)
+            return strip_html(container)
         start = max(0, anchor_start - 320)
         end = min(len(html_text), anchor_end + 320)
-        return _strip_html(html_text[start:end])
+        return strip_html(html_text[start:end])
 
     def _scored_detail_candidates(self, by_url: dict[str, dict[str, Any]]) -> list[tuple[int, str, set[int], str]]:
         return [

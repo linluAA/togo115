@@ -9,11 +9,11 @@ from telethon import TelegramClient
 from app.db import add_log
 from app.services.link import (
     TELEGRAM_MESSAGE_FETCH_TIMEOUT_SECONDS,
-    _local_text_matches_query,
-    _looks_like_context_message,
-    _looks_like_link_only_message,
-    _message_has_link_button_hint,
-    _nearby_link_text_matches,
+    local_text_matches_query,
+    looks_like_context_message,
+    looks_like_link_only_message,
+    message_has_link_button_hint,
+    nearby_link_text_matches,
     extract_115_links,
     telegram_message_text,
 )
@@ -36,8 +36,8 @@ class TelegramMessageContextMixin:
         base_id = getattr(message, "id", None)
         grouped_id = getattr(message, "grouped_id", None)
         base_text = telegram_message_text(message)
-        base_matches_query = any(_local_text_matches_query(base_text, query) for query in match_queries or [])
-        base_has_link_or_button = bool(extract_115_links(base_text) or _message_has_link_button_hint(message))
+        base_matches_query = any(local_text_matches_query(base_text, query) for query in match_queries or [])
+        base_has_link_or_button = bool(extract_115_links(base_text) or message_has_link_button_hint(message))
         context_candidates = self._context_candidates(base_id, siblings, base_has_link_or_button, match_queries)
 
         for sibling in siblings:
@@ -57,15 +57,15 @@ class TelegramMessageContextMixin:
             return False
         sibling_text = telegram_message_text(sibling)
         same_group = self._same_message_group(message, sibling)
-        sibling_has_button = _message_has_link_button_hint(sibling)
+        sibling_has_button = message_has_link_button_hint(sibling)
         if same_group:
             return True
         # Only merge a sibling share when its own text matches the query, or it is an
         # immediately adjacent link-only / button prompt belonging to the matched card.
-        if _nearby_link_text_matches(sibling_text, match_queries):
+        if nearby_link_text_matches(sibling_text, match_queries):
             return True
         distance = self._message_distance(getattr(message, "id", None), getattr(sibling, "id", None))
-        if base_matches_query and distance == 1 and extract_115_links(sibling_text) and _looks_like_link_only_message(sibling_text):
+        if base_matches_query and distance == 1 and extract_115_links(sibling_text) and looks_like_link_only_message(sibling_text):
             return True
         return bool(base_matches_query and sibling_has_button and self._button_sibling_belongs_to_base(message, sibling, match_queries))
 
@@ -76,9 +76,9 @@ class TelegramMessageContextMixin:
         sibling_text = telegram_message_text(sibling).strip()
         if not sibling_text:
             return True
-        if _nearby_link_text_matches(sibling_text, match_queries):
+        if nearby_link_text_matches(sibling_text, match_queries):
             return True
-        if any(_local_text_matches_query(sibling_text, query) for query in match_queries or []):
+        if any(local_text_matches_query(sibling_text, query) for query in match_queries or []):
             return True
         # 只允许相邻的纯按钮/短提示消息并入当前命中消息，避免把相邻资源卡片的按钮误当成当前订阅链接。
         return self._looks_like_button_prompt(sibling_text)
@@ -103,7 +103,7 @@ class TelegramMessageContextMixin:
         candidates: list[tuple[int, Any]] = []
         for sibling in siblings:
             sibling_text = telegram_message_text(sibling)
-            if _looks_like_context_message(sibling_text):
+            if looks_like_context_message(sibling_text):
                 distance = self._message_distance(base_id, getattr(sibling, "id", None))
                 if 0 < distance <= 4:
                     candidates.append((distance, sibling))
