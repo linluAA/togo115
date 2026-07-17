@@ -1103,7 +1103,16 @@ a:hover { text-decoration: underline; }
 }
 
 .subscription-toolbar {
+  display: flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.subscription-toolbar > div:first-child {
+  min-width: 0;
+  text-align: left;
 }
 
 .subscription-controls {
@@ -2755,33 +2764,36 @@ legend {
   }
 
   .subscription-panel {
-    grid-template-columns: 310px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
+    gap: 18px;
   }
 
   .subscription-toolbar {
-    position: sticky;
-    top: 104px;
-    min-height: calc(100vh - 128px);
-    align-items: stretch;
-    flex-direction: column;
-    justify-content: flex-start;
+    position: static;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
   }
 
   .subscription-toolbar h1 {
-    font-size: 42px;
+    font-size: clamp(32px, 4vw, 48px);
   }
 
   .subscription-controls {
-    width: 100%;
+    flex: 0 0 auto;
+    width: fit-content;
     max-width: 100%;
-    margin-left: 0;
+    margin-left: auto;
   }
 
   .subscription-control-grid {
-    width: 100%;
+    width: max-content;
     max-width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(100px, 118px));
   }
 
   .subscription-control-grid .control-cell,
@@ -2805,12 +2817,13 @@ legend {
   }
 
   .subscription-toolbar {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .subscription-controls {
-    justify-items: start;
+    margin-left: auto;
   }
 }
 
@@ -3858,6 +3871,7 @@ legend {
     position: static;
     min-height: 0;
     display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 26px;
@@ -3867,9 +3881,15 @@ legend {
       rgba(18, 26, 29, .8);
   }
 
+  .subscription-toolbar > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+  }
+
   .subscription-toolbar h1 {
-    font-size: clamp(54px, 6vw, 88px);
-    line-height: .9;
+    font-size: clamp(40px, 4.5vw, 64px);
+    line-height: .95;
   }
 
   .subscription-controls {
@@ -4108,12 +4128,14 @@ legend {
   }
 
   .subscription-toolbar {
-    grid-template-columns: minmax(0, 1fr) minmax(340px, .78fr);
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     padding: 24px;
   }
 
   .subscription-toolbar h1 {
-    font-size: clamp(40px, 4vw, 58px);
+    font-size: clamp(36px, 4vw, 52px);
     line-height: 1;
   }
 

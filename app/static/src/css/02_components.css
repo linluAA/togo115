@@ -195,7 +195,16 @@
 }
 
 .subscription-toolbar {
+  display: flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.subscription-toolbar > div:first-child {
+  min-width: 0;
+  text-align: left;
 }
 
 .subscription-controls {

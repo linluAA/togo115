@@ -176,33 +176,36 @@
   }
 
   .subscription-panel {
-    grid-template-columns: 310px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
+    gap: 18px;
   }
 
   .subscription-toolbar {
-    position: sticky;
-    top: 104px;
-    min-height: calc(100vh - 128px);
-    align-items: stretch;
-    flex-direction: column;
-    justify-content: flex-start;
+    position: static;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
   }
 
   .subscription-toolbar h1 {
-    font-size: 42px;
+    font-size: clamp(32px, 4vw, 48px);
   }
 
   .subscription-controls {
-    width: 100%;
+    flex: 0 0 auto;
+    width: fit-content;
     max-width: 100%;
-    margin-left: 0;
+    margin-left: auto;
   }
 
   .subscription-control-grid {
-    width: 100%;
+    width: max-content;
     max-width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(100px, 118px));
   }
 
   .subscription-control-grid .control-cell,
