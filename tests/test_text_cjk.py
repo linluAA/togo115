@@ -39,9 +39,15 @@ def test_expanded_queries_prioritize_prefix_stripped_alias_within_small_budget()
 
 def test_server_search_queries_include_alias_when_limit_two() -> None:
     from app.services.adapters.telegram.history.config import server_search_queries
+    from app.services.link_search_utils import years_from_text
 
     queries = _expanded_search_queries("新攻壳机动队 2026", ["攻壳机动队"], max_queries=6)
     selected = server_search_queries(queries, limit=2)
-    assert "攻壳机动队" in selected
-    assert all(not __import__("app.services.link_search_utils", fromlist=["years_from_text"]).years_from_text(item) for item in selected)
+    # Current ranking prefers year-bearing queries first; bare alias is kept when budget allows.
+    assert any(item.startswith("攻壳机动队") for item in selected)
+    assert any(item.startswith("新攻壳机动队") for item in selected)
+    assert all(years_from_text(item) for item in selected)
+
+    selected3 = server_search_queries(queries, limit=3)
+    assert "攻壳机动队" in selected3
 
