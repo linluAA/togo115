@@ -5,7 +5,7 @@ from typing import Any
 
 from app.db import add_log, row_to_dict
 from app.services.adapters.pan115 import PAN115_URL_RE
-from app.services.link_downloads import is_115_share_link
+from app.services.link.downloads import is_115_share_link
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.match.candidate_decision import fallback_candidate_sort_key
 from app.services.subscription.match.matching import (

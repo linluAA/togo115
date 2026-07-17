@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.services.adapters.pan115 import PAN115_URL_RE, SHARE_UNAVAILABLE, SHARE_UNKNOWN, normalize_115_share_link
-from app.services.link_downloads import is_valid_download_link
+from app.services.link.downloads import is_valid_download_link
 
 
 async def deliver_resource_url(

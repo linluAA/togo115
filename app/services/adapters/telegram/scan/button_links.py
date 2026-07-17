@@ -16,7 +16,7 @@ from app.services.adapters.telegram.scan.extract_cache import (
     get_cached_external_page_links,
     set_cached_external_page_links,
 )
-from app.services.link_parser import (
+from app.services.link import (
     HTTP_URL_RE,
     TELEGRAM_BUTTON_CLICK_MAX_PER_MESSAGE,
     TELEGRAM_BUTTON_CLICK_TIMEOUT_SECONDS,

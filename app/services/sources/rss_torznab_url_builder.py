@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
 
-from app.services.link_parser import years_from_text
+from app.services.link import years_from_text
 
 
 class RssTorznabUrlBuilderMixin:

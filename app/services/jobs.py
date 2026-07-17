@@ -91,3 +91,79 @@ def normalize_job(item: dict[str, Any]) -> dict[str, Any]:
     item["payload"] = json_loads(item.get("payload"), {})
     item["result"] = json_loads(item.get("result"), {})
     return item
+
+def claim_next_job(kinds: list[str] | None = None) -> dict[str, Any] | None:
+    """Atomically claim the oldest queued job and mark it running."""
+    now = utc_now()
+    with db() as conn:
+        if kinds:
+            placeholders = ", ".join("?" for _ in kinds)
+            row = conn.execute(
+                f"""
+                SELECT * FROM background_jobs
+                WHERE status = 'queued' AND kind IN ({placeholders})
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                tuple(kinds),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT * FROM background_jobs
+                WHERE status = 'queued'
+                ORDER BY id ASC
+                LIMIT 1
+                """
+            ).fetchone()
+        if not row:
+            return None
+        item = normalize_job(row_to_dict(row))
+        updated = conn.execute(
+            """
+            UPDATE background_jobs
+            SET status = 'running', started_at = COALESCE(started_at, ?), updated_at = ?
+            WHERE id = ? AND status = 'queued'
+            """,
+            (now, now, item["id"]),
+        )
+        if updated.rowcount != 1:
+            return None
+        item["status"] = "running"
+        item["started_at"] = item.get("started_at") or now
+        item["updated_at"] = now
+        return item
+
+
+def requeue_stale_running_jobs(max_age_seconds: int = 1800) -> int:
+    """Requeue long-running jobs that likely died with the process."""
+    # SQLite stores UTC ISO-ish strings via utc_now(); compare in Python for safety.
+    now = utc_now()
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id, started_at, updated_at FROM background_jobs WHERE status = 'running'"
+        ).fetchall()
+        count = 0
+        for row in rows:
+            started = str(row["started_at"] or row["updated_at"] or "")
+            # If timestamp parsing fails, skip.
+            try:
+                from datetime import datetime, timezone
+                started_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+                if started_dt.tzinfo is None:
+                    started_dt = started_dt.replace(tzinfo=timezone.utc)
+                age = (datetime.now(timezone.utc) - started_dt).total_seconds()
+            except Exception:
+                continue
+            if age < max_age_seconds:
+                continue
+            conn.execute(
+                """
+                UPDATE background_jobs
+                SET status = 'queued', started_at = NULL, error = COALESCE(error, ?), updated_at = ?
+                WHERE id = ? AND status = 'running'
+                """,
+                ("stale running job requeued", now, int(row["id"])),
+            )
+            count += 1
+        return count

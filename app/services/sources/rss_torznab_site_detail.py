@@ -5,7 +5,7 @@ import asyncio
 import httpx
 
 from app.db import add_log
-from app.services.link_parser import BT1207_DETAIL_DELAY_SECONDS, BT1207_DETAIL_RETRIES
+from app.services.link import BT1207_DETAIL_DELAY_SECONDS, BT1207_DETAIL_RETRIES
 
 
 class RssTorznabSiteDetailMixin:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.link_parser import context_for_115_link, _local_text_matches_query
+from app.services.link import context_for_115_link, _local_text_matches_query
 from app.services.adapters.telegram.scan.message_links import _telegram_resource_title
 
 

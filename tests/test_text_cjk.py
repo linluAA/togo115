@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.link_search_utils import _expanded_search_queries, _local_text_matches_query
+from app.services.link.search_utils import _expanded_search_queries, _local_text_matches_query
 from app.services.subscription.match.matching import compact_match_text, extra_search_keywords
 from app.services.text_cjk import query_match_aliases, simplify_cjk, title_prefix_aliases
 
@@ -39,7 +39,7 @@ def test_expanded_queries_prioritize_prefix_stripped_alias_within_small_budget()
 
 def test_server_search_queries_include_alias_when_limit_two() -> None:
     from app.services.adapters.telegram.history.config import server_search_queries
-    from app.services.link_search_utils import years_from_text
+    from app.services.link.search_utils import years_from_text
 
     queries = _expanded_search_queries("新攻壳机动队 2026", ["攻壳机动队"], max_queries=6)
     selected = server_search_queries(queries, limit=2)

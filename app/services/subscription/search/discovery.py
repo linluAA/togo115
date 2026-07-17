@@ -7,7 +7,7 @@ from app.db import add_log, db
 import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram import TelegramClientAdapter
 from app.services.adapters.telegram.models import TelegramSearchSharedState
-from app.services.link_downloads import is_valid_download_link
+from app.services.link.downloads import is_valid_download_link
 from app.services.sources.rss_torznab import RssTorznabAdapter, SearchResult
 from app.services.subscription.match.matching import extra_search_keywords, result_debug_payload
 from app.services.subscription.resource.ops import (

@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.services import integration_state as _state
-from app.services.link_parser import _download_link_key, _expanded_search_queries, _truthy
+from app.services.link import _download_link_key, _expanded_search_queries, _truthy
 
 
 def _integration_attr(name: str):

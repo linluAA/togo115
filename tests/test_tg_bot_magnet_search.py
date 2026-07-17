@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.services.sources.rss_torznab import RssTorznabAdapter, SearchResult
-from app.services.tg_bot_magnet_search import (
+from app.services.magnet import (
     _bot_title_or_alias_matches,
     _cached_magnet_search,
     _fast_magnet_queries,

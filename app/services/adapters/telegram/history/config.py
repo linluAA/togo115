@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.adapters.telegram.models import TelegramHistoryOptions
-from app.services.link_parser import (
+from app.services.link import (
     TELEGRAM_HISTORY_DEFAULT_FALLBACK_LIMIT,
     TELEGRAM_HISTORY_DEFAULT_MESSAGES_PER_QUERY,
     TELEGRAM_HISTORY_MAX_FALLBACK_LIMIT,

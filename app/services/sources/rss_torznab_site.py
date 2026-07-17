@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 from app.db import add_log
-from app.services.link_parser import BT1207_DETAIL_DELAY_SECONDS
+from app.services.link import BT1207_DETAIL_DELAY_SECONDS
 from app.services.sources.rss_torznab_detail_candidates import RssTorznabDetailCandidateMixin
 from app.services.sources.rss_torznab_qmp4 import RssTorznabQmp4Mixin
 from app.services.sources.rss_torznab_site_detail import RssTorznabSiteDetailMixin

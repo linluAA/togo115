@@ -5,7 +5,7 @@ from html import unescape
 from typing import Any
 from urllib.parse import urljoin, urlparse, urlunparse
 
-from app.services.link_parser import (
+from app.services.link import (
     HTML_ANCHOR_RE,
     HTML_HREF_RE,
     MAGNET_WEB_DETAIL_LIMIT,

@@ -5,6 +5,7 @@ from contextlib import suppress
 from app.config import settings
 from app.db import add_log
 from app.services.adapters.telegram import TelegramBotAdapter, TelegramClientAdapter
+from app.services.job_worker import job_worker
 from app.services.subscription import (
     list_subscriptions,
     recheck_pending_115_resources,
@@ -30,6 +31,7 @@ class MonitorService:
             return
         self._stopping.clear()
         self._task = asyncio.create_task(self._run(), name="togo115-monitor")
+        job_worker.start()
         add_log("info", "monitor", "\u8ba2\u9605\u76d1\u63a7\u5df2\u542f\u52a8")
 
     async def stop(self) -> None:
@@ -39,6 +41,7 @@ class MonitorService:
             with suppress(asyncio.CancelledError):
                 await self._task
         await self._bot.stop_polling()
+        await job_worker.stop()
         add_log("info", "monitor", "\u8ba2\u9605\u76d1\u63a7\u5df2\u505c\u6b62")
 
     async def _run(self) -> None:

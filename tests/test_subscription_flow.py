@@ -829,35 +829,16 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             runtime_module.emby_sync_task = old_task
 
     async def test_scheduled_emby_sync_skips_duplicate_trigger(self) -> None:
-        started = threading.Event()
-        release = threading.Event()
+        from app.services.jobs import list_jobs
 
-        async def slow_emby_sync():
-            started.set()
-            await asyncio.to_thread(release.wait)
-            return {"ok": True}
-
-        old_task = runtime_module.emby_sync_task
-        runtime_module.emby_sync_task = None
-        try:
-            with patch.object(runtime_module, "EMBY_SYNC_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription.search.tasks._default_emby_sync",
-                slow_emby_sync,
-            ):
-                first = subscription_tasks.schedule_emby_subscription_sync()
-                self.assertTrue(await asyncio.to_thread(started.wait, 1))
-                second = subscription_tasks.schedule_emby_subscription_sync()
-                release.set()
-                task = runtime_module.emby_sync_task
-
-                self.assertTrue(first["queued"])
-                self.assertFalse(second["queued"])
-                self.assertTrue(second["running"])
-                if task:
-                    await asyncio.wait_for(task, timeout=1)
-        finally:
-            runtime_module.emby_sync_task = old_task
-
-
-if __name__ == "__main__":
-    unittest.main()
+        first = subscription_tasks.schedule_emby_subscription_sync()
+        second = subscription_tasks.schedule_emby_subscription_sync()
+        self.assertTrue(first.get("ok"))
+        self.assertTrue(first.get("queued"))
+        self.assertTrue(second.get("ok"))
+        # Duplicate trigger reuses the same queued job instead of creating another.
+        self.assertEqual(first.get("job_id"), second.get("job_id"))
+        self.assertTrue(second.get("running"))
+        jobs = [item for item in list_jobs() if item.get("kind") == "emby_subscription_sync"]
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0].get("status"), "queued")

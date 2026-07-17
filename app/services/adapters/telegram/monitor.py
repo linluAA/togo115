@@ -8,7 +8,7 @@ from telethon import TelegramClient, events
 from app.db import add_log
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
-from app.services.link_parser import telegram_message_text
+from app.services.link import telegram_message_text
 
 
 class TelegramMonitorMixin:

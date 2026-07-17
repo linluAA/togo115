@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 from app.services.adapters.telegram.bot.callbacks import TelegramBotCallbackMixin
 from app.services.adapters.telegram.bot.messages import TelegramBotMessageMixin
 from app.services.sources.rss_torznab import SearchResult
-from app.services.tg_bot_magnet_search import magnet_results_reply_markup
+from app.services.magnet import magnet_results_reply_markup
 
 
 class FakeResponse:

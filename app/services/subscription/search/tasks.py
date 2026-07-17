@@ -90,16 +90,14 @@ async def _search_subscription_background_worker(
 
 
 def schedule_subscription_search(subscription_id: int) -> dict:
-    task = runtime.subscription_search_tasks.get(subscription_id)
-    if task and not task.done():
-        return {"ok": True, "queued": False, "running": True, "id": subscription_id}
-    job_id = create_job("subscription_search", int(subscription_id), {"id": int(subscription_id)})
-    task = asyncio.create_task(_search_subscription_in_worker_thread(subscription_id, job_id=job_id))
-    runtime.subscription_search_tasks[subscription_id] = task
-    task.add_done_callback(lambda _: runtime.subscription_search_tasks.pop(subscription_id, None))
-    add_log("info", "subscription", "\u8ba2\u9605\u641c\u7d22\u5df2\u52a0\u5165\u540e\u53f0\u961f\u5217", {"id": subscription_id})
-    return {"ok": True, "queued": True, "running": True, "id": subscription_id}
+    from app.services.jobs import latest_job
 
+    existing = latest_job("subscription_search", int(subscription_id))
+    if existing and existing.get("status") in {"queued", "running"}:
+        return {"ok": True, "queued": existing.get("status") == "queued", "running": True, "id": subscription_id, "job_id": existing.get("id")}
+    job_id = create_job("subscription_search", int(subscription_id), {"id": int(subscription_id)})
+    add_log("info", "subscription", "订阅搜索已加入后台队列", {"id": subscription_id, "job_id": job_id})
+    return {"ok": True, "queued": True, "running": True, "id": subscription_id, "job_id": job_id}
 
 async def _search_subscription_in_worker_thread(subscription_id: int, job_id: int | None = None) -> None:
     """Run expensive subscription search on a separate event loop in a worker thread."""
@@ -132,13 +130,14 @@ async def _search_all_background(
 
 
 def schedule_search_all_active_subscriptions() -> dict:
-    if runtime.search_all_task and not runtime.search_all_task.done():
-        return {"ok": True, "queued": False, "running": True}
-    job_id = create_job("subscription_search_all")
-    runtime.search_all_task = asyncio.create_task(_search_all_in_worker_thread(job_id=job_id))
-    add_log("info", "subscription", "搜索全部活跃订阅已加入后台队列")
-    return {"ok": True, "queued": True, "running": True}
+    from app.services.jobs import latest_job
 
+    existing = latest_job("subscription_search_all")
+    if existing and existing.get("status") in {"queued", "running"}:
+        return {"ok": True, "queued": existing.get("status") == "queued", "running": True, "job_id": existing.get("id")}
+    job_id = create_job("subscription_search_all")
+    add_log("info", "subscription", "搜索全部活跃订阅已加入后台队列", {"job_id": job_id})
+    return {"ok": True, "queued": True, "running": True, "job_id": job_id}
 
 async def _search_all_in_worker_thread(
     *,
@@ -182,14 +181,14 @@ async def _emby_sync_background(
 
 
 def schedule_emby_subscription_sync() -> dict:
-    task = runtime.emby_sync_task
-    if task and not task.done():
-        return {"ok": True, "queued": False, "running": True}
-    job_id = create_job("emby_subscription_sync")
-    runtime.emby_sync_task = asyncio.create_task(_emby_sync_in_worker_thread(job_id=job_id))
-    add_log("info", "emby", "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5df2\u52a0\u5165\u540e\u53f0\u961f\u5217")
-    return {"ok": True, "queued": True, "running": True}
+    from app.services.jobs import latest_job
 
+    existing = latest_job("emby_subscription_sync")
+    if existing and existing.get("status") in {"queued", "running"}:
+        return {"ok": True, "queued": existing.get("status") == "queued", "running": True, "job_id": existing.get("id")}
+    job_id = create_job("emby_subscription_sync")
+    add_log("info", "emby", "手动 Emby 入库状态同步已加入后台队列", {"job_id": job_id})
+    return {"ok": True, "queued": True, "running": True, "job_id": job_id}
 
 async def _emby_sync_in_worker_thread(
     *,
@@ -202,3 +201,4 @@ async def _emby_sync_in_worker_thread(
 
 def _run_emby_sync_sync(sync_func: Callable[[], Awaitable[dict]] | None, job_id: int | None = None) -> None:
     asyncio.run(_emby_sync_background(sync_func=sync_func, job_id=job_id))
+

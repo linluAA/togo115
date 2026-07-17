@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.link_parser import _download_link_key, _expanded_search_queries, _split_filter_words, years_from_text, _compact_search_text
+from app.services.link import _download_link_key, _expanded_search_queries, _split_filter_words, years_from_text, _compact_search_text
 from app.services.sources.rss_torznab_fetch_source import RssTorznabFetchSourceMixin
 from app.services.sources.rss_torznab_search_groups import RssTorznabSearchGroupsMixin
 from app.services.types import SearchResult

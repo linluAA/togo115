@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from app.db import add_log, json_loads
-from app.services.link_parser import MAGNET_WEB_DETAIL_LIMIT
+from app.services.link import MAGNET_WEB_DETAIL_LIMIT
 from app.services.types import SearchResult
 
 

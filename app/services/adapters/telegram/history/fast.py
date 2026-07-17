@@ -15,7 +15,7 @@ from app.services.adapters.telegram.scan.extract_cache import (
 )
 from app.services.adapters.telegram.models import TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
-from app.services.link_parser import (
+from app.services.link import (
     _expanded_search_queries,
     context_for_115_link,
     extract_115_links,
@@ -264,7 +264,7 @@ class TelegramFastSearchMixin:
 
     def _local_text_matches_query_safe(self, text: str | None, query: str | None) -> bool:
         try:
-            from app.services.link_parser import _local_text_matches_query
+            from app.services.link import _local_text_matches_query
 
             return bool(_local_text_matches_query(text, query))
         except Exception:

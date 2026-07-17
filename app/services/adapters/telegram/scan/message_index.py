@@ -6,10 +6,10 @@ import sqlite3
 from typing import Any
 
 from app.db import db, row_to_dict, utc_now
-from app.services.adapters.telegram.scan.message_links import _telegram_resource_title
-from app.services.link_search_utils import _compact_search_text, years_from_text
+from app.services.adapters.telegram.scan.message_titles import _telegram_resource_title
+from app.services.link.search_utils import _compact_search_text, years_from_text
 from app.services.text_cjk import query_match_aliases
-from app.services.link_parser import (
+from app.services.link import (
     _local_text_matches_query,
     _message_has_link_button_hint,
     _text_has_external_resource_page_hint,

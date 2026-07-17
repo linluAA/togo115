@@ -9,7 +9,7 @@ from app.services.adapters.media import TmdbAdapter
 from app.services.adapters.pan115 import Pan115Adapter
 from app.services.integration_state import get_setting
 from app.services.application import deliver_resource_url
-from app.services.tg_bot_magnet_search import (
+from app.services.magnet import (
     magnet_results_reply,
     magnet_results_reply_markup,
     pending_magnet_choices,

@@ -5,7 +5,7 @@ from typing import Any
 
 from app.db import add_log, utc_now
 from app.services.sources.rss_torznab import SearchResult
-from app.services.link_downloads import is_valid_download_link
+from app.services.link.downloads import is_valid_download_link
 from app.services.subscription.resource.duplicate import resource_already_exists
 from app.services.subscription.resource.fallback import (
     best_fallback_result,

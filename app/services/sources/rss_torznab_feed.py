@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 from app.db import add_log
-from app.services.link_parser import _first_text, _item_context, _item_links, extract_download_links
+from app.services.link import _first_text, _item_context, _item_links, extract_download_links
 from app.services.types import SearchResult
 
 

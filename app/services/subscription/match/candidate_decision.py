@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.services.link_downloads import is_valid_download_link
+from app.services.link.downloads import is_valid_download_link
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.episode.parser import episode_keys_from_text_for_subscription, missing_episode_keys
 from app.services.subscription.library.match import result_matches_missing_episodes

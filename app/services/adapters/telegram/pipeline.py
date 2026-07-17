@@ -7,7 +7,7 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-from app.services.link_parser import telegram_message_text
+from app.services.link import telegram_message_text
 from app.services.types import SearchResult
 
 

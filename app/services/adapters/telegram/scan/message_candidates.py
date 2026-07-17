@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.link_parser import (
+from app.services.link import (
     _looks_like_context_message,
     _looks_like_link_only_message,
     context_for_115_link,

@@ -6,14 +6,14 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.db import add_log
-from app.services.link_parser import (
+from app.services.link import (
     _html_page_title,
     _link_context_from_html,
     _strip_html,
     _title_from_link_context,
     extract_download_links,
 )
-from app.services.link_downloads import is_115_share_link, is_valid_download_link
+from app.services.link.downloads import is_115_share_link, is_valid_download_link
 from app.services.types import SearchResult
 
 

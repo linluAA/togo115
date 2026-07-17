@@ -5,7 +5,7 @@ import time
 import httpx
 
 from app.db import add_log
-from app.services.link_parser import _expanded_search_queries
+from app.services.link import _expanded_search_queries
 from app.services.sources.rss_torznab_refresh_state import RssTorznabRefreshStateMixin
 from app.services.types import SearchResult
 

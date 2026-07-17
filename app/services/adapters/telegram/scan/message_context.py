@@ -7,7 +7,7 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-from app.services.link_parser import (
+from app.services.link import (
     TELEGRAM_MESSAGE_FETCH_TIMEOUT_SECONDS,
     _local_text_matches_query,
     _looks_like_context_message,

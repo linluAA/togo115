@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from app.services.link_parser import _html_page_title
+from app.services.link import _html_page_title
 
 
 class RssTorznabTestMixin:

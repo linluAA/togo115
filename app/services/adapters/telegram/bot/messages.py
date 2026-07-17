@@ -7,7 +7,7 @@ import httpx
 from app.db import add_log, json_dumps
 from app.services.adapters.media import TmdbAdapter
 from app.services.integration_state import get_setting, module_proxy
-from app.services.tg_bot_magnet_search import tmdb_search_choices
+from app.services.magnet import tmdb_search_choices
 
 
 class TelegramBotMessageMixin:
