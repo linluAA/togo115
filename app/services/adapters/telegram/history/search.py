@@ -9,7 +9,7 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-import app.services.subscription.runtime as runtime
+from app.services import concurrency as runtime
 from app.services.adapters.telegram.history.config import build_history_options, server_search_queries
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.history.metrics import TelegramSearchMetrics

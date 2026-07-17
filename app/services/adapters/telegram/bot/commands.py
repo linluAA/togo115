@@ -3,7 +3,7 @@ from __future__ import annotations
 
 class TelegramBotCommandMixin:
     async def _command_reply(self, text: str, chat_id: int | str) -> str:
-        from app.services.subscription import (
+        from app.services.application import (
             delete_subscription,
             delete_subscription_by_title,
             deliver_resource,

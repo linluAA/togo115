@@ -134,7 +134,7 @@ class TelegramBotMagnetSearchAsyncTest(unittest.IsolatedAsyncioTestCase):
         )
         _store_magnet_search_cache("tv", 123, 5, {"name": "Drama", "media_type": "tv"}, [result])
 
-        with patch("app.services.tg_bot_magnet_search.TmdbAdapter") as tmdb_cls:
+        with patch("app.services.magnet.search.TmdbAdapter") as tmdb_cls:
             tmdb_cls.return_value.detail = AsyncMock(side_effect=AssertionError("tmdb should not be called"))
             detail, results = await search_magnets_for_tmdb("tv", 123, 5)
 

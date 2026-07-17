@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Compatibility facade for the magnet search package."""
+"""Telegram bot magnet search package."""
 
 from app.services.magnet.cache import (
     _cached_magnet_search,
