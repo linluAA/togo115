@@ -7,9 +7,9 @@ from app.db import add_log
 from app.services.adapters.telegram import TelegramBotAdapter, TelegramClientAdapter
 from app.services.job_worker import job_worker
 from app.services.subscription import (
-    recheck_pending_115_resources,
-    retry_failed_resources,
     schedule_emby_subscription_sync,
+    schedule_recheck_pending_115,
+    schedule_retry_failed_resources,
     schedule_search_all_active_subscriptions,
 )
 
@@ -51,17 +51,10 @@ class MonitorService:
                 await self._bot.ensure_polling()
                 now = time.monotonic()
                 if now - self._last_recheck > 120:
-                    await recheck_pending_115_resources()
+                    schedule_recheck_pending_115()
                     self._last_recheck = now
                 if now - self._last_failed_retry > 300:
-                    result = await retry_failed_resources(12)
-                    if int(result.get("retried") or 0):
-                        add_log(
-                            "info",
-                            "monitor",
-                            "失败任务智能重试完成",
-                            result,
-                        )
+                    schedule_retry_failed_resources(12)
                     self._last_failed_retry = now
                 if now - self._last_index_prewarm > 900:
                     try:

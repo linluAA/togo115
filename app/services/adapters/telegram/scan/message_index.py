@@ -19,78 +19,77 @@ from app.services.link import (
 )
 from app.services.types import SearchResult
 
+from app.services.adapters.telegram.scan.index_cache import (
+    TELEGRAM_INDEX_NEGATIVE_TTL_SECONDS,
+    _NEGATIVE_INDEX_CACHE,
+    _negative_cache_hit,
+    _negative_cache_key,
+    _negative_cache_store,
+)
+
 TELEGRAM_INDEX_WINDOW = 4
 TELEGRAM_INDEX_MAX_PER_SOURCE = 2500
 TELEGRAM_INDEX_QUERY_LIMIT = 600
-TELEGRAM_INDEX_NEGATIVE_TTL_SECONDS = 120.0
-_NEGATIVE_INDEX_CACHE: dict[str, float] = {}
-
-
-def _negative_cache_key(sources: list[str], queries: list[str]) -> str:
-    source_key = ",".join(sorted(str(item) for item in sources))
-    query_key = "|".join(str(item) for item in queries)
-    return source_key + "::" + query_key
-
-
-def _negative_cache_hit(sources: list[str], queries: list[str]) -> bool:
-    import time as _time
-    key = _negative_cache_key(sources, queries)
-    expires = _NEGATIVE_INDEX_CACHE.get(key)
-    if expires is None:
-        return False
-    if expires <= _time.monotonic():
-        _NEGATIVE_INDEX_CACHE.pop(key, None)
-        return False
-    return True
-
-
-def _negative_cache_store(sources: list[str], queries: list[str]) -> None:
-    import time as _time
-    key = _negative_cache_key(sources, queries)
-    _NEGATIVE_INDEX_CACHE[key] = _time.monotonic() + TELEGRAM_INDEX_NEGATIVE_TTL_SECONDS
-    if len(_NEGATIVE_INDEX_CACHE) > 512:
-        now = _time.monotonic()
-        expired = [item for item, exp in _NEGATIVE_INDEX_CACHE.items() if exp <= now]
-        for item in expired:
-            _NEGATIVE_INDEX_CACHE.pop(item, None)
-        if len(_NEGATIVE_INDEX_CACHE) > 512:
-            oldest = sorted(_NEGATIVE_INDEX_CACHE.items(), key=lambda pair: pair[1])[:128]
-            for item, _ in oldest:
-                _NEGATIVE_INDEX_CACHE.pop(item, None)
-
 
 def index_telegram_messages(source: str, messages: list[Any]) -> int:
+
     """Persist a small searchable index of Telegram message text and nearby context."""
+
     items = _index_rows(source, messages)
+
     if not items:
+
         return 0
+
     try:
+
         with db() as conn:
+
             conn.executemany(
+
                 """
+
                 INSERT INTO telegram_message_index
+
                     (source, message_id, text, context, search_blob, has_115, has_link_hint, message_date, indexed_at)
+
                 VALUES
+
                     (:source, :message_id, :text, :context, :search_blob, :has_115, :has_link_hint, :message_date, :indexed_at)
+
                 ON CONFLICT(source, message_id) DO UPDATE SET
+
                     text = excluded.text,
+
                     context = excluded.context,
+
                     search_blob = excluded.search_blob,
+
                     has_115 = excluded.has_115,
+
                     has_link_hint = excluded.has_link_hint,
+
                     message_date = excluded.message_date,
+
                     indexed_at = excluded.indexed_at
+
                 """,
+
                 items,
+
             )
+
             _prune_source_index(conn, source)
+
     except sqlite3.OperationalError as exc:
+
         if _index_table_missing(exc):
+
             return 0
+
         raise
+
     return len(items)
-
-
 
 def max_indexed_message_id(source: str) -> int:
     """Highest message_id already indexed for a Telegram source, or 0."""

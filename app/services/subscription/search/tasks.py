@@ -114,3 +114,27 @@ def schedule_emby_subscription_sync() -> dict:
             {"job_id": result.get("job_id")},
         )
     return result
+
+def schedule_recheck_pending_115() -> dict:
+    result = _reuse_or_create_job("recheck_pending_115")
+    if not result.get("reused"):
+        add_log(
+            "info",
+            "subscription",
+            "待复核 115 资源已加入后台队列",
+            {"job_id": result.get("job_id")},
+        )
+    return result
+
+
+def schedule_retry_failed_resources(limit: int = 12) -> dict:
+    result = _reuse_or_create_job("retry_failed_resources", payload={"limit": int(limit)})
+    if not result.get("reused"):
+        add_log(
+            "info",
+            "subscription",
+            "失败任务智能重试已加入后台队列",
+            {"job_id": result.get("job_id"), "limit": int(limit)},
+        )
+    return result
+

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+"""Subscription runtime constants and shared concurrency helpers."""
 
 from app.services.concurrency import (
     SUBSCRIPTION_SEARCH_CONCURRENCY,
@@ -20,10 +20,6 @@ EMBY_SYNC_START_DELAY_SECONDS = 0.1
 SEARCH_ALL_BETWEEN_SUBSCRIPTIONS_DELAY_SECONDS = 0.02
 SEARCH_ALL_WAVE_STAGGER_SECONDS = 0.05
 
-search_all_task: asyncio.Task | None = None
-emby_sync_task: asyncio.Task | None = None
-subscription_search_tasks: dict[int, asyncio.Task] = {}
-
 __all__ = [
     "TELEGRAM_SEARCH_TIMEOUT_SECONDS",
     "RSS_SEARCH_TIMEOUT_SECONDS",
@@ -34,9 +30,6 @@ __all__ = [
     "SEARCH_ALL_WAVE_STAGGER_SECONDS",
     "SUBSCRIPTION_SEARCH_CONCURRENCY",
     "TELEGRAM_SOURCE_CONCURRENCY",
-    "search_all_task",
-    "emby_sync_task",
-    "subscription_search_tasks",
     "desired_search_concurrency",
     "search_semaphore",
     "subscription_lock",

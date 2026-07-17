@@ -26,6 +26,7 @@ async def search_all_active_subscriptions() -> dict:
     )
     snapshot = await library_snapshot_or_none()
     # Emby sync is useful, but must not block the first subscription search.
+    # Parallel library snapshot sync for this search-all run (not the queued full Emby job).
     emby_task = asyncio.create_task(_sync_emby_in_background(list(subscriptions), snapshot))
     try:
         outcomes = await _search_subscriptions_in_waves(list(subscriptions), snapshot)

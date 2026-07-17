@@ -18,6 +18,8 @@ SUPPORTED_KINDS = (
     "subscription_search",
     "subscription_search_all",
     "emby_subscription_sync",
+    "recheck_pending_115",
+    "retry_failed_resources",
 )
 
 
@@ -115,6 +117,18 @@ class JobWorker:
                 await asyncio.sleep(delay)
             result = await _default_emby_sync()
             return result if isinstance(result, dict) else {"ok": True}
+        if kind == "recheck_pending_115":
+            from app.services.subscription import recheck_pending_115_resources
+
+            result = await recheck_pending_115_resources()
+            return result if isinstance(result, dict) else {"ok": True, "result": result}
+        if kind == "retry_failed_resources":
+            from app.services.subscription import retry_failed_resources
+
+            payload = job.get("payload") or {}
+            limit = int(payload.get("limit") or 12)
+            result = await retry_failed_resources(limit)
+            return result if isinstance(result, dict) else {"ok": True, "result": result}
         raise RuntimeError(f"unsupported job kind: {kind}")
 
 

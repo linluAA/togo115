@@ -5,16 +5,18 @@ from typing import Any
 
 from app.services.link.downloads import _download_link_key as download_link_key, is_valid_download_link
 from app.services.sources.rss_torznab import SearchResult
-from app.services.subscription.match.matching import result_matches_subscription
-from app.services.subscription.match.result_utils import result_text
-from app.services.match_text import compact_match_text, years_from_text
+from app.services.resource_match import (
+    compact_match_text,
+    result_matches_subscription,
+    result_text,
+    years_from_text,
+)
 
 def _query_without_year(value: str | None) -> str:
     text = str(value or "")
     text = re.sub(r"[\(（\[【]\s*(?:19|20)\d{2}\s*[\)）\]】]", " ", text)
     text = re.sub(r"(?<!\d)(?:19|20)\d{2}(?!\d)", " ", text)
     return re.sub(r"\s+", " ", text).strip()
-
 
 def _display_source(source: str | None) -> str:
     value = str(source or "\u8ba2\u9605\u6e90").strip()

@@ -44,6 +44,8 @@ from app.services.subscription.search.service import search_and_attach_resources
 from app.services.subscription.search.all import search_all_active_subscriptions
 from app.services.subscription.search.tasks import (
     schedule_emby_subscription_sync,
+    schedule_recheck_pending_115,
+    schedule_retry_failed_resources,
     schedule_search_all_active_subscriptions,
     schedule_subscription_search,
 )
@@ -81,6 +83,8 @@ __all__ = [
     "refresh_rss_sources",
     "retry_failed_resources",
     "schedule_emby_subscription_sync",
+    "schedule_recheck_pending_115",
+    "schedule_retry_failed_resources",
     "schedule_search_all_active_subscriptions",
     "schedule_subscription_search",
     "search_all_active_subscriptions",
