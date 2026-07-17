@@ -99,9 +99,9 @@ function currentRenderToken() {
   return appRenderToken;
 }
 
-function setView(view) {
+function setView(view, options = {}) {
   if (!VIEW_KEYS.includes(view)) return;
-  if (view === state.view) {
+  if (view === state.view && !options.force) {
     if (state.userMenuOpen) {
       state.userMenuOpen = false;
       updateShellUiState();
@@ -416,17 +416,10 @@ function renderApp() {
     state.userMenuOpen = !state.userMenuOpen;
     updateShellUiState();
   });
-  $("#accountSettingsBtn")?.addEventListener("click", () => {
-    state.settingsTab = "credentials";
-    localStorage.setItem("settingsTab", state.settingsTab);
-    state.userMenuOpen = false;
-    // Already on settings: setView short-circuits and would only close the menu.
-    if (state.view === "settings") {
-      updateShellUiState();
-      renderSettings();
-      return;
-    }
-    setView("settings");
+  $("#accountSettingsBtn")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openAccountSecuritySettings();
   });
   $("#themeToggleBtn")?.addEventListener("click", () => {
     state.userMenuOpen = false;
@@ -440,6 +433,40 @@ function renderApp() {
     renderLogin();
   });
   renderView();
+}
+
+
+function openAccountSecuritySettings() {
+  state.settingsTab = "credentials";
+  localStorage.setItem("settingsTab", state.settingsTab);
+  state.userMenuOpen = false;
+  if (state.view === "settings") {
+    // Same page: force re-render credentials and focus password for clear feedback.
+    updateShellUiState();
+    renderSettings();
+    focusAccountPasswordField();
+    toast("已切换到账号安全");
+    return;
+  }
+  setView("settings");
+  // renderApp is sync; focus after shell rebuild.
+  focusAccountPasswordField();
+}
+
+function focusAccountPasswordField() {
+  requestAnimationFrame(() => {
+    const form = document.querySelector('[data-save-settings="credentials"]');
+    const password = form?.querySelector('input[name="password"]');
+    const username = form?.querySelector('input[name="username"]');
+    const target = password || username;
+    if (!target) return;
+    try {
+      target.focus({ preventScroll: false });
+      if (typeof target.select === "function" && target.name === "password") target.select();
+    } catch {
+      target.focus();
+    }
+  });
 }
 
 function renderView() {

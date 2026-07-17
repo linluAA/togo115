@@ -96,9 +96,9 @@ function currentRenderToken() {
   return appRenderToken;
 }
 
-function setView(view) {
+function setView(view, options = {}) {
   if (!VIEW_KEYS.includes(view)) return;
-  if (view === state.view) {
+  if (view === state.view && !options.force) {
     if (state.userMenuOpen) {
       state.userMenuOpen = false;
       updateShellUiState();
