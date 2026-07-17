@@ -22,6 +22,7 @@ def logout_user(response: Response, user: dict) -> dict[str, bool]:
 
 def change_credentials(response: Response, user: dict, username: str, password: str) -> dict[str, bool]:
     update_credentials(username, password)
-    login_response(response, username)
-    add_log("warning", "auth", "账号密码已修改", {"old_username": user["username"], "new_username": username})
-    return {"ok": True}
+    # Force re-login with the new credentials.
+    logout_response(response)
+    add_log("warning", "auth", "账号密码已修改，已退出登录", {"old_username": user["username"], "new_username": username})
+    return {"ok": True, "relogin_required": True}

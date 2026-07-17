@@ -8,11 +8,20 @@ async function saveSettings(event) {
   if (key === "telegram") value.sources = sourceValues.join(",");
   if (key === "credentials") {
     await api("/api/auth/credentials", { method: "PUT", body: JSON.stringify(value) });
-    state.user = await api("/api/auth/me");
-  } else {
-    await api(`/api/settings/${key}`, { method: "PUT", body: JSON.stringify({ value }) });
-    state.settings = await api("/api/settings");
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Session may already be invalid after credential change.
+    }
+    cacheUser(null);
+    state.user = null;
+    state.userMenuOpen = false;
+    toast("账号密码已更新，请重新登录");
+    renderLogin();
+    return;
   }
+  await api(`/api/settings/${key}`, { method: "PUT", body: JSON.stringify({ value }) });
+  state.settings = await api("/api/settings");
   toast("已保存");
   if (key === "telegram") renderSettings();
 }

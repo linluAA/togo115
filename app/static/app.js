@@ -313,8 +313,8 @@ function renderLogin() {
         <h1>ToGo115</h1>
         <p>115 网盘资源订阅与追新控制台</p>
         <form id="loginForm">
-          <label>账号 <input name="username" autocomplete="username" value="admin" /></label>
-          <label>密码 <input name="password" type="password" autocomplete="current-password" value="admin123" /></label>
+          <label>账号 <input name="username" autocomplete="username" value="" /></label>
+          <label>密码 <input name="password" type="password" autocomplete="current-password" value="" /></label>
           <button type="submit">登录</button>
         </form>
       </section>
@@ -2159,11 +2159,20 @@ async function saveSettings(event) {
   if (key === "telegram") value.sources = sourceValues.join(",");
   if (key === "credentials") {
     await api("/api/auth/credentials", { method: "PUT", body: JSON.stringify(value) });
-    state.user = await api("/api/auth/me");
-  } else {
-    await api(`/api/settings/${key}`, { method: "PUT", body: JSON.stringify({ value }) });
-    state.settings = await api("/api/settings");
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Session may already be invalid after credential change.
+    }
+    cacheUser(null);
+    state.user = null;
+    state.userMenuOpen = false;
+    toast("账号密码已更新，请重新登录");
+    renderLogin();
+    return;
   }
+  await api(`/api/settings/${key}`, { method: "PUT", body: JSON.stringify({ value }) });
+  state.settings = await api("/api/settings");
   toast("已保存");
   if (key === "telegram") renderSettings();
 }

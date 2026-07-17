@@ -5,8 +5,8 @@ function renderLogin() {
         <h1>ToGo115</h1>
         <p>115 网盘资源订阅与追新控制台</p>
         <form id="loginForm">
-          <label>账号 <input name="username" autocomplete="username" value="admin" /></label>
-          <label>密码 <input name="password" type="password" autocomplete="current-password" value="admin123" /></label>
+          <label>账号 <input name="username" autocomplete="username" value="" /></label>
+          <label>密码 <input name="password" type="password" autocomplete="current-password" value="" /></label>
           <button type="submit">登录</button>
         </form>
       </section>
