@@ -379,7 +379,7 @@
     flex: 0 0 auto;
   }
 
-  .subscription-filter-strip select,
+  .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
     flex: 0 0 auto;
   }
@@ -404,8 +404,7 @@
     border-color: rgba(255, 255, 255, .08);
   }
 
-  .subscription-filter-strip,
-  .subscription-action-strip {
+  .subscription-control-grid {
     flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
@@ -416,12 +415,9 @@
     scrollbar-width: none;
   }
 
-  .subscription-filter-strip::-webkit-scrollbar,
-  .subscription-action-strip::-webkit-scrollbar {
-    display: none;
-  }
+  
 
-  .subscription-filter-strip select {
+  .subscription-control-grid select.control-cell {
     min-width: 108px;
     height: 34px;
     padding: 6px 28px 6px 10px;

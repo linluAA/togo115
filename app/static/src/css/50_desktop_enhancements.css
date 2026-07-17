@@ -349,13 +349,12 @@
     flex-direction: row;
   }
 
-  .subscription-filter-strip,
-  .subscription-action-strip {
+  .subscription-control-grid {
     flex: 0 0 auto;
     width: auto;
   }
 
-  .subscription-filter-strip select,
+  .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
     width: auto;
     flex: 0 0 auto;

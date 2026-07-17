@@ -1108,16 +1108,21 @@ a:hover { text-decoration: underline; }
 
 .subscription-controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
   align-items: center;
   justify-content: flex-end;
-  justify-items: end;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, .10);
   border-radius: 22px;
   background: rgba(6, 12, 13, .26);
   backdrop-filter: blur(10px);
+}
+
+.subscription-control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(108px, 1fr));
+  gap: 8px;
+  width: min(100%, 420px);
+  align-items: stretch;
 }
 
 .control-group,
@@ -1135,49 +1140,49 @@ a:hover { text-decoration: underline; }
   min-width: 126px;
 }
 
-.subscription-filter-strip,
-.subscription-action-strip {
-  justify-content: flex-end;
-  width: auto;
-}
-
-.subscription-filter-strip {
-  padding-right: 10px;
-  border-right: 1px solid rgba(255, 255, 255, .08);
-}
-
-.subscription-filter-strip select,
+.subscription-control-grid .control-cell,
 .subscription-controls .compact-tool {
-  width: auto;
-  min-height: 34px;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0 12px;
   border-radius: 999px;
   font-size: 12px;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
-.subscription-filter-strip select {
-  min-width: 132px;
-  padding: 7px 30px 7px 12px;
+.subscription-control-grid select.control-cell {
+  padding: 0 30px 0 12px;
   color: var(--ink-soft);
   background-color: rgba(255, 255, 255, .055);
+  appearance: none;
 }
 
 .subscription-controls .compact-tool {
-  min-width: 86px;
-  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--ink-soft);
   background: rgba(255, 255, 255, .055);
   box-shadow: none;
+  white-space: nowrap;
 }
 
 .subscription-controls .compact-tool:hover {
   color: #fff;
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .subscription-controls .danger.compact-tool {
-  min-width: 94px;
   color: #fff;
-  background: rgba(239, 91, 91, .82);
+  background: rgba(239, 91, 91, .88);
+}
+
+.subscription-control-grid .control-cell-span {
+  grid-column: 1 / -1;
 }
 
 .subscription-grid {
@@ -2782,7 +2787,7 @@ legend {
     width: 100%;
   }
 
-  .subscription-filter-strip select,
+  .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
     width: auto;
   }
@@ -3194,7 +3199,7 @@ legend {
     flex: 0 0 auto;
   }
 
-  .subscription-filter-strip select,
+  .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
     flex: 0 0 auto;
   }
@@ -3219,8 +3224,7 @@ legend {
     border-color: rgba(255, 255, 255, .08);
   }
 
-  .subscription-filter-strip,
-  .subscription-action-strip {
+  .subscription-control-grid {
     flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
@@ -3231,12 +3235,9 @@ legend {
     scrollbar-width: none;
   }
 
-  .subscription-filter-strip::-webkit-scrollbar,
-  .subscription-action-strip::-webkit-scrollbar {
-    display: none;
-  }
+  
 
-  .subscription-filter-strip select {
+  .subscription-control-grid select.control-cell {
     min-width: 108px;
     height: 34px;
     padding: 6px 28px 6px 10px;
@@ -3893,13 +3894,12 @@ legend {
     flex-direction: row;
   }
 
-  .subscription-filter-strip,
-  .subscription-action-strip {
+  .subscription-control-grid {
     flex: 0 0 auto;
     width: auto;
   }
 
-  .subscription-filter-strip select,
+  .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
     width: auto;
     flex: 0 0 auto;

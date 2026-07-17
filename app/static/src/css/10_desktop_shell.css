@@ -212,7 +212,7 @@
     width: 100%;
   }
 
-  .subscription-filter-strip select,
+  .subscription-control-grid .control-cell,
   .subscription-controls .compact-tool {
     width: auto;
   }

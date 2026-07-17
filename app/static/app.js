@@ -1232,24 +1232,22 @@ function subscriptionCards() {
         <p>${state.subscriptions.length} 个订阅 · 显示 ${filtered.length} 个</p>
       </div>
       <div class="subscription-controls">
-        <div class="control-group filter-group subscription-filter-strip">
-          <select id="subscriptionTypeFilter" aria-label="订阅类型">
+        <div class="subscription-control-grid">
+          <select id="subscriptionTypeFilter" class="control-cell" aria-label="订阅类型">
             <option value="all" ${state.subscriptionType === "all" ? "selected" : ""}>全部类型</option>
             <option value="tv" ${state.subscriptionType === "tv" ? "selected" : ""}>电视剧</option>
             <option value="movie" ${state.subscriptionType === "movie" ? "selected" : ""}>电影</option>
           </select>
-          <select id="subscriptionStatusFilter" aria-label="订阅状态">
+          <select id="subscriptionStatusFilter" class="control-cell" aria-label="订阅状态">
             <option value="all" ${state.subscriptionStatus === "all" ? "selected" : ""}>全部状态</option>
             <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
             <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
           </select>
-          <button type="button" class="secondary compact-tool" id="subscriptionReset">重置</button>
-        </div>
-        <div class="control-group action-group subscription-action-strip">
-          <button type="button" class="secondary compact-tool" id="searchAllSubscriptions">搜索全部</button>
-          <button type="button" class="secondary compact-tool" id="syncEmbySubscriptions">同步媒体库</button>
-          <button type="button" class="danger compact-tool" id="toggleCancelSubscriptions">${state.subscriptionCancelMode ? "退出取消" : "取消订阅"}</button>
-          ${state.subscriptionCancelMode ? `<button type="button" class="danger compact-tool" id="confirmCancelSubscriptions">确定移除</button>` : ""}
+          <button type="button" class="secondary compact-tool control-cell" id="subscriptionReset">重置</button>
+          <button type="button" class="secondary compact-tool control-cell" id="searchAllSubscriptions">搜索全部</button>
+          <button type="button" class="secondary compact-tool control-cell" id="syncEmbySubscriptions">同步媒体库</button>
+          <button type="button" class="danger compact-tool control-cell" id="toggleCancelSubscriptions">${state.subscriptionCancelMode ? "退出取消" : "取消订阅"}</button>
+          ${state.subscriptionCancelMode ? `<button type="button" class="danger compact-tool control-cell control-cell-span" id="confirmCancelSubscriptions">确定移除</button>` : ""}
         </div>
       </div>
     </div>
