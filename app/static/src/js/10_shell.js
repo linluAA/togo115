@@ -111,6 +111,13 @@ function renderApp() {
   $("#accountSettingsBtn")?.addEventListener("click", () => {
     state.settingsTab = "credentials";
     localStorage.setItem("settingsTab", state.settingsTab);
+    state.userMenuOpen = false;
+    // Already on settings: setView short-circuits and would only close the menu.
+    if (state.view === "settings") {
+      updateShellUiState();
+      renderSettings();
+      return;
+    }
     setView("settings");
   });
   $("#themeToggleBtn")?.addEventListener("click", () => {
