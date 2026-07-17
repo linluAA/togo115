@@ -1,6 +1,4 @@
 async function renderLogs() {
-  const metrics = await loadSearchMetrics();
-
   const root = $("#view");
   state.logs = [];
   state.logsHasMore = false;
@@ -15,7 +13,6 @@ async function renderLogs() {
       <button class="${state.logsMode === "debug" ? "active" : ""}" data-mode="debug">全部</button>
       <button class="danger" id="clearLogView">清空</button>
     </section>
-    ${renderSearchMetrics(metrics)}
     <div class="log-terminal"><div class="log-list"><div class="empty">正在读取日志...</div></div></div>
     <button class="secondary log-more" id="loadMoreLogs">加载更多</button>
   `;
@@ -96,47 +93,4 @@ function groupLogRows(logs) {
 }
 
 
-async function loadSearchMetrics() {
-  try {
-    return await api("/api/metrics/search");
-  } catch (error) {
-    console.warn("load search metrics failed", error);
-    return null;
-  }
-}
 
-function renderSearchMetrics(metrics) {
-  if (!metrics) {
-    return `<section class="search-metrics is-empty"><div class="empty">暂无搜索指标</div></section>`;
-  }
-  const tg = metrics.telegram || {};
-  const share = metrics.share_115 || {};
-  const cache = metrics.cache || {};
-  const gate = metrics.gate || {};
-  const attach = metrics.attach || {};
-  const msgCache = cache.message_extract || {};
-  const pageCache = cache.external_page || {};
-  const desired = metrics.desired_concurrency || metrics.semaphore_limit || 0;
-  const cacheHits = (msgCache.hits || 0) + (pageCache.hits || 0);
-  const attachParts = [
-    attach.created || 0,
-    attach.duplicates || 0,
-    attach.expired || 0,
-    attach.save_failed || 0,
-    attach.mismatch || 0,
-  ].join('/');
-  return `
-    <section class="search-metrics" aria-label="搜索性能指标">
-      <div class="metric-chip"><span class="metric-label">TG</span><span class="metric-value">${tg.searches || 0}</span></div>
-      <div class="metric-chip"><span class="metric-label">R/S/E</span><span class="metric-value">${tg.avg_resolve_ms || 0}/${tg.avg_search_ms || 0}/${tg.avg_extract_ms || 0}<em>ms</em></span></div>
-      <div class="metric-chip"><span class="metric-label">p50/p95</span><span class="metric-value">${tg.p50_total_ms || 0}/${tg.p95_total_ms || 0}<em>ms</em></span></div>
-      <div class="metric-chip"><span class="metric-label">索引/远程</span><span class="metric-value">${tg.index_hits || 0}/${tg.remote_hits || 0}</span></div>
-      <div class="metric-chip"><span class="metric-label">115</span><span class="metric-value">${share.avg_ms || 0}/${share.p95_ms || 0}<em>ms</em></span></div>
-      <div class="metric-chip"><span class="metric-label">失效</span><span class="metric-value">${share.expired || 0}/${share.recheck || 0}</span></div>
-      <div class="metric-chip metric-chip-wide"><span class="metric-label">Attach</span><span class="metric-value">${attachParts}</span></div>
-      <div class="metric-chip"><span class="metric-label">缓存</span><span class="metric-value">${cacheHits}</span></div>
-      <div class="metric-chip"><span class="metric-label">Flood</span><span class="metric-value">${gate.flood_events || 0}</span></div>
-      <div class="metric-chip"><span class="metric-label">并发</span><span class="metric-value">${metrics.concurrency || 0}/${desired}</span></div>
-    </section>
-  `;
-}

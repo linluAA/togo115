@@ -665,25 +665,6 @@
     width: auto;
   }
 
-  .search-metrics {
-    gap: 5px;
-    margin-bottom: 8px;
-    padding: 7px 8px;
-  }
-
-  .search-metrics .metric-chip {
-    padding: 3px 7px;
-    gap: 4px;
-  }
-
-  .search-metrics .metric-label {
-    font-size: 10.5px;
-  }
-
-  .search-metrics .metric-value {
-    font-size: 12px;
-  }
-
   .mobile-bottom-nav button {
     min-width: 0;
   }
