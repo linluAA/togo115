@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import asyncio
-import re
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
-import socks
 from telethon import TelegramClient
 from telethon.sessions import SQLiteSession
 
-from app.config import settings
 from app.db import add_log
+from app.services.adapters.telegram.session.client_errors import (
+    classify_client_error,
+    log_client_init_failure,
+)
+from app.services.adapters.telegram.session.client_proxy import telethon_proxy
+from app.services.integration_state import module_proxy
 
 TELEGRAM_SESSION_BUSY_TIMEOUT_MS = 15000
 TELEGRAM_SESSION_CONNECT_TIMEOUT_SECONDS = 15
@@ -33,8 +35,6 @@ class BusyTimeoutSQLiteSession(SQLiteSession):
             self._conn.execute("PRAGMA journal_mode = WAL")
             self._conn.execute("PRAGMA synchronous = NORMAL")
         return self._conn.cursor()
-
-
 
 
 class TelegramSessionClientMixin:
@@ -80,7 +80,12 @@ class TelegramSessionClientMixin:
                         "info",
                         "telegram",
                         "Telegram 客户端初始化已自动恢复",
-                        {"category": self._classify_client_error(last_error) if last_error else "unknown", "attempt": attempt + 1, "action": "connect-recovered", "recovered": True},
+                        {
+                            "category": self._classify_client_error(last_error) if last_error else "unknown",
+                            "attempt": attempt + 1,
+                            "action": "connect-recovered",
+                            "recovered": True,
+                        },
                     )
                 return client
             except Exception as exc:
@@ -110,15 +115,25 @@ class TelegramSessionClientMixin:
     async def _handle_client_connect_failure(self, exc: Exception, category: str, attempt: int) -> bool:
         if category == "session-corrupt":
             await self._handle_corrupt_session(exc, attempt)
-        can_retry = attempt < TELEGRAM_CLIENT_CONNECT_RETRIES - 1 and category in {"session-locked", "timeout", "network-or-proxy"}
+        can_retry = attempt < TELEGRAM_CLIENT_CONNECT_RETRIES - 1 and category in {
+            "session-locked",
+            "timeout",
+            "network-or-proxy",
+        }
         action = "reset-client-and-retry" if category == "session-locked" else "retry-connect"
         if can_retry:
             if category == "session-locked":
                 await self._reset_client_state()
-            self._log_client_init_failure(exc, category, action=action, recovered=category == "session-locked", attempt=attempt + 1)
+            self._log_client_init_failure(
+                exc,
+                category,
+                action=action,
+                recovered=category == "session-locked",
+                attempt=attempt + 1,
+            )
             await asyncio.sleep(TELEGRAM_CLIENT_CONNECT_RETRY_DELAY_SECONDS * (attempt + 1))
             return True
-        self._log_client_init_failure(exc, category, action="raise", recovered=False, attempt=attempt + 1)
+        self._log_client_init_failure(exc, category, action="fail", recovered=False, attempt=attempt + 1)
         return False
 
     async def _handle_corrupt_session(self, exc: Exception, attempt: int) -> None:
@@ -127,30 +142,23 @@ class TelegramSessionClientMixin:
         self._log_client_init_failure(
             exc,
             "session-corrupt",
-            action="quarantine-session-relogin",
+            action="quarantine-and-reset",
             recovered=bool(quarantined),
             attempt=attempt + 1,
-            extra={"quarantined_session": quarantined},
+            extra={"quarantined_path": quarantined} if quarantined else None,
         )
-        raise RuntimeError("Telegram 会话文件异常，已隔离旧会话，请重新登录 Telegram") from exc
 
     async def _reset_client_state(self) -> None:
         cls = type(self)
-        listener_task = getattr(cls, "_listener_task", None)
-        if listener_task and not listener_task.done():
-            listener_task.cancel()
         client = getattr(cls, "_client", None)
-        if client and client.is_connected():
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
         cls._client = None
         cls._client_loop = None
-        cls._listener_task = None
-        cls._handler_registered = False
-        cls._handler = None
-        cls._handler_sources = ()
+        if client is None:
+            return
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
 
     def _quarantine_session_file(self) -> str | None:
         session_file = self._session_file_path()
@@ -181,43 +189,7 @@ class TelegramSessionClientMixin:
             return None
 
     def _classify_client_error(self, exc: Exception) -> str:
-        text = f"{type(exc).__name__}: {exc!s} {exc!r}".casefold()
-        if isinstance(exc, asyncio.TimeoutError) or "timeout" in text or "timed out" in text:
-            return "timeout"
-        if "api id/api hash" in text or "尚未配置" in text or "missing-config" in text:
-            return "missing-config"
-        if "database is locked" in text or "database table is locked" in text or "database locked" in text:
-            return "session-locked"
-        if (
-            "file is not a database" in text
-            or "database disk image is malformed" in text
-            or "malformed" in text
-            or "corrupt" in text
-            or "no such table" in text
-        ):
-            return "session-corrupt"
-        if (
-            "auth key" in text
-            or "unauthorized" in text
-            or "session revoked" in text
-            or "user deactivated" in text
-            or "not logged in" in text
-        ):
-            return "auth"
-        if (
-            "proxy" in text
-            or "socks" in text
-            or "connection refused" in text
-            or "connection reset" in text
-            or "network" in text
-            or "host unreachable" in text
-            or "name or service not known" in text
-            or "temporary failure" in text
-            or "ssl" in text
-            or "tls" in text
-        ):
-            return "network-or-proxy"
-        return "unknown"
+        return classify_client_error(exc)
 
     def _log_client_init_failure(
         self,
@@ -229,39 +201,23 @@ class TelegramSessionClientMixin:
         attempt: int | None = None,
         extra: dict[str, Any] | None = None,
     ) -> None:
-        payload: dict[str, Any] = {
-            "category": category,
-            "error": str(exc),
-            "error_type": type(exc).__name__,
-            "error_repr": repr(exc),
-            "configured": self._telegram_config_status(),
-            "action": action,
-            "recovered": recovered,
-        }
-        if attempt is not None:
-            payload["attempt"] = attempt
-        if extra:
-            payload.update(extra)
-        add_log("warning", "telegram", "Telegram 客户端初始化失败", payload)
+        log_client_init_failure(
+            exc=exc,
+            category=category,
+            action=action,
+            recovered=recovered,
+            configured=self._telegram_config_status(),
+            attempt=attempt,
+            extra=extra,
+        )
 
     def _telethon_proxy(self, proxy_url: str | None):
-        if not proxy_url:
-            return None
-        parsed = urlparse(proxy_url)
-        scheme = parsed.scheme.lower()
-        if scheme.startswith("socks"):
-            return self._socks_proxy_tuple(parsed, scheme)
-        if scheme in ("http", "https"):
-            return ("http", parsed.hostname, parsed.port, True, parsed.username, parsed.password)
-        return None
+        return telethon_proxy(proxy_url)
 
     def _socks_proxy_tuple(self, parsed, scheme: str):
-        try:
-            import socks
-        except ImportError as exc:
-            raise RuntimeError("使用 socks 代理需要安装 PySocks") from exc
-        proxy_type = socks.SOCKS5 if scheme == "socks5" else socks.SOCKS4
-        return (proxy_type, parsed.hostname, parsed.port, True, parsed.username, parsed.password)
+        from app.services.adapters.telegram.session.client_proxy import socks_proxy_tuple
+
+        return socks_proxy_tuple(parsed, scheme)
 
     async def is_authorized(self) -> bool:
         try:
@@ -269,19 +225,10 @@ class TelegramSessionClientMixin:
             return await asyncio.wait_for(client.is_user_authorized(), timeout=8)
         except Exception as exc:
             category = self._classify_client_error(exc)
-            add_log(
-                "warning",
-                "telegram",
-                "Telegram 客户端初始化失败",
-                {
-                    "category": category,
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                    "error_repr": repr(exc),
-                    "configured": self._telegram_config_status(),
-                    "action": "check-authorized",
-                    "recovered": False,
-                },
+            self._log_client_init_failure(
+                exc,
+                category,
+                action="check-authorized",
+                recovered=False,
             )
             return False
-

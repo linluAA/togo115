@@ -1,25 +1,20 @@
 from __future__ import annotations
 
-import asyncio
 import re
-import sqlite3
-import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
-
-from telethon import TelegramClient
-from app.services.adapters.telegram.session.client import BusyTimeoutSQLiteSession, TelegramSessionClientMixin
 
 from app.config import settings
-from app.db import add_log, json_loads
-from app.services.integration_state import get_setting, module_proxy
-
-
-TELEGRAM_SESSION_BUSY_TIMEOUT_MS = 15000
-TELEGRAM_SESSION_CONNECT_TIMEOUT_SECONDS = 15
-TELEGRAM_CLIENT_CONNECT_RETRIES = 3
-TELEGRAM_CLIENT_CONNECT_RETRY_DELAY_SECONDS = 0.35
+from app.db import json_loads
+from app.services.adapters.telegram.session.client import (
+    TELEGRAM_CLIENT_CONNECT_RETRIES,
+    TELEGRAM_CLIENT_CONNECT_RETRY_DELAY_SECONDS,
+    TELEGRAM_SESSION_BUSY_TIMEOUT_MS,
+    TELEGRAM_SESSION_CONNECT_TIMEOUT_SECONDS,
+    BusyTimeoutSQLiteSession,
+    TelegramSessionClientMixin,
+)
+from app.services.integration_state import get_setting
 
 
 class TelegramSessionConfigMixin(TelegramSessionClientMixin):
@@ -55,7 +50,13 @@ class TelegramSessionConfigMixin(TelegramSessionClientMixin):
 
     def _source_value(self, item: Any) -> str:
         if isinstance(item, dict):
-            value = item.get("source") or item.get("canonical") or item.get("id") or item.get("value") or item.get("username")
+            value = (
+                item.get("source")
+                or item.get("canonical")
+                or item.get("id")
+                or item.get("value")
+                or item.get("username")
+            )
         else:
             value = item
         return str(value or "").strip().strip("[]'\" ")
@@ -65,10 +66,25 @@ class TelegramSessionConfigMixin(TelegramSessionClientMixin):
         try:
             config = get_setting("telegram")
         except Exception:
-            return {"api_id": False, "api_hash": False, "session_file": False, "session_path": str(session_file)}
+            return {
+                "api_id": False,
+                "api_hash": False,
+                "session_file": False,
+                "session_path": str(session_file),
+            }
         return {
             "api_id": bool(config.get("api_id")),
             "api_hash": bool(config.get("api_hash")),
             "session_file": session_file.exists(),
             "session_path": str(session_file),
         }
+
+
+__all__ = [
+    "BusyTimeoutSQLiteSession",
+    "TELEGRAM_CLIENT_CONNECT_RETRIES",
+    "TELEGRAM_CLIENT_CONNECT_RETRY_DELAY_SECONDS",
+    "TELEGRAM_SESSION_BUSY_TIMEOUT_MS",
+    "TELEGRAM_SESSION_CONNECT_TIMEOUT_SECONDS",
+    "TelegramSessionConfigMixin",
+]
