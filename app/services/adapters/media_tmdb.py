@@ -7,12 +7,13 @@ from typing import Any
 import httpx
 
 from app.services.integration_state import get_setting, module_proxy
+from app.services.http_client import shared_async_client
 
 
 class TmdbAdapter:
-    async def _client(self) -> httpx.AsyncClient:
+    async def _client(self):
         proxy = module_proxy("tmdb")
-        return httpx.AsyncClient(proxy=proxy or None, timeout=20)
+        return shared_async_client(proxy=proxy or None, timeout=20, follow_redirects=True)
 
     def _api_key(self) -> str | None:
         return get_setting("tmdb").get("api_key")

@@ -11,11 +11,13 @@ from app.services.adapters.telegram.session.dialog_keys import TelegramDialogKey
 from app.services.adapters.telegram.session.dialog_store import load_dialog_entity_rows
 
 TELEGRAM_DIALOG_CACHE_TTL_SECONDS = 300
+TELEGRAM_DIALOG_NEGATIVE_TTL_SECONDS = 90
 
 
 class TelegramDialogsMixin(TelegramDialogKeysMixin):
     _dialog_entity_map_cache: dict[str, dict[str, dict[str, Any]]] = {}
     _dialog_entity_map_cache_at: dict[str, float] = {}
+    _dialog_negative_cache: dict[str, float] = {}
 
     async def _resolve_from_persistent_cache(self, client: TelegramClient, source: str) -> dict[str, Any] | None:
         try:
@@ -107,14 +109,29 @@ class TelegramDialogsMixin(TelegramDialogKeysMixin):
 
     async def _resolve_dialogs(self, client: TelegramClient, sources: list[str]) -> list[dict[str, Any]]:
         dialogs: list[dict[str, Any]] = []
-        dialog_map: dict[str, dict[str, Any]] = {}
-        try:
-            dialog_map = await self._dialog_entity_map(client)
-        except asyncio.TimeoutError:
-            add_log("warning", "telegram", "Telegram 会话列表读取超时，继续逐个解析来源", {"sources": len(sources), "timeout": 15})
-        except Exception as exc:
-            add_log("warning", "telegram", "Telegram 会话列表读取失败，继续逐个解析来源", {"sources": len(sources), "error": str(exc)})
+        pending: list[str] = []
+        now = time.monotonic()
+        # 1) Prefer persistent entity rows to avoid cold iter_dialogs.
         for source in sources:
+            if self._dialog_negative_hit(source, now):
+                dialogs.append({"entity": source, "source": source, "canonical": source})
+                continue
+            persisted = await self._resolve_from_persistent_cache(client, source)
+            if persisted is not None:
+                dialogs.append(persisted)
+                continue
+            pending.append(source)
+
+        dialog_map: dict[str, dict[str, Any]] = {}
+        if pending:
+            try:
+                dialog_map = await self._dialog_entity_map(client)
+            except asyncio.TimeoutError:
+                add_log("warning", "telegram", "Telegram 会话列表读取超时，继续逐个解析来源", {"sources": len(pending), "timeout": 15})
+            except Exception as exc:
+                add_log("warning", "telegram", "Telegram 会话列表读取失败，继续逐个解析来源", {"sources": len(pending), "error": str(exc)})
+
+        for source in pending:
             matched = None
             for key in self._dialog_lookup_keys(source):
                 matched = dialog_map.get(key)
@@ -126,12 +143,36 @@ class TelegramDialogsMixin(TelegramDialogKeysMixin):
                 if entity is not None:
                     self._persist_entity(entity, str(matched.get("canonical") or source), matched.get("title"))
                 continue
-            persisted = await self._resolve_from_persistent_cache(client, source)
-            if persisted is not None:
-                dialogs.append(persisted)
-                continue
-            dialogs.append(await self._resolve_dialog(client, source))
+            resolved = await self._resolve_dialog(client, source)
+            entity = resolved.get("entity")
+            if entity is source or (isinstance(entity, str) and entity == source):
+                self._dialog_negative_store(source)
+            dialogs.append(resolved)
         return dialogs
+
+    def _dialog_negative_hit(self, source: str, now: float | None = None) -> bool:
+        key = str(source or "").strip()
+        if not key:
+            return False
+        expires = type(self)._dialog_negative_cache.get(key)
+        if expires is None:
+            return False
+        stamp = time.monotonic() if now is None else now
+        if expires <= stamp:
+            type(self)._dialog_negative_cache.pop(key, None)
+            return False
+        return True
+
+    def _dialog_negative_store(self, source: str) -> None:
+        key = str(source or "").strip()
+        if not key:
+            return
+        cache = type(self)._dialog_negative_cache
+        cache[key] = time.monotonic() + TELEGRAM_DIALOG_NEGATIVE_TTL_SECONDS
+        if len(cache) > 256:
+            oldest = sorted(cache.items(), key=lambda item: item[1])[:64]
+            for item, _ in oldest:
+                cache.pop(item, None)
 
     async def _resolve_dialog(self, client: TelegramClient, source: str) -> dict[str, Any]:
         entity = None

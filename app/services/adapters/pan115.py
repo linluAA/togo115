@@ -20,6 +20,7 @@ from app.services.adapters.pan115_share import (
     probe_share_availability,
 )
 from app.services.adapters.pan115_state import add_log, get_setting, module_proxy
+from app.services.http_client import shared_async_client
 
 
 PAN115_URL_RE = re.compile(
@@ -65,9 +66,9 @@ class Pan115Adapter(Pan115QrMixin, Pan115OfflineMixin):
     OFFLINE_ADD_TASK_URL = "https://115.com/web/lixian/?ct=lixian&ac=add_task_url"
     OFFLINE_REFERER = "https://115.com/?ct=offline&ac=tasklist"
 
-    def _client(self) -> httpx.AsyncClient:
+    def _client(self):
         proxy = module_proxy("pan115")
-        return httpx.AsyncClient(proxy=proxy or None, timeout=25, follow_redirects=True)
+        return shared_async_client(proxy=proxy or None, timeout=25, follow_redirects=True)
 
     def _folder_item(self, item: dict[str, Any]) -> dict[str, str] | None:
         cid = item.get("cid") or item.get("file_id") or item.get("fid") or item.get("id")

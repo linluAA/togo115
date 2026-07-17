@@ -8,6 +8,7 @@ import httpx
 from app.services.adapters.media_emby_dashboard import EmbyDashboardMixin
 from app.services.adapters.media_emby_images import EmbyImagesMixin
 from app.services.integration_state import get_setting, module_proxy
+from app.services.http_client import shared_async_client
 
 
 class EmbyAdapter(EmbyImagesMixin, EmbyDashboardMixin):
@@ -34,7 +35,7 @@ class EmbyAdapter(EmbyImagesMixin, EmbyDashboardMixin):
         if not base_url or not api_key:
             return {"movies": [], "series": [], "episodes": []}
         proxy = module_proxy("emby")
-        async with httpx.AsyncClient(proxy=proxy or None, timeout=30, follow_redirects=True) as client:
+        async with shared_async_client(proxy=proxy or None, timeout=30, follow_redirects=True) as client:
             items, episodes = await asyncio.gather(
                 self._get_items(client, base_url, api_key, self._snapshot_params("Movie,Series")),
                 self._get_items(client, base_url, api_key, self._snapshot_params("Episode")),

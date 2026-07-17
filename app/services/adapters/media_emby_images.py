@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 
 from app.services.integration_state import get_setting, module_proxy
+from app.services.http_client import shared_async_client
 
 
 class EmbyImagesMixin:
@@ -19,7 +20,7 @@ class EmbyImagesMixin:
         if not base_url or not api_key:
             return b"", "image/jpeg"
         proxy = module_proxy("emby")
-        async with httpx.AsyncClient(proxy=proxy or None, timeout=20, follow_redirects=True) as client:
+        async with shared_async_client(proxy=proxy or None, timeout=20, follow_redirects=True) as client:
             res = await client.get(
                 f"{base_url}{path}",
                 params={"api_key": api_key, "maxWidth": max_width},

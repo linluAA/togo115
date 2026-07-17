@@ -14,19 +14,21 @@ from app.services.text_cjk import query_match_aliases
 from app.services.types import SearchResult
 
 TELEGRAM_INDEX_QUERY_LIMIT = 600
+TELEGRAM_INDEX_PREFILTER_LIMIT = 120
+TELEGRAM_INDEX_FTS_LIMIT = 160
 
 
 def search_blob_for(text: str, context: str) -> str:
     raw = f"{context}\n{text}"
-    # Compact + simplified form for SQL LIKE against subscription query stems.
+    # Compact + simplified form for SQL LIKE / FTS against subscription query stems.
     return compact_search_text(raw)
 
 
 def index_prefilter_terms(queries: list[str]) -> list[str]:
-    """Extract short stems used for SQL LIKE prefiltering.
+    """Extract short stems used for SQL LIKE / FTS prefiltering.
 
     Uses both original and simplified/prefix-stripped aliases so traditional
-    cards and simplified subscriptions can hit.
+    cards and simplified subscriptions can hit. Longer stems are preferred.
     """
     terms: list[str] = []
     seen: set[str] = set()
@@ -35,7 +37,6 @@ def index_prefilter_terms(queries: list[str]) -> list[str]:
         text = str(value or "").strip()
         if len(text) < 2:
             return
-        # Strip years and whitespace for broader LIKE stems.
         text = re.sub(r"(?<!\d)(?:19|20)\d{2}(?!\d)", " ", text)
         text = re.sub(r"\s+", "", text)
         if len(text) < 2:
@@ -51,12 +52,14 @@ def index_prefilter_terms(queries: list[str]) -> list[str]:
     for query in queries:
         for alias in query_match_aliases(query) or [str(query or "").strip()]:
             add(alias)
-            # Also keep a compact simplified form for punctuation-free rows.
             compact = compact_search_text(alias)
             if compact:
                 add(compact)
             if len(terms) >= 12:
-                return terms
+                break
+        if len(terms) >= 12:
+            break
+    terms.sort(key=lambda item: (-len(item), item.casefold()))
     return terms
 
 
@@ -65,57 +68,114 @@ def candidate_rows(
     sources: list[str],
     prefilter_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+    clean_sources = [str(source).strip() for source in sources if str(source).strip()]
+    if not clean_sources:
+        return []
     terms = [str(term).strip() for term in (prefilter_terms or []) if str(term).strip()]
-    # Prefer compact/simplified stems for search_blob matching.
-    compact_terms = []
-    seen = set()
+    compact_terms: list[str] = []
+    seen: set[str] = set()
     for term in terms:
         compact = compact_search_text(term)
         if compact and compact not in seen:
             seen.add(compact)
             compact_terms.append(compact)
-    for source in sources:
-        fetched = []
-        if compact_terms:
-            like_clauses = []
-            params: list[Any] = [source]
-            for term in compact_terms:
-                like_clauses.append("search_blob LIKE ?")
-                params.append(f"%{term}%")
-            where_like = " OR ".join(like_clauses)
-            sql = f"""
-                SELECT source, message_id, text, context
-                FROM telegram_message_index
-                WHERE source = ? AND has_115 = 1 AND ({where_like})
-                ORDER BY message_id DESC
-                LIMIT ?
-            """
-            params.append(min(TELEGRAM_INDEX_QUERY_LIMIT, 200))
-            try:
-                fetched = conn.execute(sql, params).fetchall()
-            except Exception:
-                fetched = []
-        if not fetched:
-            fetched = conn.execute(
-                """
-                SELECT source, message_id, text, context
-                FROM telegram_message_index
-                WHERE source = ? AND has_115 = 1
-                ORDER BY message_id DESC
-                LIMIT ?
-                """,
-                (source, TELEGRAM_INDEX_QUERY_LIMIT),
-            ).fetchall()
-        rows.extend(row_to_dict(row) or {} for row in fetched)
-    return rows
+    compact_terms.sort(key=lambda item: (-len(item), item))
+
+    fts_rows = _candidate_rows_fts(conn, clean_sources, compact_terms)
+    if fts_rows:
+        return fts_rows
+
+    like_rows = _candidate_rows_like(conn, clean_sources, compact_terms)
+    if like_rows:
+        return like_rows
+
+    return _candidate_rows_recent(conn, clean_sources)
+
+
+def _candidate_rows_fts(conn: Any, sources: list[str], compact_terms: list[str]) -> list[dict[str, Any]]:
+    if not compact_terms:
+        return []
+    match = _fts_match_query(compact_terms[:4])
+    if not match:
+        return []
+    placeholders = ",".join("?" for _ in sources)
+    sql = f"""
+        SELECT i.source, i.message_id, i.text, i.context
+        FROM telegram_message_index_fts
+        JOIN telegram_message_index i
+          ON i.source = telegram_message_index_fts.source
+         AND i.message_id = telegram_message_index_fts.message_id
+        WHERE i.has_115 = 1
+          AND i.source IN ({placeholders})
+          AND telegram_message_index_fts MATCH ?
+        ORDER BY i.message_id DESC
+        LIMIT ?
+    """
+    params: list[Any] = [*sources, match, TELEGRAM_INDEX_FTS_LIMIT]
+    try:
+        fetched = conn.execute(sql, params).fetchall()
+    except Exception:
+        return []
+    return [row_to_dict(row) or {} for row in fetched]
+
+
+def _candidate_rows_like(conn: Any, sources: list[str], compact_terms: list[str]) -> list[dict[str, Any]]:
+    if not compact_terms:
+        return []
+    stems = compact_terms[:4]
+    like_clauses = ["search_blob LIKE ?" for _ in stems]
+    placeholders = ",".join("?" for _ in sources)
+    sql = f"""
+        SELECT source, message_id, text, context
+        FROM telegram_message_index
+        WHERE has_115 = 1
+          AND source IN ({placeholders})
+          AND ({" OR ".join(like_clauses)})
+        ORDER BY message_id DESC
+        LIMIT ?
+    """
+    params: list[Any] = [*sources, *[f"%{term}%" for term in stems], TELEGRAM_INDEX_PREFILTER_LIMIT]
+    try:
+        fetched = conn.execute(sql, params).fetchall()
+    except Exception:
+        return []
+    return [row_to_dict(row) or {} for row in fetched]
+
+
+def _candidate_rows_recent(conn: Any, sources: list[str]) -> list[dict[str, Any]]:
+    placeholders = ",".join("?" for _ in sources)
+    sql = f"""
+        SELECT source, message_id, text, context
+        FROM telegram_message_index
+        WHERE has_115 = 1
+          AND source IN ({placeholders})
+        ORDER BY message_id DESC
+        LIMIT ?
+    """
+    limit = min(TELEGRAM_INDEX_QUERY_LIMIT, max(80, 40 * len(sources)))
+    try:
+        fetched = conn.execute(sql, [*sources, limit]).fetchall()
+    except Exception:
+        return []
+    return [row_to_dict(row) or {} for row in fetched]
+
+
+def _fts_match_query(terms: list[str]) -> str:
+    parts: list[str] = []
+    for term in terms:
+        cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", str(term or ""), flags=re.UNICODE).strip()
+        if len(cleaned) < 2:
+            continue
+        token = cleaned.replace('"', " ")
+        parts.append(f'"{token}"')
+    if not parts:
+        return ""
+    return " OR ".join(parts[:4])
 
 
 def row_to_result(row: dict[str, Any], url: str, context: str, matched_query: str) -> SearchResult:
     message_id = str(row.get("message_id") or "")
     title = title_from_context(context, matched_query)
-    # Keep context limited to the accepted title segment so subscription match cannot re-expand
-    # into neighboring cards that only appeared in the raw window.
     safe_context = context
     if title and not str(title).startswith("Telegram ") and title not in context:
         safe_context = f"{title}\n{url}"
@@ -140,4 +200,4 @@ def title_from_context(context: str, matched_query: str) -> str:
     for line in context.splitlines():
         if matched_query and local_text_matches_query(line, matched_query):
             return line.strip()[:160]
-    return matched_query or "Telegram 索引命中"
+    return matched_query or "Telegram index hit"

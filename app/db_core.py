@@ -96,6 +96,12 @@ def get_connection() -> sqlite3.Connection:
                 _wal_initialized_paths.add(path_key)
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        conn.execute("PRAGMA temp_store = MEMORY")
+        conn.execute("PRAGMA cache_size = -65536")
+        conn.execute("PRAGMA mmap_size = 268435456")
+    except Exception:
+        pass
     return conn
 
 

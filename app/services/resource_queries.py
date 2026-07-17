@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import OrderedDict
 from typing import Any
 
@@ -8,12 +9,25 @@ from app.services.subscription.episode.parser import episode_keys_from_text_for_
 from app.services.subscription.episode.summary import episode_range_labels
 from app.services.subscription.resource.resources import resource_dedupe_key
 
+RECENT_RESOURCES_CACHE_TTL = 8.0
+_recent_resources_cache: dict[tuple[int, int], tuple[float, list[dict]]] = {}
+
 
 def list_recent_resources(limit: int = 80, offset: int = 0) -> list[dict]:
     """Return recent resources with same-sub hash/episode rows merged for display."""
     limit = max(1, min(int(limit or 80), 200))
     offset = max(0, int(offset or 0))
-    fetch_limit = min(1000, max(limit * 8, offset * 4 + 80))
+    cache_key = (limit, offset)
+    cached = _recent_resources_cache.get(cache_key)
+    if cached is not None:
+        expires_at, payload = cached
+        if expires_at > time.monotonic():
+            return [dict(item) for item in payload]
+        _recent_resources_cache.pop(cache_key, None)
+    if offset == 0:
+        fetch_limit = min(320, max(limit * 4, 80))
+    else:
+        fetch_limit = min(1000, max(limit * 8, offset * 4 + 80))
     with db() as conn:
         rows = conn.execute(
             """
@@ -28,7 +42,20 @@ def list_recent_resources(limit: int = 80, offset: int = 0) -> list[dict]:
         ).fetchall()
     items = [row_to_dict(row) or {} for row in rows]
     merged = merge_resource_rows(items)
-    return merged[offset : offset + limit]
+    result = merged[offset : offset + limit]
+    _recent_resources_cache[cache_key] = (
+        time.monotonic() + RECENT_RESOURCES_CACHE_TTL,
+        [dict(item) for item in result],
+    )
+    if len(_recent_resources_cache) > 32:
+        oldest = sorted(_recent_resources_cache.items(), key=lambda pair: pair[1][0])[:8]
+        for key, _ in oldest:
+            _recent_resources_cache.pop(key, None)
+    return result
+
+
+def invalidate_recent_resources_cache() -> None:
+    _recent_resources_cache.clear()
 
 
 def merge_resource_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -188,6 +215,7 @@ def delete_resources(ids: list[int]) -> int:
     with db() as conn:
         cursor = conn.execute(f"DELETE FROM resources WHERE id IN ({placeholders})", resource_ids)
         deleted = int(cursor.rowcount or 0)
+    invalidate_recent_resources_cache()
     add_log("info", "subscription", "deleted recent resources", {"requested": len(resource_ids), "deleted": deleted})
     return deleted
 
@@ -196,5 +224,6 @@ def clear_resources() -> int:
     with db() as conn:
         cursor = conn.execute("DELETE FROM resources")
         deleted = int(cursor.rowcount or 0)
+    invalidate_recent_resources_cache()
     add_log("info", "subscription", "cleared recent resources", {"deleted": deleted})
     return deleted

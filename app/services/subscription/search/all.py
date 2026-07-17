@@ -114,15 +114,38 @@ async def _sync_emby_in_background(subscriptions: list[dict], snapshot) -> None:
         )
 
 
+def _prefer_incremental_telegram(subscription: dict) -> bool:
+    """Prefer incremental TG scan for movies / previously checked TV.
+
+    Full remote TG history remains available via single-sub search paths.
+    """
+    media_type = str(subscription.get("media_type") or "").casefold()
+    if media_type == "movie":
+        return True
+    last_checked = str(subscription.get("last_checked_at") or "").strip()
+    return bool(last_checked)
+
+
 async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
     await asyncio.sleep(runtime.SEARCH_ALL_BETWEEN_SUBSCRIPTIONS_DELAY_SECONDS)
     subscription = get_subscription(subscription["id"]) or subscription
     if subscription.get("status") != "active":
         return (0, 0, 0)
-    add_log("debug", "subscription", "开始搜索订阅", {"id": subscription.get("id"), "title": subscription.get("title")})
+    incremental = _prefer_incremental_telegram(subscription)
+    add_log(
+        "debug",
+        "subscription",
+        "开始搜索订阅",
+        {
+            "id": subscription.get("id"),
+            "title": subscription.get("title"),
+            "media_type": subscription.get("media_type"),
+            "incremental_telegram": incremental,
+        },
+    )
     try:
         results = await asyncio.wait_for(
-            _search_and_attach_resources_guarded(subscription["id"], snapshot, incremental_telegram=False),
+            _search_and_attach_resources_guarded(subscription["id"], snapshot, incremental_telegram=incremental),
             timeout=runtime.SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:

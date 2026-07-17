@@ -7,6 +7,7 @@ import httpx
 
 from app.db import add_log
 from app.services.integration_state import get_setting, module_proxy
+from app.services.http_client import shared_async_client
 
 
 class EmbyDashboardMixin:
@@ -23,7 +24,7 @@ class EmbyDashboardMixin:
             return {"media_count": 0, "libraries": [], "users": [], "history": [], "error": str(exc)}
 
     async def _fetch_dashboard(self, base_url: str, api_key: str, proxy: str | None) -> dict[str, Any]:
-        async with httpx.AsyncClient(proxy=proxy or None, timeout=20, follow_redirects=True) as client:
+        async with shared_async_client(proxy=proxy or None, timeout=20, follow_redirects=True) as client:
             counts, folders, users_raw = await asyncio.gather(
                 self._get(client, base_url, "/Items/Counts", api_key),
                 self._get(client, base_url, "/Library/VirtualFolders", api_key),

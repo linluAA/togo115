@@ -19,6 +19,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     ensure_columns(conn, "resources", _RESOURCE_COLUMNS)
     _ensure_telegram_message_index(conn)
     _ensure_telegram_message_index_columns(conn)
+    _ensure_telegram_message_index_fts(conn)
     _ensure_telegram_dialog_entities(conn)
     _merge_duplicate_tmdb_subscriptions(conn)
     _delete_duplicate_resources(conn)
@@ -156,6 +157,59 @@ def _ensure_telegram_message_index_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE telegram_message_index ADD COLUMN search_blob TEXT NOT NULL DEFAULT ''")
 
 
+
+def _ensure_telegram_message_index_fts(conn: sqlite3.Connection) -> None:
+    """Create FTS5 shadow index for search_blob when SQLite supports it."""
+    try:
+        conn.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS telegram_message_index_fts USING fts5(
+                source UNINDEXED,
+                message_id UNINDEXED,
+                search_blob,
+                content='telegram_message_index',
+                content_rowid='rowid'
+            )
+            """
+        )
+    except sqlite3.OperationalError:
+        # FTS5 unavailable in this SQLite build; LIKE path remains active.
+        return
+
+    # Keep triggers for content sync.
+    conn.executescript(
+        """
+        CREATE TRIGGER IF NOT EXISTS telegram_message_index_ai AFTER INSERT ON telegram_message_index BEGIN
+          INSERT INTO telegram_message_index_fts(rowid, source, message_id, search_blob)
+          VALUES (new.rowid, new.source, new.message_id, new.search_blob);
+        END;
+        CREATE TRIGGER IF NOT EXISTS telegram_message_index_ad AFTER DELETE ON telegram_message_index BEGIN
+          INSERT INTO telegram_message_index_fts(telegram_message_index_fts, rowid, source, message_id, search_blob)
+          VALUES ('delete', old.rowid, old.source, old.message_id, old.search_blob);
+        END;
+        CREATE TRIGGER IF NOT EXISTS telegram_message_index_au AFTER UPDATE ON telegram_message_index BEGIN
+          INSERT INTO telegram_message_index_fts(telegram_message_index_fts, rowid, source, message_id, search_blob)
+          VALUES ('delete', old.rowid, old.source, old.message_id, old.search_blob);
+          INSERT INTO telegram_message_index_fts(rowid, source, message_id, search_blob)
+          VALUES (new.rowid, new.source, new.message_id, new.search_blob);
+        END;
+        """
+    )
+
+    # Bootstrap existing rows once if FTS is empty but base table is not.
+    try:
+        fts_count = conn.execute("SELECT COUNT(*) AS c FROM telegram_message_index_fts").fetchone()[0]
+        base_count = conn.execute("SELECT COUNT(*) AS c FROM telegram_message_index").fetchone()[0]
+        if int(base_count or 0) > 0 and int(fts_count or 0) == 0:
+            conn.execute(
+                """
+                INSERT INTO telegram_message_index_fts(rowid, source, message_id, search_blob)
+                SELECT rowid, source, message_id, search_blob FROM telegram_message_index
+                """
+            )
+    except Exception:
+        pass
+
 def _ensure_background_jobs(conn: sqlite3.Connection) -> None:
     ensure_columns(
         conn,
@@ -197,7 +251,7 @@ def _ensure_indexes(conn: sqlite3.Connection) -> None:
             ON telegram_message_index(source, message_id DESC);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_source_has115
             ON telegram_message_index(source, has_115, message_id DESC);
-        -- search_blob is filtered with LIKE; composite source/has_115 already prunes rows first.
+        -- search_blob is filtered with FTS5 (preferred) or LIKE; composite source/has_115 prunes rows.
         CREATE INDEX IF NOT EXISTS idx_resources_subscription_status
             ON resources(subscription_id, status);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_indexed_at
