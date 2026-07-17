@@ -15,10 +15,16 @@ class Shared115ValidationCache:
     """
 
     def __init__(self) -> None:
-        self._adapter = Pan115Adapter()
+        self._adapter: Any | None = None
         self._inflight: dict[str, asyncio.Future[str]] = {}
         self.checked = 0
         self.coalesced = 0
+
+    def _get_adapter(self) -> Any:
+        # Resolve after construction so tests can patch Pan115Adapter first.
+        if self._adapter is None:
+            self._adapter = Pan115Adapter()
+        return self._adapter
 
     async def availability(self, url: str) -> str:
         value = str(url or "")
@@ -32,7 +38,7 @@ class Shared115ValidationCache:
         future: asyncio.Future[str] = loop.create_future()
         self._inflight[value] = future
         try:
-            state = await self._adapter.share_availability(value)
+            state = await self._get_adapter().share_availability(value)
             self.checked += 1
             if not future.done():
                 future.set_result(state)
@@ -58,3 +64,9 @@ def process_115_cache() -> Shared115ValidationCache:
     if _PROCESS_CACHE is None:
         _PROCESS_CACHE = Shared115ValidationCache()
     return _PROCESS_CACHE
+
+
+def reset_process_115_cache() -> None:
+    """Drop the process cache (tests / adapter reconfiguration)."""
+    global _PROCESS_CACHE
+    _PROCESS_CACHE = None

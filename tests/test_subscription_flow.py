@@ -12,6 +12,7 @@ from app.services.integrations import SearchResult, TelegramClientAdapter
 from app.services.subscription.library import snapshot as snapshot_module
 import app.services.subscription.runtime as runtime_module
 from app.services.subscription.search import tasks as subscription_tasks
+from app.services.subscription.search.share115_cache import reset_process_115_cache
 from app.services.subscription.search.service import search_and_attach_resources
 from app.services.subscription.search.all import search_all_active_subscriptions
 from app.services.subscription.match.matching import result_matches_subscription
@@ -25,8 +26,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         settings.data_dir = Path(self.temp_dir.name)
         settings.database_path = settings.data_dir / "togo115-test.sqlite3"
         init_db()
+        reset_process_115_cache()
 
     def tearDown(self) -> None:
+        reset_process_115_cache()
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
         self.temp_dir.cleanup()
@@ -86,7 +89,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter") as pan_cls, patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter") as pan_cls, patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             pan_cls.return_value.share_availability = AsyncMock(return_value="available")
@@ -189,7 +192,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter") as pan_cls, patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter") as pan_cls, patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             pan_cls.return_value.share_availability = AsyncMock(return_value="available")
@@ -287,7 +290,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[expired, valid])
@@ -326,7 +329,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[lower, better])
@@ -365,7 +368,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
@@ -393,7 +396,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[recheck])
@@ -439,7 +442,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[expired])
@@ -484,7 +487,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.delivery.link_validation.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(side_effect=[False, True])
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])

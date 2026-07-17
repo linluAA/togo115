@@ -117,6 +117,7 @@ async def attach_telegram_results(
                 break
             if outcome == "duplicate":
                 duplicate_count += 1
+                matched.append(result)
                 continue
             save_failed_count += 1
         if not created:
@@ -138,9 +139,10 @@ async def attach_telegram_results(
     validation_report = {**validation_report, "115_ms": int((time.perf_counter() - validation_started) * 1000)}
 
     log_unmatched_results(facade, subscription, results, matched, source_label="TG 历史搜索")
+    available_matched = len(created) + int(duplicate_count)
     summary = {
         "raw_matched": len(raw_matched),
-        "available_matched": len(matched),
+        "available_matched": available_matched,
         "created": len(created),
         "duplicates": duplicate_count,
         "save_failed": save_failed_count,
