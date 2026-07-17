@@ -24,6 +24,9 @@ const state = {
   tmdbMore: null,
   tmdbTrending: null,
   tmdbTrendingLimit: 0,
+  tmdbHeroTimer: null,
+  tmdbHeroFeaturedKey: "",
+  tmdbHeroPool: [],
   theme: initialTheme(),
   logsMode: "simple",
   logs: [],
@@ -110,6 +113,7 @@ function setView(view, options = {}) {
   }
   // Bump token so any in-flight async page renderer can ignore stale work.
   appRenderToken += 1;
+  if (view !== "tmdb" && typeof stopTmdbHeroRotation === "function") stopTmdbHeroRotation();
   state.view = view;
   state.userMenuOpen = false;
   persistView();
@@ -121,6 +125,7 @@ applyTheme();
 window.addEventListener("hashchange", () => {
   const view = routeView();
   if (!view || view === state.view) return;
+  if (view !== "tmdb" && typeof stopTmdbHeroRotation === "function") stopTmdbHeroRotation();
   state.view = view;
   localStorage.setItem("currentView", view);
   state.userMenuOpen = false;
@@ -490,9 +495,109 @@ function tmdbMorePageSize() {
 }
 
 /* source: static/src/js/20_tmdb_home.js */
+const TMDB_HERO_ROTATE_MS = 45000;
+
+function stopTmdbHeroRotation() {
+  if (state.tmdbHeroTimer) {
+    clearInterval(state.tmdbHeroTimer);
+    state.tmdbHeroTimer = null;
+  }
+}
+
+function tmdbHeroItemKey(item) {
+  if (!item) return "";
+  const mediaType = item.media_type === "movie" || item.title ? "movie" : "tv";
+  return `${mediaType}-${item.id}`;
+}
+
+function buildTmdbHeroPool(tv = [], movie = []) {
+  const pool = [];
+  const seen = new Set();
+  for (const item of [...tv, ...movie]) {
+    if (!item || !item.id) continue;
+    const key = tmdbHeroItemKey(item);
+    if (seen.has(key)) continue;
+    // Prefer items with a backdrop so the hero banner looks complete.
+    if (!item.backdrop_path && !item.poster_path) continue;
+    seen.add(key);
+    pool.push(item);
+  }
+  // Prefer backdrop-first ordering while still allowing random selection later.
+  pool.sort((a, b) => Number(Boolean(b.backdrop_path)) - Number(Boolean(a.backdrop_path)));
+  return pool;
+}
+
+function pickRandomTmdbHero(pool, excludeKey = "") {
+  if (!pool.length) return null;
+  if (pool.length === 1) return pool[0];
+  const candidates = excludeKey ? pool.filter((item) => tmdbHeroItemKey(item) !== excludeKey) : pool;
+  const source = candidates.length ? candidates : pool;
+  return source[Math.floor(Math.random() * source.length)];
+}
+
+function applyTmdbHero(featured) {
+  const hero = $(".tmdb-hero");
+  const heroFeature = $("#heroFeature");
+  if (!featured || !hero) return;
+  const title = featured.name || featured.title || "热门内容";
+  const year = (featured.first_air_date || featured.release_date || "").slice(0, 4) || "新近热门";
+  const mediaType = featured.media_type === "movie" || featured.title ? "movie" : "tv";
+  const payloadId = `${mediaType}-${featured.id}`;
+  state.tmdbHeroFeaturedKey = payloadId;
+  state.mediaPayloads.set(payloadId, {
+    title,
+    media_type: mediaType,
+    tmdb_id: featured.id,
+    poster_url: posterUrl(featured),
+    overview: featured.overview || "",
+    release_year: Number.parseInt(year, 10) || null,
+    keywords: [title],
+  });
+  const heroOverlay = state.theme === "light"
+    ? "linear-gradient(90deg, rgba(248, 251, 252, .96), rgba(248, 251, 252, .76), rgba(248, 251, 252, .38))"
+    : "linear-gradient(90deg, rgba(9, 15, 17, .94), rgba(9, 15, 17, .62), rgba(9, 15, 17, .28))";
+  const imageUrl = backdropUrl(featured);
+  // Preload next banner image to reduce flicker on rotation.
+  const preload = new Image();
+  preload.src = imageUrl;
+  hero.style.backgroundImage = `${heroOverlay}, url('${imageUrl}')`;
+  if (heroFeature) {
+    heroFeature.innerHTML = `
+      <img class="hero-feature-poster" src="${posterUrl(featured)}" alt="${escapeHtml(title)}" />
+      <div class="hero-feature-copy">
+        <span>精选推荐</span>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${year} · ${mediaType === "movie" ? "电影" : "剧集"}</small>
+      </div>
+      <button type="button" class="hero-feature-link" data-detail="${payloadId}">查看</button>
+    `;
+  }
+}
+
+function rotateTmdbHeroOnce() {
+  if (state.view !== "tmdb" || state.tmdbSearchQuery.trim() || state.tmdbMore) {
+    stopTmdbHeroRotation();
+    return;
+  }
+  const featured = pickRandomTmdbHero(state.tmdbHeroPool, state.tmdbHeroFeaturedKey);
+  if (!featured) return;
+  applyTmdbHero(featured);
+  // Rebind detail actions for the rewritten hero button.
+  const root = $("#view");
+  if (root && typeof bindMediaActions === "function") bindMediaActions(root);
+}
+
+function startTmdbHeroRotation(pool) {
+  stopTmdbHeroRotation();
+  state.tmdbHeroPool = Array.isArray(pool) ? pool : [];
+  if (state.tmdbHeroPool.length <= 1) return;
+  state.tmdbHeroTimer = setInterval(rotateTmdbHeroOnce, TMDB_HERO_ROTATE_MS);
+}
+
 async function renderTmdb() {
   const root = $("#view");
   if (state.tmdbMore) {
+    stopTmdbHeroRotation();
     const items = state.tmdbMore.items || [];
     const pageSize = tmdbMorePageSize();
     const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
@@ -581,6 +686,7 @@ async function renderTmdb() {
     if (event.key === "Enter") searchTmdb();
   });
   if (isSearching) {
+    stopTmdbHeroRotation();
     bindMediaActions($("#searchSection"));
     return;
   }
@@ -598,38 +704,13 @@ async function renderTmdbTrending(root = $("#view")) {
     if (!section.isConnected || state.tmdbSearchQuery.trim()) return;
     const tv = data.tv || [];
     const movie = data.movie || [];
-    const featured = tv[0] || movie[0];
-    const hero = $(".tmdb-hero");
-    const heroFeature = $("#heroFeature");
-    if (featured && hero) {
-      const title = featured.name || featured.title || "热门内容";
-      const year = (featured.first_air_date || featured.release_date || "").slice(0, 4) || "新近热门";
-      const mediaType = featured.media_type === "movie" || featured.title ? "movie" : "tv";
-      const payloadId = `${mediaType}-${featured.id}`;
-      state.mediaPayloads.set(payloadId, {
-        title,
-        media_type: mediaType,
-        tmdb_id: featured.id,
-        poster_url: posterUrl(featured),
-        overview: featured.overview || "",
-        release_year: Number.parseInt(year, 10) || null,
-        keywords: [title],
-      });
-      const heroOverlay = state.theme === "light"
-        ? "linear-gradient(90deg, rgba(248, 251, 252, .96), rgba(248, 251, 252, .76), rgba(248, 251, 252, .38))"
-        : "linear-gradient(90deg, rgba(9, 15, 17, .94), rgba(9, 15, 17, .62), rgba(9, 15, 17, .28))";
-      hero.style.backgroundImage = `${heroOverlay}, url('${backdropUrl(featured)}')`;
-      if (heroFeature) {
-        heroFeature.innerHTML = `
-          <img class="hero-feature-poster" src="${posterUrl(featured)}" alt="${escapeHtml(title)}" />
-          <div class="hero-feature-copy">
-            <span>今日看点</span>
-            <strong>${escapeHtml(title)}</strong>
-            <small>${year} · ${mediaType === "movie" ? "电影" : "剧集"}</small>
-          </div>
-          <button type="button" class="hero-feature-link" data-detail="${payloadId}">查看</button>
-        `;
-      }
+    const heroPool = buildTmdbHeroPool(tv, movie);
+    const featured = pickRandomTmdbHero(heroPool, state.tmdbHeroFeaturedKey) || tv[0] || movie[0];
+    if (featured) {
+      applyTmdbHero(featured);
+      startTmdbHeroRotation(heroPool);
+    } else {
+      stopTmdbHeroRotation();
     }
     section.innerHTML = `
       <div class="tmdb-board">

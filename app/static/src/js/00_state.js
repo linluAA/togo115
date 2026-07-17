@@ -21,6 +21,9 @@ const state = {
   tmdbMore: null,
   tmdbTrending: null,
   tmdbTrendingLimit: 0,
+  tmdbHeroTimer: null,
+  tmdbHeroFeaturedKey: "",
+  tmdbHeroPool: [],
   theme: initialTheme(),
   logsMode: "simple",
   logs: [],
@@ -107,6 +110,7 @@ function setView(view, options = {}) {
   }
   // Bump token so any in-flight async page renderer can ignore stale work.
   appRenderToken += 1;
+  if (view !== "tmdb" && typeof stopTmdbHeroRotation === "function") stopTmdbHeroRotation();
   state.view = view;
   state.userMenuOpen = false;
   persistView();
@@ -118,6 +122,7 @@ applyTheme();
 window.addEventListener("hashchange", () => {
   const view = routeView();
   if (!view || view === state.view) return;
+  if (view !== "tmdb" && typeof stopTmdbHeroRotation === "function") stopTmdbHeroRotation();
   state.view = view;
   localStorage.setItem("currentView", view);
   state.userMenuOpen = false;
