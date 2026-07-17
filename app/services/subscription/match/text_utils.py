@@ -3,14 +3,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.services.match_text import compact_match_text
 from app.services.text_cjk import normalize_cjk_for_match
 
 
 MATCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 
-def compact_match_text(value: str | None) -> str:
-    return MATCH_DROP_RE.sub("", normalize_cjk_for_match(str(value or "")).casefold())
 
 
 def _safe_text(value: Any) -> str:

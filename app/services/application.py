@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-"""Application-facing actions for UI/adapters.
+"""Application-facing actions for UI/adapters/routers.
 
-Adapters and routers should import domain operations from here instead of
-reaching into subscription package internals.
+Prefer this facade over reaching into subscription package internals.
 """
 
 from typing import Any
@@ -21,16 +20,34 @@ def delete_subscription(*args: Any, **kwargs: Any):
     return _delete(*args, **kwargs)
 
 
+def delete_subscriptions(*args: Any, **kwargs: Any):
+    from app.services.subscription import delete_subscriptions as _delete
+
+    return _delete(*args, **kwargs)
+
+
 def delete_subscription_by_title(*args: Any, **kwargs: Any):
     from app.services.subscription import delete_subscription_by_title as _delete
 
     return _delete(*args, **kwargs)
 
 
+def get_subscription(*args: Any, **kwargs: Any):
+    from app.services.subscription import get_subscription as _get
+
+    return _get(*args, **kwargs)
+
+
 def list_subscriptions(*args: Any, **kwargs: Any):
     from app.services.subscription import list_subscriptions as _list
 
     return _list(*args, **kwargs)
+
+
+def update_subscription(*args: Any, **kwargs: Any):
+    from app.services.subscription import update_subscription as _update
+
+    return _update(*args, **kwargs)
 
 
 async def deliver_resource(*args: Any, **kwargs: Any):
@@ -55,6 +72,30 @@ async def retry_failed_resources(*args: Any, **kwargs: Any):
     from app.services.subscription import retry_failed_resources as _retry
 
     return await _retry(*args, **kwargs)
+
+
+def list_failed_resources(*args: Any, **kwargs: Any):
+    from app.services.subscription import list_failed_resources as _list
+
+    return _list(*args, **kwargs)
+
+
+def schedule_subscription_search(*args: Any, **kwargs: Any):
+    from app.services.subscription import schedule_subscription_search as _schedule
+
+    return _schedule(*args, **kwargs)
+
+
+def schedule_search_all_active_subscriptions(*args: Any, **kwargs: Any):
+    from app.services.subscription import schedule_search_all_active_subscriptions as _schedule
+
+    return _schedule(*args, **kwargs)
+
+
+def schedule_emby_subscription_sync(*args: Any, **kwargs: Any):
+    from app.services.subscription import schedule_emby_subscription_sync as _schedule
+
+    return _schedule(*args, **kwargs)
 
 
 def telegram_source_lock(source: str):

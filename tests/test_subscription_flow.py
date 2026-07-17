@@ -694,7 +694,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.tasks._default_search", AsyncMock(side_effect=tracked_search)):
             await asyncio.gather(*[
-                subscription_tasks._search_subscription_background(item_id, search_func=subscription_tasks._default_search)
+                subscription_tasks._search_and_attach_resources_guarded(item_id, search_func=subscription_tasks._default_search)
                 for item_id in ids
             ])
 
@@ -728,105 +728,122 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             row = conn.execute("SELECT message FROM logs WHERE scope = 'subscription' ORDER BY id DESC LIMIT 1").fetchone()
         self.assertEqual(row["message"], "\u8ba2\u9605\u641c\u7d22\u5df2\u5728\u8fd0\u884c\uff0c\u5df2\u8df3\u8fc7\u91cd\u590d\u89e6\u53d1")
 
-    async def test_scheduled_search_all_runs_as_async_background_task(self) -> None:
+    async def test_scheduled_search_all_enqueues_job_without_blocking(self) -> None:
+        from app.services.jobs import list_jobs
+        from app.services.job_worker import JobWorker
+
         async def nonblocking_search_all():
-            await asyncio.sleep(0.08)
-            return {"ok": True}
+            await asyncio.sleep(0.05)
+            return {"ok": True, "searched": 0}
 
-        old_task = runtime_module.search_all_task
-        runtime_module.search_all_task = None
-        try:
-            with patch.object(runtime_module, "SEARCH_ALL_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription.search.tasks._default_search_all",
-                nonblocking_search_all,
-            ):
-                started = time.perf_counter()
-                result = subscription_tasks.schedule_search_all_active_subscriptions()
-                await asyncio.sleep(0.01)
-                elapsed = time.perf_counter() - started
-                task = runtime_module.search_all_task
-
-            self.assertTrue(result["running"])
+        worker = JobWorker(poll_seconds=0.05)
+        with patch.object(runtime_module, "SEARCH_ALL_START_DELAY_SECONDS", 0), patch(
+            "app.services.subscription.search.tasks._default_search_all",
+            nonblocking_search_all,
+        ):
+            started = time.perf_counter()
+            result = subscription_tasks.schedule_search_all_active_subscriptions()
+            elapsed = time.perf_counter() - started
+            self.assertTrue(result["queued"])
             self.assertLess(elapsed, 0.05)
-            if task:
-                await asyncio.wait_for(task, timeout=1)
-        finally:
-            runtime_module.search_all_task = old_task
+            worker.start()
+            try:
+                for _ in range(40):
+                    jobs = [j for j in list_jobs() if j.get("id") == result.get("job_id")]
+                    if jobs and jobs[0].get("status") == "done":
+                        break
+                    await asyncio.sleep(0.05)
+                else:
+                    self.fail("job did not complete")
+            finally:
+                await worker.stop()
 
     async def test_scheduled_subscription_search_runs_outside_api_event_loop(self) -> None:
+        from app.services.jobs import list_jobs
+        from app.services.job_worker import JobWorker
+
         subscription_id = self._subscription()
 
         async def blocking_search(*args, **kwargs):
             time.sleep(0.08)
             return []
 
-        old_task = runtime_module.subscription_search_tasks.get(subscription_id)
-        runtime_module.subscription_search_tasks.pop(subscription_id, None)
-        try:
-            with patch("app.services.subscription.search.tasks._default_search", AsyncMock(side_effect=blocking_search)):
-                started = time.perf_counter()
-                result = subscription_tasks.schedule_subscription_search(subscription_id)
-                await asyncio.sleep(0.01)
-                elapsed = time.perf_counter() - started
-                task = runtime_module.subscription_search_tasks.get(subscription_id)
-
-                self.assertTrue(result["running"])
-                self.assertLess(elapsed, 0.05)
-                if task:
-                    await asyncio.wait_for(task, timeout=1)
-        finally:
-            if old_task is not None:
-                runtime_module.subscription_search_tasks[subscription_id] = old_task
+        worker = JobWorker(poll_seconds=0.05)
+        with patch("app.services.subscription.search.tasks._default_search", AsyncMock(side_effect=blocking_search)):
+            started = time.perf_counter()
+            result = subscription_tasks.schedule_subscription_search(subscription_id)
+            # Schedule must not wait for blocking search.
+            await asyncio.sleep(0.01)
+            elapsed = time.perf_counter() - started
+            self.assertTrue(result["running"])
+            self.assertLess(elapsed, 0.05)
+            worker.start()
+            try:
+                for _ in range(40):
+                    jobs = [j for j in list_jobs() if j.get("id") == result.get("job_id")]
+                    if jobs and jobs[0].get("status") in {"done", "failed"}:
+                        break
+                    await asyncio.sleep(0.05)
+            finally:
+                await worker.stop()
 
     async def test_scheduled_search_all_runs_outside_api_event_loop_when_worker_blocks(self) -> None:
+        from app.services.jobs import list_jobs
+        from app.services.job_worker import JobWorker
+
         async def blocking_search_all():
             time.sleep(0.08)
             return {"ok": True}
 
-        old_task = runtime_module.search_all_task
-        runtime_module.search_all_task = None
-        try:
-            with patch.object(runtime_module, "SEARCH_ALL_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription.search.tasks._default_search_all",
-                blocking_search_all,
-            ):
-                started = time.perf_counter()
-                result = subscription_tasks.schedule_search_all_active_subscriptions()
-                await asyncio.sleep(0.01)
-                elapsed = time.perf_counter() - started
-                task = runtime_module.search_all_task
-
-                self.assertTrue(result["running"])
-                self.assertLess(elapsed, 0.05)
-                if task:
-                    await asyncio.wait_for(task, timeout=1)
-        finally:
-            runtime_module.search_all_task = old_task
+        worker = JobWorker(poll_seconds=0.05)
+        with patch.object(runtime_module, "SEARCH_ALL_START_DELAY_SECONDS", 0), patch(
+            "app.services.subscription.search.tasks._default_search_all",
+            blocking_search_all,
+        ):
+            started = time.perf_counter()
+            result = subscription_tasks.schedule_search_all_active_subscriptions()
+            await asyncio.sleep(0.01)
+            elapsed = time.perf_counter() - started
+            self.assertTrue(result["running"])
+            self.assertLess(elapsed, 0.05)
+            worker.start()
+            try:
+                for _ in range(40):
+                    jobs = [j for j in list_jobs() if j.get("id") == result.get("job_id")]
+                    if jobs and jobs[0].get("status") in {"done", "failed"}:
+                        break
+                    await asyncio.sleep(0.05)
+            finally:
+                await worker.stop()
 
     async def test_scheduled_emby_sync_runs_outside_api_event_loop_when_worker_blocks(self) -> None:
+        from app.services.jobs import list_jobs
+        from app.services.job_worker import JobWorker
+
         async def blocking_emby_sync():
             time.sleep(0.08)
             return {"ok": True}
 
-        old_task = runtime_module.emby_sync_task
-        runtime_module.emby_sync_task = None
-        try:
-            with patch.object(runtime_module, "EMBY_SYNC_START_DELAY_SECONDS", 0), patch(
-                "app.services.subscription.search.tasks._default_emby_sync",
-                blocking_emby_sync,
-            ):
-                started = time.perf_counter()
-                result = subscription_tasks.schedule_emby_subscription_sync()
-                await asyncio.sleep(0.01)
-                elapsed = time.perf_counter() - started
-                task = runtime_module.emby_sync_task
-
-                self.assertTrue(result["running"])
-                self.assertLess(elapsed, 0.05)
-                if task:
-                    await asyncio.wait_for(task, timeout=1)
-        finally:
-            runtime_module.emby_sync_task = old_task
+        worker = JobWorker(poll_seconds=0.05)
+        with patch.object(runtime_module, "EMBY_SYNC_START_DELAY_SECONDS", 0), patch(
+            "app.services.subscription.search.tasks._default_emby_sync",
+            blocking_emby_sync,
+        ):
+            started = time.perf_counter()
+            result = subscription_tasks.schedule_emby_subscription_sync()
+            await asyncio.sleep(0.01)
+            elapsed = time.perf_counter() - started
+            self.assertTrue(result["running"])
+            self.assertLess(elapsed, 0.05)
+            worker.start()
+            try:
+                for _ in range(40):
+                    jobs = [j for j in list_jobs() if j.get("id") == result.get("job_id")]
+                    if jobs and jobs[0].get("status") in {"done", "failed"}:
+                        break
+                    await asyncio.sleep(0.05)
+            finally:
+                await worker.stop()
 
     async def test_scheduled_emby_sync_skips_duplicate_trigger(self) -> None:
         from app.services.jobs import list_jobs

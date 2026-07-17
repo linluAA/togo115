@@ -86,3 +86,16 @@ BT1207_DETAIL_RETRIES = 3
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]
+
+# Public aliases (preferred over underscore names)
+download_link_key = _download_link_key
+expanded_search_queries = _expanded_search_queries
+split_filter_words = _split_filter_words
+compact_search_text = _compact_search_text
+local_text_matches_query = _local_text_matches_query
+truthy = _truthy
+first_text = _first_text
+item_context = _item_context
+item_links = _item_links
+html_page_title = _html_page_title
+

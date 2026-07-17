@@ -5,8 +5,7 @@ from typing import Any, Awaitable, Callable
 
 from app.db import add_log
 import app.services.subscription.runtime as runtime
-from app.services.subscription.crud.service import mark_subscription_checked
-from app.services.jobs import create_job, mark_job_done, mark_job_failed, mark_job_running
+from app.services.jobs import create_job, latest_job
 
 SearchCallable = Callable[[int, dict[str, list[dict[str, Any]]] | None], Awaitable[list[dict]]]
 
@@ -46,13 +45,14 @@ async def _search_and_attach_resources_guarded(
     incremental_telegram: bool = False,
     search_func: Callable[..., Awaitable[list[dict]]] | None = None,
 ) -> list[dict]:
+    """Serialize one subscription and respect process-wide search concurrency."""
     search_func = search_func or _default_search
     lock = runtime.subscription_lock(subscription_id)
     if lock.locked():
         add_log(
             "info",
             "subscription",
-            "\u8ba2\u9605\u641c\u7d22\u5df2\u5728\u8fd0\u884c\uff0c\u5df2\u8df3\u8fc7\u91cd\u590d\u89e6\u53d1",
+            '订阅搜索已在运行，已跳过重复触发',
             {"id": subscription_id, "incremental_telegram": incremental_telegram},
         )
         return []
@@ -61,144 +61,56 @@ async def _search_and_attach_resources_guarded(
             return await search_func(subscription_id, snapshot, incremental_telegram=incremental_telegram)
 
 
-async def _search_subscription_background(
-    subscription_id: int,
-    *,
-    search_func: Callable[..., Awaitable[list[dict]]] | None = None,
-    job_id: int | None = None,
-) -> None:
-    if job_id is not None:
-        mark_job_running(job_id)
-    try:
-        created = await _search_and_attach_resources_guarded(subscription_id, search_func=search_func)
-        if job_id is not None:
-            mark_job_done(job_id, {"id": subscription_id, "created": len(created or [])})
-    except Exception as exc:
-        mark_subscription_checked(subscription_id)
-        if job_id is not None:
-            mark_job_failed(job_id, str(exc), {"id": subscription_id})
-        add_log("error", "subscription", "\u8ba2\u9605\u540e\u53f0\u641c\u7d22\u5931\u8d25", {"id": subscription_id, "error": str(exc)})
-
-
-async def _search_subscription_background_worker(
-    subscription_id: int,
-    *,
-    search_func: Callable[..., Awaitable[list[dict]]] | None = None,
-    job_id: int | None = None,
-) -> None:
-    await _search_subscription_background(subscription_id, search_func=search_func, job_id=job_id)
+def _reuse_or_create_job(kind: str, target_id: int | None = None, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    existing = latest_job(kind, target_id)
+    if existing and existing.get("status") in {"queued", "running"}:
+        return {
+            "ok": True,
+            "queued": existing.get("status") == "queued",
+            "running": True,
+            "job_id": existing.get("id"),
+            "reused": True,
+        }
+    job_id = create_job(kind, target_id, payload)
+    return {"ok": True, "queued": True, "running": True, "job_id": job_id, "reused": False}
 
 
 def schedule_subscription_search(subscription_id: int) -> dict:
-    from app.services.jobs import latest_job
-
-    existing = latest_job("subscription_search", int(subscription_id))
-    if existing and existing.get("status") in {"queued", "running"}:
-        return {"ok": True, "queued": existing.get("status") == "queued", "running": True, "id": subscription_id, "job_id": existing.get("id")}
-    job_id = create_job("subscription_search", int(subscription_id), {"id": int(subscription_id)})
-    add_log("info", "subscription", "订阅搜索已加入后台队列", {"id": subscription_id, "job_id": job_id})
-    return {"ok": True, "queued": True, "running": True, "id": subscription_id, "job_id": job_id}
-
-async def _search_subscription_in_worker_thread(subscription_id: int, job_id: int | None = None) -> None:
-    """Run expensive subscription search on a separate event loop in a worker thread."""
-    await asyncio.to_thread(_run_subscription_search_sync, subscription_id, job_id)
-
-
-def _run_subscription_search_sync(subscription_id: int, job_id: int | None = None) -> None:
-    asyncio.run(_search_subscription_background_worker(subscription_id, job_id=job_id))
-
-
-async def _search_all_background(
-    *,
-    search_all_func: Callable[[], Awaitable[dict]] | None = None,
-    job_id: int | None = None,
-) -> None:
-    if job_id is not None:
-        mark_job_running(job_id)
-    try:
-        await asyncio.sleep(runtime.SEARCH_ALL_START_DELAY_SECONDS)
-        search_all_func = search_all_func or _default_search_all
-        result = await search_all_func()
-        if job_id is not None:
-            mark_job_done(job_id, result if isinstance(result, dict) else {"ok": True})
-    except Exception as exc:
-        if job_id is not None:
-            mark_job_failed(job_id, str(exc))
-        add_log("error", "subscription", "搜索全部活跃订阅后台任务失败", {"error": str(exc), "error_type": type(exc).__name__})
-    finally:
-        runtime.search_all_task = None
+    result = _reuse_or_create_job(
+        "subscription_search",
+        int(subscription_id),
+        {"id": int(subscription_id)},
+    )
+    result["id"] = int(subscription_id)
+    if not result.get("reused"):
+        add_log(
+            "info",
+            "subscription",
+            '订阅搜索已加入后台队列',
+            {"id": subscription_id, "job_id": result.get("job_id")},
+        )
+    return result
 
 
 def schedule_search_all_active_subscriptions() -> dict:
-    from app.services.jobs import latest_job
-
-    existing = latest_job("subscription_search_all")
-    if existing and existing.get("status") in {"queued", "running"}:
-        return {"ok": True, "queued": existing.get("status") == "queued", "running": True, "job_id": existing.get("id")}
-    job_id = create_job("subscription_search_all")
-    add_log("info", "subscription", "搜索全部活跃订阅已加入后台队列", {"job_id": job_id})
-    return {"ok": True, "queued": True, "running": True, "job_id": job_id}
-
-async def _search_all_in_worker_thread(
-    *,
-    search_all_func: Callable[[], Awaitable[dict]] | None = None,
-    job_id: int | None = None,
-) -> None:
-    """Run manual search-all outside the API event loop to keep the frontend responsive."""
-    await asyncio.to_thread(_run_search_all_sync, search_all_func, job_id)
-
-
-def _run_search_all_sync(search_all_func: Callable[[], Awaitable[dict]] | None, job_id: int | None = None) -> None:
-    asyncio.run(_search_all_background(search_all_func=search_all_func, job_id=job_id))
-
-
-async def _emby_sync_background(
-    *,
-    sync_func: Callable[[], Awaitable[dict]] | None = None,
-    job_id: int | None = None,
-) -> None:
-    if job_id is not None:
-        mark_job_running(job_id)
-    try:
-        await asyncio.sleep(runtime.EMBY_SYNC_START_DELAY_SECONDS)
-        sync_func = sync_func or _default_emby_sync
-        result = await sync_func()
-        if job_id is not None:
-            mark_job_done(job_id, result if isinstance(result, dict) else {"ok": True})
-        level = "info" if result.get("ok") else "warning"
+    result = _reuse_or_create_job("subscription_search_all")
+    if not result.get("reused"):
         add_log(
-            level,
-            "emby",
-            "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5b8c\u6210" if result.get("ok") else "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u5931\u8d25",
-            result,
+            "info",
+            "subscription",
+            '搜索全部活跃订阅已加入后台队列',
+            {"job_id": result.get("job_id")},
         )
-    except Exception as exc:
-        if job_id is not None:
-            mark_job_failed(job_id, str(exc))
-        add_log("error", "emby", "\u624b\u52a8 Emby \u5165\u5e93\u72b6\u6001\u540c\u6b65\u540e\u53f0\u4efb\u52a1\u5931\u8d25", {"error": str(exc), "error_type": type(exc).__name__})
-    finally:
-        runtime.emby_sync_task = None
+    return result
 
 
 def schedule_emby_subscription_sync() -> dict:
-    from app.services.jobs import latest_job
-
-    existing = latest_job("emby_subscription_sync")
-    if existing and existing.get("status") in {"queued", "running"}:
-        return {"ok": True, "queued": existing.get("status") == "queued", "running": True, "job_id": existing.get("id")}
-    job_id = create_job("emby_subscription_sync")
-    add_log("info", "emby", "手动 Emby 入库状态同步已加入后台队列", {"job_id": job_id})
-    return {"ok": True, "queued": True, "running": True, "job_id": job_id}
-
-async def _emby_sync_in_worker_thread(
-    *,
-    sync_func: Callable[[], Awaitable[dict]] | None = None,
-    job_id: int | None = None,
-) -> None:
-    """Run manual Emby subscription sync outside the API event loop."""
-    await asyncio.to_thread(_run_emby_sync_sync, sync_func, job_id)
-
-
-def _run_emby_sync_sync(sync_func: Callable[[], Awaitable[dict]] | None, job_id: int | None = None) -> None:
-    asyncio.run(_emby_sync_background(sync_func=sync_func, job_id=job_id))
-
+    result = _reuse_or_create_job("emby_subscription_sync")
+    if not result.get("reused"):
+        add_log(
+            "info",
+            "emby",
+            '手动 Emby 入库状态同步已加入后台队列',
+            {"job_id": result.get("job_id")},
+        )
+    return result

@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.services.link.downloads import _download_link_key, is_valid_download_link
+from app.services.link.downloads import _download_link_key as download_link_key, is_valid_download_link
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.match.matching import result_matches_subscription
 from app.services.subscription.match.result_utils import result_text
-from app.services.subscription.match.text_utils import compact_match_text, years_from_text
+from app.services.match_text import compact_match_text, years_from_text
 
 def _query_without_year(value: str | None) -> str:
     text = str(value or "")
@@ -89,7 +89,7 @@ def _rank_magnet_results(subscription: dict[str, Any], results: list[SearchResul
     seen: set[tuple[str, str]] = set()
     scored: list[tuple[int, int, int, SearchResult]] = []
     for index, result in enumerate(results):
-        key = _download_link_key(result.url)
+        key = download_link_key(result.url)
         if key in seen:
             continue
         seen.add(key)

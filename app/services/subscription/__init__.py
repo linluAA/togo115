@@ -44,10 +44,6 @@ __all__ = [
     "duplicate_subscription",
     "library_snapshot_or_none",
     "mark_subscription_checked",
-    "_search_all_background",
-    "_search_and_attach_resources_guarded",
-    "_search_semaphore",
-    "_search_subscription_background",
 ]
 
 

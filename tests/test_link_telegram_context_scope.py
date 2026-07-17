@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.link import context_for_115_link, _local_text_matches_query
+from app.services.link import context_for_115_link, local_text_matches_query
 from app.services.adapters.telegram.scan.message_links import _telegram_resource_title
 
 
@@ -16,7 +16,7 @@ def test_context_for_115_link_prefers_nearest_title_above_share() -> None:
     assert "念念相忘" in scoped
     assert "野狗骨头" not in scoped
     assert _telegram_resource_title(scoped).startswith("念念相忘")
-    assert not _local_text_matches_query(scoped, "野狗骨头")
+    assert not local_text_matches_query(scoped, "野狗骨头")
 
 
 def test_context_for_115_link_keeps_matching_title_when_adjacent() -> None:
@@ -28,7 +28,7 @@ def test_context_for_115_link_keeps_matching_title_when_adjacent() -> None:
     )
     scoped = context_for_115_link(text, "https://115.com/s/ydgtlink?password=1111", 1)
     assert "野狗骨头" in scoped
-    assert _local_text_matches_query(scoped, "野狗骨头")
+    assert local_text_matches_query(scoped, "野狗骨头")
 
 
 def test_context_for_115_link_excludes_following_title() -> None:

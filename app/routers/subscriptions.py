@@ -6,10 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import current_user
 from app.schemas import ResourceBulkDeleteRequest, SearchRequest, SubscriptionBulkDeleteRequest, SubscriptionCreate, SubscriptionUpdate
-from app.services.jobs import list_jobs
-from app.services.manual_search import manual_search_resources
-from app.services.resource_queries import clear_resources, delete_resources, list_recent_resources
-from app.services.subscription import (
+from app.services.application import (
     create_subscription,
     delete_subscription,
     delete_subscriptions,
@@ -23,6 +20,9 @@ from app.services.subscription import (
     schedule_subscription_search,
     update_subscription,
 )
+from app.services.jobs import list_jobs
+from app.services.manual_search import manual_search_resources
+from app.services.resource_queries import clear_resources, delete_resources, list_recent_resources
 
 
 router = APIRouter()

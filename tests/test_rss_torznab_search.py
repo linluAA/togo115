@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.sources.rss_torznab_search import RssTorznabSearchMixin
+from app.services.sources.rss.search import RssTorznabSearchMixin
 from app.services.types import SearchResult
 
 

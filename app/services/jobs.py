@@ -96,6 +96,11 @@ def claim_next_job(kinds: list[str] | None = None) -> dict[str, Any] | None:
     """Atomically claim the oldest queued job and mark it running."""
     now = utc_now()
     with db() as conn:
+        # Exclusive transaction reduces double-claim risk under multi-worker.
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except Exception:
+            pass
         if kinds:
             placeholders = ", ".join("?" for _ in kinds)
             row = conn.execute(

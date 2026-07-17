@@ -258,15 +258,15 @@ class TelegramFastSearchMixin:
         filtered = [
             result
             for result in results
-            if any(self._local_text_matches_query_safe(result.context or result.title, query) for query in queries)
+            if any(self.local_text_matches_query_safe(result.context or result.title, query) for query in queries)
         ]
         return filtered or results
 
-    def _local_text_matches_query_safe(self, text: str | None, query: str | None) -> bool:
+    def local_text_matches_query_safe(self, text: str | None, query: str | None) -> bool:
         try:
-            from app.services.link import _local_text_matches_query
+            from app.services.link import local_text_matches_query
 
-            return bool(_local_text_matches_query(text, query))
+            return bool(local_text_matches_query(text, query))
         except Exception:
             return True
 

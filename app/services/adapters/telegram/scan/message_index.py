@@ -7,7 +7,7 @@ from typing import Any
 
 from app.db import db, row_to_dict, utc_now
 from app.services.adapters.telegram.scan.message_titles import _telegram_resource_title
-from app.services.link.search_utils import _compact_search_text, years_from_text
+from app.services.link.search_utils import _compact_search_text as compact_search_text, years_from_text
 from app.services.text_cjk import query_match_aliases
 from app.services.link import (
     _local_text_matches_query,
@@ -162,7 +162,7 @@ def search_telegram_message_index(sources: list[str], queries: list[str], limit:
 def _search_blob_for(text: str, context: str) -> str:
     raw = f"{context}\n{text}"
     # Compact + simplified form for SQL LIKE against subscription query stems.
-    return _compact_search_text(raw)
+    return compact_search_text(raw)
 
 
 def _index_prefilter_terms(queries: list[str]) -> list[str]:
@@ -195,7 +195,7 @@ def _index_prefilter_terms(queries: list[str]) -> list[str]:
         for alias in query_match_aliases(query) or [str(query or "").strip()]:
             add(alias)
             # Also keep a compact simplified form for punctuation-free rows.
-            compact = _compact_search_text(alias)
+            compact = compact_search_text(alias)
             if compact:
                 add(compact)
             if len(terms) >= 12:
@@ -269,7 +269,7 @@ def _candidate_rows(conn: Any, sources: list[str], prefilter_terms: list[str] | 
     compact_terms = []
     seen = set()
     for term in terms:
-        compact = _compact_search_text(term)
+        compact = compact_search_text(term)
         if compact and compact not in seen:
             seen.add(compact)
             compact_terms.append(compact)

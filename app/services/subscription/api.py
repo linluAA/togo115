@@ -1,7 +1,7 @@
 """Stable public API for the subscription domain.
 
 External callers (routers, monitor, Telegram bot/adapters, tests that exercise
-end-to-end flows) should import from this module — or from
+end-to-end flows) should import from this module ? or from
 ``app.services.subscription`` which re-exports the same surface.
 
 Implementation lives under ``app.services.subscription.*`` subpackages.
@@ -9,8 +9,6 @@ Do not reach into private ``_`` helpers across package boundaries.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from app.schemas import SubscriptionCreate, SubscriptionUpdate
 from app.services.sources.rss_torznab import SearchResult
@@ -45,10 +43,6 @@ from app.services.subscription.delivery.recheck import (
 from app.services.subscription.search.service import search_and_attach_resources
 from app.services.subscription.search.all import search_all_active_subscriptions
 from app.services.subscription.search.tasks import (
-    _search_all_background,
-    _search_and_attach_resources_guarded,
-    _search_semaphore,
-    _search_subscription_background,
     schedule_emby_subscription_sync,
     schedule_search_all_active_subscriptions,
     schedule_subscription_search,
@@ -69,7 +63,6 @@ async def sync_subscriptions_with_emby(force: bool = False) -> dict:
 
 
 __all__ = [
-    # Public
     "SearchResult",
     "SubscriptionCreate",
     "SubscriptionUpdate",
@@ -95,13 +88,8 @@ __all__ = [
     "sync_subscription_list_with_emby",
     "sync_subscriptions_with_emby",
     "update_subscription",
-    # Compatibility helpers (prefer not to use from new code)
     "active_subscriptions",
     "duplicate_subscription",
     "library_snapshot_or_none",
     "mark_subscription_checked",
-    "_search_all_background",
-    "_search_and_attach_resources_guarded",
-    "_search_semaphore",
-    "_search_subscription_background",
 ]
