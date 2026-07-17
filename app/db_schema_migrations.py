@@ -162,6 +162,7 @@ def _ensure_background_jobs(conn: sqlite3.Connection) -> None:
         "background_jobs",
         {
             "heartbeat_at": "TEXT",
+            "worker_id": "TEXT",
         },
     )
 

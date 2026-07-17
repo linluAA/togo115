@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """CJK normalize/alias helpers."""
 
-from app.services.text_cjk_tables import _SPACE_RE, _TITLE_PREFIX_ALIASES, _TRAD_TO_SIMP
+from app.services.text_cjk.tables import _SPACE_RE, _TITLE_PREFIX_ALIASES, _TRAD_TO_SIMP
 
 def simplify_cjk(text: str | None) -> str:
     value = str(text or "")

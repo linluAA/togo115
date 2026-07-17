@@ -129,6 +129,7 @@ SCHEMA_SQL = """
             created_at TEXT NOT NULL,
             started_at TEXT,
             heartbeat_at TEXT,
+            worker_id TEXT,
             finished_at TEXT,
             updated_at TEXT NOT NULL
         );

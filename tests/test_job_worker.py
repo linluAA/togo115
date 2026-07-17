@@ -114,10 +114,18 @@ class JobWorkerTest(unittest.IsolatedAsyncioTestCase):
         create_job("subscription_search_all")
         stats = job_queue_stats()
         self.assertGreaterEqual(stats.get("queued", 0), 1)
+        self.assertIn("worker_id", stats)
+        self.assertTrue(str(stats.get("worker_id") or ""))
+        claimed = claim_next_job(["subscription_search_all"])
+        self.assertIsNotNone(claimed)
+        self.assertTrue(str(claimed.get("worker_id") or ""))
+        stats2 = job_queue_stats()
+        self.assertGreaterEqual(int(stats2.get("running_workers") or 0), 1)
         record_job_event({"kind": "subscription_search_all", "status": "done", "duration_ms": 12})
         snap = metrics_snapshot()
         self.assertIn("jobs", snap)
         self.assertGreaterEqual(int(snap["jobs"]["done"]), 1)
+        self.assertIn("worker_id", snap.get("jobs") or {})
         clear_metrics()
 
 

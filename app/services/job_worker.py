@@ -17,6 +17,7 @@ from app.services.jobs import (
     mark_job_failed,
     requeue_stale_running_jobs,
     touch_job_heartbeat,
+    worker_instance_id,
 )
 from app.services.search_metrics import record_job_event
 
@@ -64,7 +65,7 @@ class JobWorker:
                     if requeued:
                         record_job_event({"kind": "requeue", "status": "requeued", "count": requeued})
                     last_requeue = now
-                job = claim_next_job(list(SUPPORTED_KINDS))
+                job = claim_next_job(list(SUPPORTED_KINDS), worker_id=worker_instance_id())
                 if not job:
                     await asyncio.sleep(self.poll_seconds)
                     continue
@@ -119,7 +120,7 @@ class JobWorker:
 
     async def _heartbeat_loop(self, job_id: int, interval: float = 15.0) -> None:
         while True:
-            touch_job_heartbeat(job_id)
+            touch_job_heartbeat(job_id, worker_id=worker_instance_id())
             await asyncio.sleep(interval)
 
     def _dispatch_blocking(self, kind: str, job: dict[str, Any]) -> dict[str, Any]:

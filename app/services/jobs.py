@@ -1,8 +1,21 @@
 from __future__ import annotations
 
+import os
+import socket
+from functools import lru_cache
 from typing import Any
 
 from app.db import db, json_dumps, json_loads, row_to_dict, utc_now
+
+
+@lru_cache(maxsize=1)
+def worker_instance_id() -> str:
+    """Stable-ish worker identity for multi-instance observability."""
+    explicit = (os.environ.get("TOGO115_WORKER_ID") or os.environ.get("HOSTNAME") or "").strip()
+    if explicit:
+        return explicit[:120]
+    host = socket.gethostname() or "worker"
+    return f"{host}:{os.getpid()}"[:120]
 
 
 def create_job(kind: str, target_id: int | None = None, payload: dict[str, Any] | None = None) -> int:
@@ -58,32 +71,45 @@ def mark_job_failed(job_id: int, error: str, result: dict[str, Any] | None = Non
         )
 
 
-def touch_job_heartbeat(job_id: int) -> None:
+def touch_job_heartbeat(job_id: int, worker_id: str | None = None) -> None:
     """Refresh heartbeat for a long-running job (multi-instance liveness)."""
     now = utc_now()
+    worker = (worker_id or worker_instance_id())[:120]
     with db() as conn:
         conn.execute(
             """
             UPDATE background_jobs
-            SET heartbeat_at = ?, updated_at = ?
+            SET heartbeat_at = ?, worker_id = COALESCE(?, worker_id), updated_at = ?
             WHERE id = ? AND status = 'running'
             """,
-            (now, now, int(job_id)),
+            (now, worker, now, int(job_id)),
         )
 
 
-def job_queue_stats() -> dict[str, int]:
+def job_queue_stats() -> dict[str, Any]:
     with db() as conn:
         rows = conn.execute(
             "SELECT status, COUNT(*) AS c FROM background_jobs GROUP BY status"
         ).fetchall()
-    counts = {"queued": 0, "running": 0, "done": 0, "failed": 0}
+        running_workers = conn.execute(
+            """
+            SELECT COUNT(DISTINCT worker_id) AS c
+            FROM background_jobs
+            WHERE status = 'running' AND worker_id IS NOT NULL AND worker_id != ''
+            """
+        ).fetchone()
+    counts: dict[str, Any] = {"queued": 0, "running": 0, "done": 0, "failed": 0}
     for row in rows:
         key = str(row["status"] if hasattr(row, "keys") else row[0])
         val = int(row["c"] if hasattr(row, "keys") else row[1])
         if key in counts:
             counts[key] = val
-    counts["total"] = sum(counts.values())
+    counts["total"] = int(counts["queued"]) + int(counts["running"]) + int(counts["done"]) + int(counts["failed"])
+    try:
+        counts["running_workers"] = int(running_workers["c"] if hasattr(running_workers, "keys") else running_workers[0] or 0)
+    except Exception:
+        counts["running_workers"] = 0
+    counts["worker_id"] = worker_instance_id()
     return counts
 
 
@@ -121,9 +147,10 @@ def normalize_job(item: dict[str, Any]) -> dict[str, Any]:
     item["result"] = json_loads(item.get("result"), {})
     return item
 
-def claim_next_job(kinds: list[str] | None = None) -> dict[str, Any] | None:
+def claim_next_job(kinds: list[str] | None = None, worker_id: str | None = None) -> dict[str, Any] | None:
     """Atomically claim the oldest queued job and mark it running."""
     now = utc_now()
+    worker = (worker_id or worker_instance_id())[:120]
     with db() as conn:
         # Exclusive transaction reduces double-claim risk under multi-worker.
         try:
@@ -159,16 +186,18 @@ def claim_next_job(kinds: list[str] | None = None) -> dict[str, Any] | None:
             SET status = 'running',
                 started_at = COALESCE(started_at, ?),
                 heartbeat_at = ?,
+                worker_id = ?,
                 updated_at = ?
             WHERE id = ? AND status = 'queued'
             """,
-            (now, now, now, item["id"]),
+            (now, now, worker, now, item["id"]),
         )
         if updated.rowcount != 1:
             return None
         item["status"] = "running"
         item["started_at"] = item.get("started_at") or now
         item["heartbeat_at"] = now
+        item["worker_id"] = worker
         item["updated_at"] = now
         return item
 
@@ -197,7 +226,7 @@ def requeue_stale_running_jobs(max_age_seconds: int = 1800) -> int:
             conn.execute(
                 """
                 UPDATE background_jobs
-                SET status = 'queued', started_at = NULL, heartbeat_at = NULL,
+                SET status = 'queued', started_at = NULL, heartbeat_at = NULL, worker_id = NULL,
                     error = COALESCE(error, ?), updated_at = ?
                 WHERE id = ? AND status = 'running'
                 """,
