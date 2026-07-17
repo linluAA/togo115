@@ -104,7 +104,7 @@ class TelegramBotMagnetSearchTest(unittest.TestCase):
     def test_fast_source_options_limit_detail_fetches(self) -> None:
         source = _fast_source_options({"name": "BT1207", "type": "site_plugin", "plugin": "bt1207"})
 
-        self.assertEqual(source["_fast_detail_limit"], 3)
+        self.assertEqual(source["_fast_detail_limit"], 2)
         self.assertLess(source["_bt1207_detail_delay"], 0.6)
         self.assertLessEqual(source["_request_timeout"], 8.0)
 

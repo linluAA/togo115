@@ -19,7 +19,7 @@ from app.db_core import (
     utc_now,
     verify_password,
 )
-from app.db_logs import add_log
+from app.db_logs import add_log, flush_log_buffer
 from app.db_schema import init_db
 
 __all__ = [
@@ -33,6 +33,7 @@ __all__ = [
     "_is_sqlite_locked",
     "_retry_sqlite_locked",
     "add_log",
+    "flush_log_buffer",
     "db",
     "get_connection",
     "hash_password",

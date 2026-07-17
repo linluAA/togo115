@@ -13,7 +13,7 @@ from app.services.subscription.search import all as search_all_module
 
 class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
     def test_subscription_concurrency_is_three(self) -> None:
-        self.assertEqual(runtime.SUBSCRIPTION_SEARCH_CONCURRENCY, 3)
+        self.assertEqual(runtime.SUBSCRIPTION_SEARCH_CONCURRENCY, 4)
 
     def test_floodwait_gate_increases_interval(self) -> None:
         gate = TelegramRequestGate(0.05)
@@ -30,7 +30,7 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
         snap = metrics_snapshot()
         self.assertEqual(snap["telegram"]["searches"], 1)
         self.assertEqual(snap["share_115"]["checks"], 2)
-        self.assertEqual(snap["concurrency"], 3)
+        self.assertEqual(snap["concurrency"], 4)
         clear_metrics()
 
     async def test_search_all_starts_without_waiting_emby(self) -> None:

@@ -7,8 +7,8 @@ Kept outside the subscription package so adapters do not import domain internals
 
 import asyncio
 
-TELEGRAM_SOURCE_CONCURRENCY = 1
-SUBSCRIPTION_SEARCH_CONCURRENCY = 3
+TELEGRAM_SOURCE_CONCURRENCY = 2
+SUBSCRIPTION_SEARCH_CONCURRENCY = 4
 
 telegram_source_locks: dict[str, asyncio.Lock] = {}
 telegram_source_locks_loop: asyncio.AbstractEventLoop | None = None
@@ -17,6 +17,9 @@ subscription_search_semaphore_loop: asyncio.AbstractEventLoop | None = None
 subscription_search_semaphore_limit: int = 0
 subscription_locks: dict[int, asyncio.Lock] = {}
 subscription_locks_loop: asyncio.AbstractEventLoop | None = None
+telegram_dialog_semaphore: asyncio.Semaphore | None = None
+telegram_dialog_semaphore_loop: asyncio.AbstractEventLoop | None = None
+telegram_dialog_semaphore_limit: int = 0
 
 
 def desired_search_concurrency() -> int:
@@ -35,6 +38,22 @@ def desired_search_concurrency() -> int:
     except Exception:
         concurrency = SUBSCRIPTION_SEARCH_CONCURRENCY
     return max(1, int(concurrency))
+
+
+def desired_telegram_dialog_concurrency() -> int:
+    """Adaptive cross-dialog TG concurrency; same dialog remains serialized by lock."""
+    base = TELEGRAM_SOURCE_CONCURRENCY
+    try:
+        from app.services.adapters.telegram.rate_limit import telegram_request_gate
+
+        interval = float(telegram_request_gate.interval)
+        if interval >= 0.8:
+            return 1
+        if interval >= 0.25:
+            return max(1, min(2, base))
+        return max(1, base)
+    except Exception:
+        return max(1, base)
 
 
 def search_semaphore() -> asyncio.Semaphore:
@@ -68,6 +87,30 @@ def search_semaphore() -> asyncio.Semaphore:
     return subscription_search_semaphore
 
 
+def telegram_dialog_search_semaphore() -> asyncio.Semaphore:
+    """Cross-dialog TG search ceiling that tracks FloodWait pressure."""
+    global telegram_dialog_semaphore, telegram_dialog_semaphore_loop, telegram_dialog_semaphore_limit
+    loop = asyncio.get_running_loop()
+    desired = desired_telegram_dialog_concurrency()
+    if (
+        telegram_dialog_semaphore is None
+        or telegram_dialog_semaphore_loop is not loop
+        or telegram_dialog_semaphore_limit != desired
+    ):
+        current = telegram_dialog_semaphore
+        if (
+            current is not None
+            and telegram_dialog_semaphore_loop is loop
+            and telegram_dialog_semaphore_limit > 0
+            and current._value < telegram_dialog_semaphore_limit
+        ):
+            return current
+        telegram_dialog_semaphore = asyncio.Semaphore(desired)
+        telegram_dialog_semaphore_loop = loop
+        telegram_dialog_semaphore_limit = desired
+    return telegram_dialog_semaphore
+
+
 def subscription_lock(subscription_id: int) -> asyncio.Lock:
     global subscription_locks, subscription_locks_loop
     loop = asyncio.get_running_loop()
@@ -98,4 +141,9 @@ def telegram_source_lock(source: str) -> asyncio.Lock:
 
 def search_all_wave_size() -> int:
     """How many subscriptions to launch per wave during search-all."""
-    return desired_search_concurrency()
+    # When TG pressure is low, launch a slightly wider wave than the hard semaphore
+    # so finished tasks immediately fill the next slot.
+    desired = desired_search_concurrency()
+    if desired >= SUBSCRIPTION_SEARCH_CONCURRENCY:
+        return min(desired + 1, 6)
+    return desired

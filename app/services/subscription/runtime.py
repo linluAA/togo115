@@ -6,19 +6,21 @@ from app.services.concurrency import (
     SUBSCRIPTION_SEARCH_CONCURRENCY,
     TELEGRAM_SOURCE_CONCURRENCY,
     desired_search_concurrency,
+    desired_telegram_dialog_concurrency,
     search_all_wave_size,
     search_semaphore,
     subscription_lock,
+    telegram_dialog_search_semaphore,
     telegram_source_lock,
 )
 
 TELEGRAM_SEARCH_TIMEOUT_SECONDS = 75
 RSS_SEARCH_TIMEOUT_SECONDS = 60
 SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS = 120
-SEARCH_ALL_START_DELAY_SECONDS = 0.35
+SEARCH_ALL_START_DELAY_SECONDS = 0.15
 EMBY_SYNC_START_DELAY_SECONDS = 0.1
-SEARCH_ALL_BETWEEN_SUBSCRIPTIONS_DELAY_SECONDS = 0.02
-SEARCH_ALL_WAVE_STAGGER_SECONDS = 0.05
+SEARCH_ALL_BETWEEN_SUBSCRIPTIONS_DELAY_SECONDS = 0.0
+SEARCH_ALL_WAVE_STAGGER_SECONDS = 0.02
 
 __all__ = [
     "TELEGRAM_SEARCH_TIMEOUT_SECONDS",
@@ -31,8 +33,10 @@ __all__ = [
     "SUBSCRIPTION_SEARCH_CONCURRENCY",
     "TELEGRAM_SOURCE_CONCURRENCY",
     "desired_search_concurrency",
+    "desired_telegram_dialog_concurrency",
     "search_semaphore",
     "subscription_lock",
+    "telegram_dialog_search_semaphore",
     "telegram_source_lock",
     "search_all_wave_size",
 ]

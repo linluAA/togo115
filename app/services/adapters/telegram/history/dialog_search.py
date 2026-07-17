@@ -30,7 +30,7 @@ class TelegramDialogSearchMixin(TelegramDialogSearchQueryMixin, TelegramDialogSe
         incremental: bool = False,
         shared_state: TelegramSearchSharedState | None = None,
     ) -> tuple[list[SearchResult], dict[str, int]]:
-        semaphore = asyncio.Semaphore(TELEGRAM_DIALOG_SEARCH_CONCURRENCY)
+        semaphore = runtime.telegram_dialog_search_semaphore()
         all_results: list[SearchResult] = []
         state = shared_state or TelegramSearchSharedState()
         extract_ms_total = 0

@@ -5,6 +5,9 @@ from typing import Any
 
 from app.services.adapters.pan115 import PAN115_URL_RE, SHARE_AVAILABLE, Pan115Adapter
 
+# Cap concurrent live 115 probes across the process (cache hits bypass this).
+SHARE_115_PROBE_CONCURRENCY = 3
+
 
 class Shared115ValidationCache:
     """Process-wide 115 availability helper for concurrent subscription searches.
@@ -12,11 +15,13 @@ class Shared115ValidationCache:
     Pan115 already keeps a TTL cache of share probes. This layer adds:
     - one adapter instance for the process burst
     - in-flight de-duplication so identical URLs only hit the network once
+    - limited concurrency for live probes to avoid serial attach latency
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, probe_concurrency: int = SHARE_115_PROBE_CONCURRENCY) -> None:
         self._adapter: Any | None = None
         self._inflight: dict[str, asyncio.Future[str]] = {}
+        self._probe_semaphore = asyncio.Semaphore(max(1, int(probe_concurrency or 1)))
         self.checked = 0
         self.coalesced = 0
 
@@ -38,7 +43,8 @@ class Shared115ValidationCache:
         future: asyncio.Future[str] = loop.create_future()
         self._inflight[value] = future
         try:
-            state = await self._get_adapter().share_availability(value)
+            async with self._probe_semaphore:
+                state = await self._get_adapter().share_availability(value)
             self.checked += 1
             if not future.done():
                 future.set_result(state)
@@ -51,6 +57,26 @@ class Shared115ValidationCache:
             current = self._inflight.get(value)
             if current is future:
                 self._inflight.pop(value, None)
+
+    async def availability_many(self, urls: list[str]) -> dict[str, str]:
+        """Probe many URLs with bounded concurrency; returns url->state map."""
+        unique: list[str] = []
+        seen: set[str] = set()
+        for url in urls:
+            value = str(url or "")
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            unique.append(value)
+        if not unique:
+            return {}
+        states = await asyncio.gather(*(self.availability(url) for url in unique), return_exceptions=True)
+        out: dict[str, str] = {}
+        for url, state in zip(unique, states):
+            if isinstance(state, Exception):
+                continue
+            out[url] = str(state)
+        return out
 
     def stats(self) -> dict[str, int]:
         return {"checked": self.checked, "coalesced": self.coalesced}

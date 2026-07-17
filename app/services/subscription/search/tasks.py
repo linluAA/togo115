@@ -6,6 +6,10 @@ from typing import Any, Awaitable, Callable
 from app.db import add_log
 import app.services.subscription.runtime as runtime
 from app.services.jobs import create_job, latest_job
+from app.services.subscription.search.recent_cache import (
+    get_recent_search_results,
+    store_recent_search_results,
+)
 
 SearchCallable = Callable[[int, dict[str, list[dict[str, Any]]] | None], Awaitable[list[dict]]]
 
@@ -22,7 +26,18 @@ async def _default_search(
 ) -> list[dict]:
     from app.services.subscription.search.service import search_and_attach_resources
 
-    return await search_and_attach_resources(subscription_id, snapshot, incremental_telegram=incremental_telegram)
+    cached = get_recent_search_results(subscription_id, incremental_telegram=incremental_telegram)
+    if cached is not None:
+        add_log(
+            "debug",
+            "subscription",
+            "复用短时搜索结果缓存",
+            {"id": subscription_id, "count": len(cached), "incremental_telegram": incremental_telegram},
+        )
+        return cached
+    results = await search_and_attach_resources(subscription_id, snapshot, incremental_telegram=incremental_telegram)
+    store_recent_search_results(subscription_id, results, incremental_telegram=incremental_telegram)
+    return results
 
 
 async def _default_search_all() -> dict:

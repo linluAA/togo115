@@ -9,6 +9,9 @@ from app.services.types import SearchResult
 
 
 class RssTorznabCacheMixin:
+    # Full hits stay long; empty/no-result queries use a short negative cache.
+    EMPTY_SEARCH_CACHE_TTL_SECONDS = 120
+
     def _search_cache_key(self, source: dict[str, Any], query: str | None) -> tuple[str, str]:
         return (self._source_dedupe_key(source), str(query or ""))
 
@@ -18,18 +21,19 @@ class RssTorznabCacheMixin:
         if not cached:
             return None
         timestamp, results = cached
-        if time.time() - timestamp > self.SEARCH_CACHE_TTL_SECONDS:
+        ttl = self.EMPTY_SEARCH_CACHE_TTL_SECONDS if not results else self.SEARCH_CACHE_TTL_SECONDS
+        if time.time() - timestamp > ttl:
             self._search_cache.pop(key, None)
             return None
         return list(results)
 
     def _store_source_results_cache(self, source: dict[str, Any], query: str | None, results: list[SearchResult]) -> None:
-        if len(self._search_cache) > 512:
+        if len(self._search_cache) > 768:
             now = time.time()
             expired = [key for key, (timestamp, _) in self._search_cache.items() if now - timestamp > self.SEARCH_CACHE_TTL_SECONDS]
             for key in expired:
                 self._search_cache.pop(key, None)
-            if len(self._search_cache) > 512:
+            if len(self._search_cache) > 768:
                 for key in list(self._search_cache)[:128]:
                     self._search_cache.pop(key, None)
         self._search_cache[self._search_cache_key(source, query)] = (time.time(), list(results))

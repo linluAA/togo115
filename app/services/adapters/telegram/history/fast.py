@@ -117,7 +117,7 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
         *,
         shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
-        semaphore = asyncio.Semaphore(TELEGRAM_FAST_DIALOG_SEARCH_CONCURRENCY)
+        semaphore = runtime.telegram_dialog_search_semaphore()
         results: list[SearchResult] = []
         state = shared_state or TelegramSearchSharedState()
         tasks = [asyncio.create_task(self._guarded_fast_dialog_search(semaphore, client, dialog, query, budget, results, shared_state=state)) for dialog in dialogs]

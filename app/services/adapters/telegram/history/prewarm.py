@@ -7,15 +7,16 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
+from app.services import concurrency as runtime
 from app.services.adapters.telegram.rate_limit import telegram_request_gate
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, max_indexed_message_id
 from app.services.search_metrics import record_prewarm
 
 
-TELEGRAM_INDEX_PREWARM_LIMIT = 40
-TELEGRAM_INDEX_PREWARM_DIALOG_CONCURRENCY = 2
+TELEGRAM_INDEX_PREWARM_LIMIT = 50
+TELEGRAM_INDEX_PREWARM_DIALOG_CONCURRENCY = 3
 # When a source is already warm, only pull a small recent window to catch new posts.
-TELEGRAM_INDEX_PREWARM_DELTA_LIMIT = 12
+TELEGRAM_INDEX_PREWARM_DELTA_LIMIT = 18
 
 
 class TelegramIndexPrewarmMixin:
@@ -43,7 +44,7 @@ class TelegramIndexPrewarmMixin:
         if not dialogs:
             return {"sources": len(source_values), "indexed": 0, "dialogs": 0, "skipped_warm": 0}
 
-        semaphore = asyncio.Semaphore(TELEGRAM_INDEX_PREWARM_DIALOG_CONCURRENCY)
+        semaphore = runtime.telegram_dialog_search_semaphore()
         total_indexed = 0
         skipped_warm = 0
 

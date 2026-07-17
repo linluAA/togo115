@@ -70,14 +70,28 @@ async def attach_telegram_results(
     duplicate_count = 0
     save_failed_count = 0
     recheck_saved_count = 0
+    # Prefetch 115 states for top candidates with bounded concurrency, then save sequentially
+    # so "first created wins" ordering stays deterministic.
+    share_cache = process_115_cache() if ordered else None
+    prefaced_states: dict[str, str] = {}
+    if share_cache is not None and ordered:
+        probe_urls = [
+            str(getattr(result, "url", "") or "")
+            for result in ordered[:12]
+            if PAN115_URL_RE.match(str(getattr(result, "url", "") or ""))
+        ]
+        if probe_urls:
+            prefaced_states = await share_cache.availability_many(probe_urls)
+
     with db() as conn:
         existing_rows = existing_resource_rows(conn, subscription_id)
-        share_cache = process_115_cache() if ordered else None
         for result in ordered:
             url = str(getattr(result, "url", "") or "")
             mark_recheck = False
             if share_cache is not None and PAN115_URL_RE.match(url):
-                state = await share_cache.availability(url)
+                state = prefaced_states.get(url)
+                if state is None:
+                    state = await share_cache.availability(url)
                 validation_report["checked_115"] += 1
                 if state == SHARE_UNAVAILABLE:
                     validation_report["expired_115"] += 1
