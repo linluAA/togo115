@@ -435,6 +435,11 @@
   z-index: 5;
 }
 
+/* Keep status chip clear of the cancel-mode checkbox at top-right. */
+.subscription-card.selecting .subscription-status-menu {
+  margin-right: 34px;
+}
+
 .subscription-status-chip {
   flex: 0 0 auto;
   display: inline-flex;
