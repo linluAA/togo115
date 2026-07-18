@@ -7,6 +7,7 @@ from app.db import add_log, db, utc_now
 from app.services.subscription.crud.service import get_subscription
 from app.services.subscription.delivery.service import deliver_resource
 from app.services.subscription.episode.summary import subscription_episode_snapshot
+from app.services.subscription.episode.parser import _all_tmdb_episode_keys, missing_episode_keys
 from app.services.subscription.library.service import mark_completed_subscription, subscription_should_hide, enrich_subscription_with_library
 from app.services.subscription.search.flow import _search_fallback_when_needed, _search_telegram_first, _telegram_should_skip_fallback
 
@@ -32,6 +33,19 @@ async def search_and_attach_resources(
             {"id": subscription_id, "title": subscription.get("title")},
         )
         return []
+    if not subscription_needs_resource_search(subscription):
+        _mark_subscription_checked(subscription_id)
+        add_log(
+            "info",
+            "subscription",
+            "订阅当前无缺集，跳过资源搜索",
+            {
+                "id": subscription_id,
+                "title": subscription.get("title"),
+                "media_type": subscription.get("media_type"),
+            },
+        )
+        return []
 
     created, telegram_matches, telegram_summary = await _search_telegram_first(subscription, incremental_telegram)
     if created:
@@ -44,24 +58,44 @@ async def search_and_attach_resources(
             {"id": subscription_id, "count": len(created)},
         )
     if not created and telegram_matches and _telegram_should_skip_fallback(telegram_summary, subscription):
-        with db() as conn:
-            conn.execute(
-                "UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?",
-                (utc_now(), utc_now(), subscription_id),
-            )
+        _mark_subscription_checked(subscription_id)
         return []
 
     fallback_created = await _search_fallback_when_needed(subscription, deliver_func=deliver_resource)
     if fallback_created:
         created.extend(fallback_created)
 
+    _mark_subscription_checked(subscription_id)
+    return created
+
+
+
+
+def subscription_needs_resource_search(subscription: dict) -> bool:
+    """Return False when library state already shows nothing to fetch.
+
+    Unknown TV scope (no TMDB episode map) still searches. Emby snapshot
+    failures stay searchable so we do not permanently stall.
+    """
+    if subscription.get("emby_snapshot_failed"):
+        return True
+    media_type = str(subscription.get("media_type") or "").casefold()
+    if media_type == "movie":
+        return not bool(subscription.get("in_library"))
+    if media_type != "tv":
+        return True
+    expected = _all_tmdb_episode_keys(subscription)
+    if not expected:
+        return True
+    return bool(missing_episode_keys(subscription))
+
+
+def _mark_subscription_checked(subscription_id: int) -> None:
     with db() as conn:
         conn.execute(
             "UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?",
             (utc_now(), utc_now(), subscription_id),
         )
-    return created
-
 
 def _log_subscription_episode_snapshot(subscription: dict) -> None:
     episode_snapshot = subscription_episode_snapshot(subscription)

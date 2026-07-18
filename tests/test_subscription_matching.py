@@ -11,6 +11,7 @@ from app.services.subscription.library.match import (
 from app.services.subscription.match.matching import result_matches_subscription
 from app.services.subscription.resource.matching import matching_results
 from app.services.subscription.episode.parser import episodes_from_text, missing_episode_keys, owned_episode_keys
+from app.services.subscription.search.service import subscription_needs_resource_search
 
 
 def result(text: str) -> SearchResult:
@@ -567,6 +568,27 @@ class SubscriptionMatchingTest(unittest.TestCase):
         self.assertTrue(_subscription_is_complete(subscription))
         self.assertEqual(owned_episode_keys(subscription), {(1, i) for i in range(1, 11)})
         self.assertEqual(missing_episode_keys(subscription), set())
+
+
+    def test_subscription_needs_resource_search_skips_complete_tv(self) -> None:
+        complete = {
+            "media_type": "tv",
+            "tmdb_total_count": 5,
+            "emby_count": 5,
+            "emby_episode_keys": ["1x1", "1x2", "1x3", "1x4", "1x5"],
+        }
+        incomplete = {
+            "media_type": "tv",
+            "tmdb_total_count": 5,
+            "emby_count": 3,
+            "emby_episode_keys": ["1x1", "1x2", "1x3"],
+        }
+        movie_owned = {"media_type": "movie", "in_library": True}
+        movie_missing = {"media_type": "movie", "in_library": False}
+        self.assertFalse(subscription_needs_resource_search(complete))
+        self.assertTrue(subscription_needs_resource_search(incomplete))
+        self.assertFalse(subscription_needs_resource_search(movie_owned))
+        self.assertTrue(subscription_needs_resource_search(movie_missing))
 
 if __name__ == "__main__":
     unittest.main()

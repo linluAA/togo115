@@ -29,6 +29,13 @@ def resource_already_exists(
     result_episodes = episode_keys_from_text_for_subscription(subscription, result_text(result))
     result_title_key = compact_match_text(title_without_year(getattr(result, "title", "")) or getattr(result, "title", ""))
     rows = existing_rows if existing_rows is not None else existing_resource_rows(conn, subscription_id)
+    # Fast path: exact hash/url key match without scanning episode similarity.
+    if candidate_key:
+        for row in rows:
+            if not _resource_status_is_effective(row.get("status")):
+                continue
+            if _resource_dedupe_key(row.get("url") or "") == candidate_key:
+                return f"same_{candidate_key[0]}"
     for row in rows:
         reason = _duplicate_reason_for_row(subscription, result_episodes, result_title_key, candidate_key, row)
         if reason:

@@ -43,3 +43,15 @@ def existing_resource_rows(conn: sqlite3.Connection, subscription_id: int) -> li
         (subscription_id,),
     ).fetchall()
     return [row_to_dict(row) or {} for row in rows]
+
+
+def existing_resource_key_index(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
+    """Map effective resource dedupe keys to the newest matching row."""
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        if not resource_status_is_effective(row.get("status")):
+            continue
+        key = resource_dedupe_key(row.get("url") or "")
+        if key and key not in index:
+            index[key] = row
+    return index

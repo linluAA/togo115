@@ -344,6 +344,78 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             rows = conn.execute("SELECT url FROM resources ORDER BY id").fetchall()
         self.assertEqual([row["url"] for row in rows], ["https://115.com/s/better?password=2222"])
 
+    
+    async def test_search_skips_when_tv_has_no_missing_episodes(self) -> None:
+        subscription_id = self._drama_subscription()
+        with db() as conn:
+            conn.execute(
+                """
+                UPDATE subscriptions
+                SET tmdb_total_count = 5, emby_count = 5,
+                    emby_episode_keys = ?, in_library = 1
+                WHERE id = ?
+                """,
+                ('["1x1","1x2","1x3","1x4","1x5"]', subscription_id),
+            )
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls:
+            telegram_cls.return_value.search_history = AsyncMock(return_value=[])
+            rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
+            results = await search_and_attach_resources(subscription_id)
+        self.assertEqual(results, [])
+        telegram_cls.return_value.search_history.assert_not_awaited()
+        rss_cls.return_value.search_history_by_priority_until_match.assert_not_awaited()
+
+    async def test_telegram_attach_keeps_non_overlapping_missing_packs(self) -> None:
+        from app.services.subscription.search.selection import attach_telegram_results
+
+        subscription_id = self._drama_subscription()
+        with db() as conn:
+            conn.execute(
+                """
+                UPDATE subscriptions
+                SET tmdb_id = 12345, tmdb_total_count = 10, emby_count = 5,
+                    emby_episode_keys = ?
+                WHERE id = ?
+                """,
+                ('["1x1","1x2","1x3","1x4","1x5"]', subscription_id),
+            )
+        subscription = None
+        with db() as conn:
+            from app.db import row_to_dict
+            row = conn.execute("SELECT * FROM subscriptions WHERE id = ?", (subscription_id,)).fetchone()
+            subscription = row_to_dict(row)
+        subscription["tmdb_id"] = 12345
+        subscription["emby_episode_keys"] = ["1x1", "1x2", "1x3", "1x4", "1x5"]
+        subscription["tmdb_total_count"] = 10
+        subscription["emby_count"] = 5
+        subscription["keywords"] = ["Drama"]
+        first = SearchResult(
+            title="Drama S01E06 1080p",
+            url="https://115.com/s/ep06?password=1111",
+            source="-1001",
+            context="Drama S01E06 1080p\nTMDB ID: 12345",
+        )
+        second = SearchResult(
+            title="Drama S01E07 1080p",
+            url="https://115.com/s/ep07?password=2222",
+            source="-1001",
+            context="Drama S01E07 1080p\nTMDB ID: 12345",
+        )
+        pan_cache = type("C", (), {})()
+        async def availability(url):
+            return "available"
+        async def availability_many(urls):
+            return {url: "available" for url in urls}
+        pan_cache.availability = availability
+        pan_cache.availability_many = availability_many
+        with patch("app.services.subscription.search.selection.process_115_cache", return_value=pan_cache):
+            created, matched, summary = await attach_telegram_results(None, subscription, [first, second])
+        self.assertEqual(summary.get("created"), 2)
+        self.assertEqual({item["url"] for item in created}, {first.url, second.url})
+
+
     async def test_duplicate_telegram_resource_does_not_trigger_magnet_fallback(self) -> None:
         # When the library is already complete, pure TG duplicates should not open RSS/magnet fallback.
         subscription_id = self._drama_subscription()
