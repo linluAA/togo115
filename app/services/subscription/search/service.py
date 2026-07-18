@@ -43,7 +43,7 @@ async def search_and_attach_resources(
             "TG 资源已保存但投递失败，继续搜索订阅源/磁力兜底",
             {"id": subscription_id, "count": len(created)},
         )
-    if not created and telegram_matches and _telegram_should_skip_fallback(telegram_summary):
+    if not created and telegram_matches and _telegram_should_skip_fallback(telegram_summary, subscription):
         with db() as conn:
             conn.execute(
                 "UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?",

@@ -29,7 +29,7 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
             return created, matches, summary
         # Fast stage already resolved the library state for this subscription.
         # Skip full TG search when there is nothing new to fetch remotely.
-        if _telegram_should_skip_full_after_fast(summary):
+        if _telegram_should_skip_full_after_fast(summary, subscription):
             add_log(
                 "info",
                 "subscription",
@@ -44,7 +44,7 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
                 },
             )
             return created, matches, summary
-        if summary.get("raw_matched") and not _telegram_summary_needs_full_retry(summary):
+        if summary.get("raw_matched") and not _telegram_summary_needs_full_retry(summary, subscription):
             return created, matches, summary
         # Targeted remote recheck only for sources that produced index hits.
         if summary.get("from_index") and not summary.get("created"):
@@ -99,12 +99,13 @@ async def _run_telegram_search_stage(
     return created, telegram_matches, summary
 
 
-def _telegram_should_skip_full_after_fast(summary: dict[str, Any]) -> bool:
+def _telegram_should_skip_full_after_fast(summary: dict[str, Any], subscription: dict | None = None) -> bool:
     """Skip full TG history when fast stage already settled the outcome.
 
     Cases:
-    - matched only duplicates (already in library)
-    - no candidates at all is NOT skipped (full may still find remote posts)
+    - created resources: full search is unnecessary
+    - matched only duplicates when the library no longer has missing episodes
+    - index-only pure duplicates with remaining missing episodes still go full/remote
     - expired/recheck/save_failed still need full or fallback path
     """
     if int(summary.get("created") or 0) > 0:
@@ -118,19 +119,35 @@ def _telegram_should_skip_full_after_fast(summary: dict[str, Any]) -> bool:
     available = int(summary.get("available_matched") or 0)
     duplicates = int(summary.get("duplicates") or 0)
     raw_matched = int(summary.get("raw_matched") or 0)
-    # All matched candidates are already known resources.
-    if raw_matched > 0 and duplicates >= raw_matched:
-        return True
-    if available > 0 and duplicates >= available and int(summary.get("created") or 0) == 0:
-        return True
-    return False
+    pure_duplicates = (raw_matched > 0 and duplicates >= raw_matched) or (
+        available > 0 and duplicates >= available and int(summary.get("created") or 0) == 0
+    )
+    if not pure_duplicates:
+        return False
+    # Index hits are a partial view. If the subscription still misses episodes,
+    # keep scanning full/remote history for newer packs.
+    if summary.get("from_index") and _subscription_has_missing_episodes(subscription):
+        return False
+    return True
 
 
-def _telegram_summary_needs_full_retry(summary: dict[str, Any]) -> bool:
+def _subscription_has_missing_episodes(subscription: dict | None) -> bool:
+    if not subscription or subscription.get("media_type") != "tv":
+        return False
+    try:
+        from app.services.subscription.episode.parser import missing_episode_keys
+
+        return bool(missing_episode_keys(subscription))
+    except Exception:
+        # Fail open: prefer another search pass over silently missing new packs.
+        return True
+
+
+def _telegram_summary_needs_full_retry(summary: dict[str, Any], subscription: dict | None = None) -> bool:
     # Index hits that failed to create still deserve a targeted remote recheck.
     if summary.get("from_index") and not summary.get("created"):
-        # But pure duplicates do not need remote recheck.
-        if _telegram_should_skip_full_after_fast(summary):
+        # Pure duplicates without remaining missing episodes do not need remote recheck.
+        if _telegram_should_skip_full_after_fast(summary, subscription):
             return False
         return True
     return bool(summary.get("expired_115") or summary.get("recheck_115") or summary.get("save_failed"))
@@ -162,8 +179,12 @@ def _log_telegram_stage_result(
         )
 
 
-def _telegram_should_skip_fallback(summary: dict[str, Any]) -> bool:
-    """Skip fallback only when Telegram found usable resources that are already known."""
+def _telegram_should_skip_fallback(summary: dict[str, Any], subscription: dict | None = None) -> bool:
+    """Skip fallback only when Telegram found usable resources that are already known.
+
+    If the subscription still misses episodes, keep RSS/magnet fallback even when
+    Telegram only produced duplicates of older packs.
+    """
     available = int(summary.get("available_matched") or 0)
     if available <= 0:
         return False
@@ -173,7 +194,11 @@ def _telegram_should_skip_fallback(summary: dict[str, Any]) -> bool:
         return False
     if int(summary.get("save_failed") or 0) > 0:
         return False
-    return int(summary.get("duplicates") or 0) == available
+    if int(summary.get("duplicates") or 0) != available:
+        return False
+    if _subscription_has_missing_episodes(subscription):
+        return False
+    return True
 
 
 async def _search_fallback_when_needed(subscription: dict, deliver_func=None) -> list[dict]:

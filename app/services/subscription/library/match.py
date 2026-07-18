@@ -7,9 +7,9 @@ from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.episode.parser import (
     _all_tmdb_episode_keys,
     _episode_key_from_item,
-    _episode_keys_from_json,
     episode_keys_from_text_for_subscription,
     missing_episode_keys,
+    owned_episode_keys,
 )
 from app.services.subscription.match.matching import (
     compact_match_text,
@@ -74,10 +74,14 @@ def _subscription_is_complete(subscription: dict, in_library: bool | None = None
         return library
     expected = _all_tmdb_episode_keys(subscription)
     if expected:
-        owned = subscription.get("emby_episodes")
-        if not isinstance(owned, set):
-            owned = _episode_keys_from_json(subscription.get("emby_episode_keys"))
-        return (bool(owned) and expected.issubset(owned)) or count >= len(expected)
+        owned = owned_episode_keys(subscription)
+        if owned:
+            # Explicit keys are authoritative; never complete on bare count alone.
+            return expected.issubset(owned)
+        # Without keys, only allow count-based completion for pure S01 expectations.
+        if all(season == 1 for season, _ in expected):
+            return count >= len(expected)
+        return False
     total = int(subscription.get("tmdb_total_count") or 0)
     return bool(total and count >= total)
 
@@ -126,22 +130,15 @@ def result_matches_missing_episodes(subscription: dict, result: SearchResult, *e
         return False
     if episodes:
         return bool(episodes & missing)
-    if _result_is_primary_115_resource(result):
+    # Bare TG/115 packs without episode labels: only accept as a last-resort primary
+    # hit when we already know the subscription still misses episodes.
+    if missing and _result_is_primary_115_resource(result):
         return True
     return False
 
 
 def _owned_episode_keys(subscription: dict) -> set[tuple[int, int]]:
-    owned = subscription.get("emby_episodes")
-    if not isinstance(owned, set):
-        owned = _episode_keys_from_json(subscription.get("emby_episode_keys"))
-    if owned:
-        return owned
-    try:
-        count = int(subscription.get("emby_count") or 0)
-    except (TypeError, ValueError):
-        count = 0
-    return {(1, episode) for episode in range(1, count + 1)} if count > 0 else set()
+    return owned_episode_keys(subscription)
 
 
 

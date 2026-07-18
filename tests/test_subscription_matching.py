@@ -4,10 +4,13 @@ import sqlite3
 from app.services.integrations import SearchResult
 from app.services.subscription.resource.resources import canonical_115_url as _canonical_115_url, resource_dedupe_key as _resource_dedupe_key
 from app.services.subscription.resource.ops import fallback_blocked_by_primary_resource, resource_already_exists
-from app.services.subscription.library.match import result_matches_missing_episodes
+from app.services.subscription.library.match import (
+    _subscription_is_complete,
+    result_matches_missing_episodes,
+)
 from app.services.subscription.match.matching import result_matches_subscription
 from app.services.subscription.resource.matching import matching_results
-from app.services.subscription.episode.parser import episodes_from_text
+from app.services.subscription.episode.parser import episodes_from_text, missing_episode_keys, owned_episode_keys
 
 
 def result(text: str) -> SearchResult:
@@ -516,6 +519,55 @@ class SubscriptionMatchingTest(unittest.TestCase):
         }
         card = result("剧集：攻殻機動隊(2026)\n季集：S01E01-E02")
         self.assertTrue(result_matches_subscription(subscription, card))
+
+    def test_owned_inference_skips_emby_count_for_multi_season_without_keys(self) -> None:
+        subscription = {
+            "title": "Multi Season",
+            "media_type": "tv",
+            "keywords": ["Multi Season"],
+            "tmdb_seasons": [
+                {"season_number": 1, "episode_count": 10},
+                {"season_number": 2, "episode_count": 10},
+            ],
+            "emby_count": 12,
+            "emby_episode_keys": [],
+        }
+        self.assertEqual(owned_episode_keys(subscription), set())
+        # Without known ownership, all expected eps remain missing.
+        self.assertEqual(len(missing_episode_keys(subscription)), 20)
+        self.assertTrue(result_matches_missing_episodes(subscription, result("Multi Season S02E03 1080p")))
+        self.assertFalse(_subscription_is_complete(subscription))
+
+    def test_complete_requires_episode_keys_for_multi_season(self) -> None:
+        incomplete = {
+            "title": "Multi Season",
+            "media_type": "tv",
+            "tmdb_seasons": [
+                {"season_number": 1, "episode_count": 2},
+                {"season_number": 2, "episode_count": 2},
+            ],
+            "emby_count": 4,
+            "emby_episode_keys": [],
+        }
+        complete = {
+            **incomplete,
+            "emby_episode_keys": ["1x1", "1x2", "2x1", "2x2"],
+        }
+        self.assertFalse(_subscription_is_complete(incomplete))
+        self.assertTrue(_subscription_is_complete(complete))
+
+    def test_complete_allows_s01_count_when_keys_absent(self) -> None:
+        subscription = {
+            "title": "Single Season",
+            "media_type": "tv",
+            "tmdb_total_count": 10,
+            "emby_count": 10,
+            "emby_episode_keys": [],
+        }
+        self.assertTrue(_subscription_is_complete(subscription))
+        self.assertEqual(owned_episode_keys(subscription), {(1, i) for i in range(1, 11)})
+        self.assertEqual(missing_episode_keys(subscription), set())
+
 if __name__ == "__main__":
     unittest.main()
 

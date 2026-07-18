@@ -95,22 +95,37 @@ def _all_tmdb_episode_keys(subscription: dict) -> set[tuple[int, int]]:
     return {(1, episode) for episode in range(1, total + 1)} if total > 0 else set()
 
 
+def owned_episode_keys(subscription: dict) -> set[tuple[int, int]]:
+    """Return owned episode keys for a TV subscription.
+
+    Prefer explicit Emby episode keys. Only fall back to continuous S01
+    ownership from ``emby_count`` when the expected scope is pure S01 (or
+    has no multi-season map). Multi-season shows without keys return empty
+    ownership so missing-episode logic stays conservative.
+    """
+    owned = subscription.get("emby_episodes")
+    if not isinstance(owned, set):
+        owned = _episode_keys_from_json(subscription.get("emby_episode_keys"))
+    if owned:
+        return owned
+    try:
+        count = int(subscription.get("emby_count") or 0)
+    except (TypeError, ValueError):
+        count = 0
+    if count <= 0:
+        return set()
+    expected = _all_tmdb_episode_keys(subscription)
+    if expected and not all(season == 1 for season, _ in expected):
+        return set()
+    return {(1, episode) for episode in range(1, count + 1)}
+
+
 def missing_episode_keys(subscription: dict) -> set[tuple[int, int]]:
     if subscription.get("media_type") != "tv":
         return set()
     expected = _all_tmdb_episode_keys(subscription)
     if not expected:
         return set()
-    owned = subscription.get("emby_episodes")
-    if not isinstance(owned, set):
-        owned = _episode_keys_from_json(subscription.get("emby_episode_keys"))
-    if not owned:
-        try:
-            count = int(subscription.get("emby_count") or 0)
-        except (TypeError, ValueError):
-            count = 0
-        if count > 0 and all(season == 1 for season, _ in expected):
-            owned = {(1, episode) for episode in range(1, count + 1)}
-    return expected - owned
+    return expected - owned_episode_keys(subscription)
 
 

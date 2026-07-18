@@ -345,6 +345,52 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row["url"] for row in rows], ["https://115.com/s/better?password=2222"])
 
     async def test_duplicate_telegram_resource_does_not_trigger_magnet_fallback(self) -> None:
+        # When the library is already complete, pure TG duplicates should not open RSS/magnet fallback.
+        subscription_id = self._drama_subscription()
+        url = "https://115.com/s/dramacode?password=8888"
+        now = utc_now()
+        with db() as conn:
+            conn.execute(
+                """
+                UPDATE subscriptions
+                SET tmdb_id = ?, tmdb_total_count = 5, emby_count = 5,
+                    emby_episode_keys = ?
+                WHERE id = ?
+                """,
+                (12345, '["1x1","1x2","1x3","1x4","1x5"]', subscription_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO resources (subscription_id, source, title, url, status, created_at, updated_at)
+                VALUES (?, 'telegram:test', 'Drama S01E05 1080p', ?, 'delivered', ?, ?)
+                """,
+                (subscription_id, url, now, now),
+            )
+        telegram_result = SearchResult(
+            title="Drama S01E05 1080p",
+            url=url,
+            source="-100123",
+            context="Drama S01E05 1080p\nTMDB ID: 12345\nhttps://115.com/s/dramacode?password=8888",
+        )
+        pan = AsyncMock()
+        pan.share_availability = AsyncMock(return_value="available")
+
+        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
+            "app.services.subscription.search.discovery.RssTorznabAdapter"
+        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
+            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
+        ) as deliver:
+            telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
+            rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
+
+            results = await search_and_attach_resources(subscription_id)
+
+        self.assertEqual(results, [])
+        deliver.assert_not_awaited()
+        rss_cls.return_value.search_history_by_priority_until_match.assert_not_awaited()
+
+    async def test_duplicate_telegram_resource_still_falls_back_when_missing_episodes(self) -> None:
+        # Incomplete library + only TG duplicates should still try RSS/magnet for newer packs.
         subscription_id = self._drama_subscription()
         url = "https://115.com/s/dramacode?password=8888"
         now = utc_now()
@@ -378,7 +424,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(results, [])
         deliver.assert_not_awaited()
-        rss_cls.return_value.search_history_by_priority_until_match.assert_not_awaited()
+        rss_cls.return_value.search_history_by_priority_until_match.assert_awaited()
 
     async def test_unknown_telegram_115_link_is_saved_for_recheck_and_falls_back(self) -> None:
         subscription_id = self._drama_subscription()

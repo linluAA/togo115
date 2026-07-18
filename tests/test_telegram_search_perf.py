@@ -288,8 +288,23 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
             "save_failed": 0,
             "from_index": True,
         }
-        self.assertTrue(_telegram_should_skip_full_after_fast(summary))
-        self.assertFalse(_telegram_summary_needs_full_retry(summary))
+        complete = {
+            "media_type": "tv",
+            "tmdb_total_count": 2,
+            "emby_count": 2,
+            "emby_episode_keys": ["1x1", "1x2"],
+        }
+        incomplete = {
+            "media_type": "tv",
+            "tmdb_total_count": 10,
+            "emby_count": 2,
+            "emby_episode_keys": ["1x1", "1x2"],
+        }
+        # Index pure-duplicates only skip full when there is no remaining missing episode.
+        self.assertTrue(_telegram_should_skip_full_after_fast(summary, complete))
+        self.assertFalse(_telegram_summary_needs_full_retry(summary, complete))
+        self.assertFalse(_telegram_should_skip_full_after_fast(summary, incomplete))
+        self.assertTrue(_telegram_summary_needs_full_retry(summary, incomplete))
 
     def test_index_mismatch_still_needs_full_retry(self) -> None:
         from app.services.subscription.search.flow import _telegram_should_skip_full_after_fast, _telegram_summary_needs_full_retry
@@ -325,10 +340,35 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
                 "from_index": True,
             }
 
+        # Complete subscription: pure index duplicates can stop after fast.
+        complete = {
+            "id": 1,
+            "title": "x",
+            "status": "active",
+            "media_type": "tv",
+            "tmdb_total_count": 1,
+            "emby_count": 1,
+            "emby_episode_keys": ["1x1"],
+        }
         with patch.object(flow_mod, "_run_telegram_search_stage", side_effect=fake_stage):
-            created, matches, summary = await flow_mod._search_telegram_first({"id": 1, "title": "x", "status": "active"}, False)
+            created, matches, summary = await flow_mod._search_telegram_first(complete, False)
         self.assertEqual(calls, [True])  # only fast
         self.assertEqual(summary["duplicates"], 1)
+
+        # Incomplete subscription: keep full/remote pass for newer packs.
+        calls.clear()
+        incomplete = {
+            "id": 2,
+            "title": "x",
+            "status": "active",
+            "media_type": "tv",
+            "tmdb_total_count": 10,
+            "emby_count": 1,
+            "emby_episode_keys": ["1x1"],
+        }
+        with patch.object(flow_mod, "_run_telegram_search_stage", side_effect=fake_stage):
+            await flow_mod._search_telegram_first(incomplete, False)
+        self.assertEqual(calls, [True, False])
 
     async def test_search_telegram_first_targets_force_remote(self) -> None:
         from app.services.subscription.search import flow as flow_mod
@@ -361,6 +401,31 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(states[1][0], False)
         self.assertTrue(states[1][1])  # force_remote on full
         self.assertEqual(states[1][2], ["-1007"])
+
+    def test_skip_fallback_requires_no_missing_episodes(self) -> None:
+        from app.services.subscription.search.flow import _telegram_should_skip_fallback
+
+        summary = {
+            "created": 0,
+            "available_matched": 2,
+            "duplicates": 2,
+            "expired_115": 0,
+            "save_failed": 0,
+        }
+        complete = {
+            "media_type": "tv",
+            "tmdb_total_count": 2,
+            "emby_count": 2,
+            "emby_episode_keys": ["1x1", "1x2"],
+        }
+        incomplete = {
+            "media_type": "tv",
+            "tmdb_total_count": 10,
+            "emby_count": 2,
+            "emby_episode_keys": ["1x1", "1x2"],
+        }
+        self.assertTrue(_telegram_should_skip_fallback(summary, complete))
+        self.assertFalse(_telegram_should_skip_fallback(summary, incomplete))
 
 class TelegramExtractCacheTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
