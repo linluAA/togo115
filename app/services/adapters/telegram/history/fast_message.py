@@ -35,12 +35,11 @@ class TelegramFastMessageMixin:
             return self._filter_cached_results_by_query(list(cached), queries)
 
         texts = [telegram_message_text(message)]
-        # Prefer current message first; only scan neighbors if no direct 115 link.
+        # Prefer current message first; only scan neighbors/buttons if no direct 115 link.
         link_contexts = self._fast_link_contexts(texts[0] if texts else "")
         if not link_contexts:
             texts.extend(await self._fast_neighbor_texts(client, entity, message))
             link_contexts = self._fast_link_contexts("\n".join(text for text in texts if text))
-        # Button click is relatively expensive; only try when still no direct share link.
         if not link_contexts:
             link_contexts.update(await self._fast_button_link_contexts(message, client, entity, texts))
 

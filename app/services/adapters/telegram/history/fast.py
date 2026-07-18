@@ -77,19 +77,17 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
             indexed_results = search_telegram_message_index([str(item["canonical"]) for item in dialogs], queries, TELEGRAM_FAST_RETURN_TARGET)
             if indexed_results:
                 results = self._dedupe_results(state.remember_results(indexed_results))
-                add_log(
-                    "info",
+                add_log("debug",
                     "telegram",
                     "Telegram 本地索引快速命中资源",
                     {"title": title, "count": len(results), "sources": len(dialogs), "resolve_ms": resolve_ms, "total_ms": _elapsed_ms(started)},
                 )
                 return results
         budget = TelegramSearchBudget(TELEGRAM_FAST_TOTAL_BUDGET_SECONDS)
-        add_log("info", "telegram", "Telegram 快速搜索开始", {**self._fast_search_start_payload(title, dialogs, queries[0]), "resolve_ms": resolve_ms})
+        add_log("debug", "telegram", "Telegram 快速搜索开始", {**self._fast_search_start_payload(title, dialogs, queries[0]), "resolve_ms": resolve_ms})
         search_started = time.perf_counter()
         results = await self._search_dialogs_fast(client, dialogs, queries[0], budget, shared_state=state)
-        add_log(
-            "info",
+        add_log("debug",
             "telegram",
             "Telegram 快速搜索完成",
             {"title": title, "count": len(results), "resolve_ms": resolve_ms, "search_ms": _elapsed_ms(search_started), "total_ms": _elapsed_ms(started), "remaining_budget": round(budget.remaining, 2)},

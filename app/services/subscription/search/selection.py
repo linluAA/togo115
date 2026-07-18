@@ -48,8 +48,7 @@ async def attach_telegram_results(
             }
             for result in results[:3]
         ]
-        add_log(
-            "info",
+        add_log("debug",
             "subscription",
             "TG 已提取链接但标题上下文未命中订阅，已跳过以避免错误投递",
             {
@@ -99,8 +98,7 @@ async def attach_telegram_results(
                 validation_report["checked_115"] += 1
                 if state == SHARE_UNAVAILABLE:
                     validation_report["expired_115"] += 1
-                    add_log(
-                        "info",
+                    add_log("debug",
                         "subscription",
                         "115 分享链接已失效，跳过保存和投递",
                         {
@@ -186,8 +184,7 @@ async def attach_telegram_results(
         ),
         **validation_report,
     }
-    add_log(
-        "info",
+    add_log("debug",
         "subscription",
         "TG 搜索指标",
         {
@@ -227,8 +224,7 @@ async def attach_telegram_results(
         }
     )
     if results and not created:
-        add_log(
-            "info",
+        add_log("debug",
             "subscription",
             "TG 提取结果未形成新投递",
             {

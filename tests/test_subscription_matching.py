@@ -590,6 +590,37 @@ class SubscriptionMatchingTest(unittest.TestCase):
         self.assertFalse(subscription_needs_resource_search(movie_owned))
         self.assertTrue(subscription_needs_resource_search(movie_missing))
 
+
+    def test_resource_already_exists_uses_memoized_index(self) -> None:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE resources (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription_id INTEGER, title TEXT, url TEXT, status TEXT)"
+        )
+        subscription = {
+            "title": "Drama",
+            "media_type": "tv",
+            "keywords": ["Drama"],
+            "tmdb_total_count": 10,
+            "emby_episode_keys": [],
+        }
+        try:
+            conn.execute(
+                "INSERT INTO resources (subscription_id, title, url, status) VALUES (1, 'Drama S01E01-E05', 'https://115.com/s/old?password=aaaa', 'delivered')"
+            )
+            rows = [
+                {"title": "Drama S01E01-E05", "url": "https://115.com/s/old?password=aaaa", "status": "delivered"}
+            ]
+            same = result("Drama S01E06")
+            same.url = "https://115.com/s/old?password=aaaa"
+            covered = result("Drama S01E03")
+            self.assertEqual(resource_already_exists(conn, 1, same, subscription, rows), "same_115")
+            self.assertEqual(resource_already_exists(conn, 1, covered, subscription, rows), "covered_episodes")
+            from app.services.subscription.resource import duplicate as dup_mod
+            self.assertIn(id(rows), dup_mod._ROW_INDEX_MEMO)
+        finally:
+            conn.close()
+
 if __name__ == "__main__":
     unittest.main()
 

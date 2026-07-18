@@ -35,8 +35,7 @@ async def search_and_attach_resources(
         return []
     if not subscription_needs_resource_search(subscription):
         _mark_subscription_checked(subscription_id)
-        add_log(
-            "info",
+        add_log("debug",
             "subscription",
             "订阅当前无缺集，跳过资源搜索",
             {

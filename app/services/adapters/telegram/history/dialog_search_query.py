@@ -120,10 +120,19 @@ class TelegramDialogSearchQueryMixin:
                 read_ms = _elapsed_ms(read_started)
                 pipeline_stats.read = len(messages)
                 extract_started = time.perf_counter()
-                for message in messages:
+                # Deep extract (neighbor/button pipeline) only on top-N ranked messages.
+                deep_budget = min(len(messages), max(2, min(6, int(options.messages_per_query or 6))))
+                for index, message in enumerate(messages):
                     processed += 1
                     stats["searched"] += 1
                     pipeline_stats.title_matched += 1
+                    if index >= deep_budget and results:
+                        # Already have links from better-ranked hits; skip remaining deep extracts.
+                        break
+                    if index >= deep_budget:
+                        # Still try a cheap body-only extract for a couple more candidates.
+                        if index >= deep_budget + 4:
+                            break
                     links = await self._pipeline_extract_message_links(
                         client,
                         entity,

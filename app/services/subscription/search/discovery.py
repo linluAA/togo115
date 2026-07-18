@@ -54,8 +54,7 @@ async def search_telegram_history(
         return []
 
     if results:
-        add_log(
-            "info",
+        add_log("debug",
             "subscription",
             "TG 快速搜索已提取到资源链接" if fast else "TG 历史搜索已提取到资源链接",
             {"id": subscription_id, "title": search_title, "count": len(results)},

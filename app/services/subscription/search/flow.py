@@ -30,8 +30,7 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
         # Fast stage already resolved the library state for this subscription.
         # Skip full TG search when there is nothing new to fetch remotely.
         if _telegram_should_skip_full_after_fast(summary, subscription):
-            add_log(
-                "info",
+            add_log("debug",
                 "subscription",
                 "TG 快速搜索已足够，跳过完整历史搜索",
                 {
@@ -172,7 +171,7 @@ def _log_telegram_stage_result(
         add_log("info", "subscription", "发现新的 TG 资源链接", {"id": subscription["id"], "count": len(created)})
     elif telegram_matches:
         add_log(
-            "info",
+            "debug",
             "subscription",
             f"TG {stage}搜索找到资源但没有新增保存，已按原因决定是否继续兜底",
             {"id": subscription["id"], **summary},

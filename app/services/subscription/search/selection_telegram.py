@@ -44,10 +44,10 @@ def _log_telegram_attach_summary(subscription_id: int, summary: dict[str, Any]) 
         add_log("warning", "subscription", "TG 命中的 115 资源需要待复检，将继续搜索订阅源/磁力", {"id": subscription_id, **summary})
         return
     if summary.get("expired_115") and not summary.get("available_matched"):
-        add_log("info", "subscription", "TG 命中的 115 资源均已失效，将继续搜索订阅源/磁力", {"id": subscription_id, **summary})
+        add_log("debug", "subscription", "TG 命中的 115 资源均已失效，将继续搜索订阅源/磁力", {"id": subscription_id, **summary})
         return
     if summary.get("duplicates") == summary.get("available_matched") and summary.get("available_matched"):
-        add_log("info", "subscription", "TG 资源已存在，本次不再重复保存", {"id": subscription_id, **summary})
+        add_log("debug", "subscription", "TG 资源已存在，本次不再重复保存", {"id": subscription_id, **summary})
         return
     if summary.get("save_failed"):
         add_log("warning", "subscription", "TG 资源匹配成功但保存失败，将继续搜索订阅源/磁力", {"id": subscription_id, **summary})
