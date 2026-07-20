@@ -7,11 +7,28 @@ on:
       - master
     tags:
       - "v*"
+    paths-ignore:
+      # Pure docs/meta should not burn multi-arch image builds.
+      - "**/*.md"
+      - ".helloagents/**"
+      - ".tools/**"
+      - "docs/**"
   pull_request:
     branches:
       - main
       - master
+    paths-ignore:
+      - "**/*.md"
+      - ".helloagents/**"
+      - ".tools/**"
+      - "docs/**"
   workflow_dispatch:
+
+# Only keep the newest build for a ref. Intermediate API batch pushes
+# no longer waste full multi-arch image builds.
+concurrency:
+  group: docker-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
