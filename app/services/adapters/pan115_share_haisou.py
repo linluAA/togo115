@@ -9,6 +9,13 @@ from app.services.adapters.pan115_share_status import (
     ShareAvailability,
 )
 from app.services.adapters.pan115_state import add_log
+from app.services.sources.haisou.budget import (
+    allow_haisou_validate,
+    get_cached_haisou_validate,
+    note_haisou_validate,
+    set_cached_haisou_validate,
+    validate_cache_key,
+)
 
 
 def classify_haisou_validate_result(result: dict[str, Any] | None) -> ShareAvailability:
@@ -60,8 +67,23 @@ async def try_haisou_share_fallback(
     if not haisou_enabled():
         return None
 
+    clean_link = str(link or "").strip()
+    cache_key = validate_cache_key(clean_link, receive_code)
+    cached = get_cached_haisou_validate(cache_key)
+    if isinstance(cached, ShareAvailability):
+        return cached
+    if not allow_haisou_validate():
+        add_log(
+            "warning",
+            "115",
+            "海搜备用检测达到窗口预算，保留原 Cookie 状态",
+            {"link": clean_link[:240], "trigger": trigger},
+        )
+        return None
+
     try:
-        result = await HaisouClient().validate(str(link or "").strip(), pwd=receive_code)
+        note_haisou_validate()
+        result = await HaisouClient().validate(clean_link, pwd=receive_code)
     except HaisouApiError as exc:
         add_log(
             "warning",
@@ -87,6 +109,7 @@ async def try_haisou_share_fallback(
         return None
 
     info = classify_haisou_validate_result(result if isinstance(result, dict) else {})
+    set_cached_haisou_validate(cache_key, info)
     add_log(
         "info" if info.status == SHARE_AVAILABLE else "warning",
         "115",

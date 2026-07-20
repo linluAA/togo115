@@ -34,7 +34,15 @@ def metrics_snapshot() -> dict[str, Any]:
         queue_stats = job_queue_stats()
     except Exception:
         queue_stats = {}
+    haisou_budget = {}
+    try:
+        from app.services.sources.haisou.budget import haisou_budget_snapshot
+
+        haisou_budget = haisou_budget_snapshot()
+    except Exception:
+        haisou_budget = {}
     return {
+        "haisou_budget": haisou_budget,
         "worker_id": (queue_stats or {}).get("worker_id"),
         "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY,
         "desired_concurrency": desired_concurrency,

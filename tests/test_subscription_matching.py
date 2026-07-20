@@ -621,6 +621,89 @@ class SubscriptionMatchingTest(unittest.TestCase):
         finally:
             conn.close()
 
+
+
+class UpdateToEpisodeParseEdgeTest(unittest.TestCase):
+    def test_update_to_colon_and_variants_cover_range(self) -> None:
+        samples = {
+            "某某剧 更到21集 4K": 21,
+            "某某剧 更新：21": 21,
+            "某某剧 更新:21集": 21,
+            "某某剧 已更至21集": 21,
+            "某某剧 更新到第21集": 21,
+            "某某剧【更新至21】": 21,
+        }
+        for title, expected in samples.items():
+            keys = episodes_from_text(title)
+            self.assertIn((1, expected), keys, title)
+            self.assertEqual(len(keys), expected, title)
+            self.assertIn((1, 1), keys, title)
+
+    def test_single_episode_update_still_single(self) -> None:
+        keys = episodes_from_text("某某剧 更新第21集 4K")
+        self.assertEqual(keys, {(1, 21)})
+
+
+class TmdbEnrichmentRefreshTest(unittest.TestCase):
+    def test_needs_refresh_when_library_caught_up_on_active_show(self) -> None:
+        from app.services.subscription.library.service import _needs_tmdb_enrichment, _TMDB_REFRESH_MEMO
+
+        _TMDB_REFRESH_MEMO.clear()
+        sub = {
+            "id": 9001,
+            "media_type": "tv",
+            "status": "active",
+            "tmdb_id": 123,
+            "tmdb_total_count": 19,
+            "tmdb_seasons": [{"season_number": 1, "episode_count": 19}],
+            "emby_count": 19,
+            "emby_episode_keys": [f"1x{i}" for i in range(1, 20)],
+            "release_year": 2026,
+        }
+        self.assertTrue(_needs_tmdb_enrichment(sub))
+
+    def test_refresh_cooldown_avoids_repeat_fetch(self) -> None:
+        import time
+        from app.services.subscription.library.service import (
+            _needs_tmdb_enrichment,
+            _TMDB_REFRESH_MEMO,
+            _TMDB_REFRESH_COOLDOWN_SECONDS,
+        )
+
+        _TMDB_REFRESH_MEMO.clear()
+        sub = {
+            "id": 9002,
+            "media_type": "tv",
+            "status": "active",
+            "tmdb_id": 456,
+            "tmdb_total_count": 19,
+            "tmdb_seasons": [{"season_number": 1, "episode_count": 19}],
+            "emby_count": 19,
+            "emby_episode_keys": [f"1x{i}" for i in range(1, 20)],
+            "release_year": 2026,
+        }
+        self.assertTrue(_needs_tmdb_enrichment(sub))
+        _TMDB_REFRESH_MEMO[9002] = time.time()
+        self.assertFalse(_needs_tmdb_enrichment(sub))
+        _TMDB_REFRESH_MEMO[9002] = time.time() - (_TMDB_REFRESH_COOLDOWN_SECONDS + 10)
+        self.assertTrue(_needs_tmdb_enrichment(sub))
+
+    def test_fresh_tmdb_detail_overwrites_stale_total(self) -> None:
+        from app.services.subscription.library.state import _tmdb_metadata
+
+        sub = {
+            "tmdb_total_count": 19,
+            "tmdb_seasons": [{"season_number": 1, "episode_count": 19}],
+        }
+        detail = {
+            "number_of_episodes": 21,
+            "seasons": [{"season_number": 1, "episode_count": 21}],
+        }
+        total, seasons = _tmdb_metadata(sub, detail)
+        self.assertEqual(total, 21)
+        self.assertEqual(seasons, [{"season_number": 1, "episode_count": 21}])
+
+
 if __name__ == "__main__":
     unittest.main()
 

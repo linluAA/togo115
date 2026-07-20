@@ -16,7 +16,11 @@ PLAIN_EPISODE_RANGE_RE = re.compile(
     r"(?<![a-z0-9])(?P<start>\d{1,3})\s*(?:-|~|–|—|至|到)\s*(?P<end>\d{1,3})\s*(?:集|话|話|eps?|episodes?)?(?![a-z0-9])",
     re.I,
 )
-UPDATE_TO_EPISODE_RE = re.compile(rf"(?:更新至|更至|连载至|完结至)\s*(?P<episode>{CN_NUMBER_TOKEN})(?:\s*(?:集|话|話|ep|eps?|episode))?", re.I)
+UPDATE_TO_EPISODE_RE = re.compile(
+    rf"(?:已?更新至|已?更至|更到|更新到|连载至|完结至)\s*(?:第\s*)?(?P<episode>{CN_NUMBER_TOKEN})(?:\s*(?:集|话|話|ep|eps?|episode))?"
+    rf"|更新\s*[:：]\s*(?:第\s*)?(?P<episode_colon>{CN_NUMBER_TOKEN})(?:\s*(?:集|话|話|ep|eps?|episode))?",
+    re.I,
+)
 SEASON_MENTION_RE = re.compile(
     rf"(?<![a-z0-9])s(?P<s>\d{{1,2}})(?!\d)"
     rf"|season[\s._-]*(?P<season>\d{{1,2}})\b"

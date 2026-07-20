@@ -32,9 +32,11 @@ CN_EPISODE_RANGE_NATIVE_RE = re.compile(
     re.I,
 )
 CN_UPDATE_TO_NATIVE_RE = re.compile(
-    rf"(?:\u66f4\u65b0\u81f3|\u66f4\u65b0\u5230|\u8fde\u8f7d\u81f3|\u9023\u8f09\u81f3|\u5b8c\u7ed3\u81f3|\u5b8c\u7d50\u81f3)\s*(?:\u7b2c\s*)?(?P<episode>{CN_NUM_TOKEN})\s*(?:[{CN_EPISODE_UNIT}]|ep|eps?|episode)?",
+    rf"(?:\u5df2?\u66f4\u65b0\u81f3|\u5df2?\u66f4\u81f3|\u66f4\u5230|\u66f4\u65b0\u5230|\u8fde\u8f7d\u81f3|\u9023\u8f09\u81f3|\u5b8c\u7ed3\u81f3|\u5b8c\u7d50\u81f3)\s*(?:\u7b2c\s*)?(?P<episode>{CN_NUM_TOKEN})\s*(?:[{CN_EPISODE_UNIT}]|ep|eps?|episode)?"
+    rf"|\u66f4\u65b0\s*[:\uff1a]\s*(?:\u7b2c\s*)?(?P<episode_colon>{CN_NUM_TOKEN})\s*(?:[{CN_EPISODE_UNIT}]|ep|eps?|episode)?",
     re.I,
 )
+
 EPISODE_DOTTED_TOKEN_RE = re.compile(r"(?i)(?<![a-z0-9])(?:s(?P<season>\d{1,2})[\s._-]*)?(?:e|ep)(?![a-z])[\s._-]*(?P<episode>\d{1,3})(?:\s*(?:-|~|\u2013|\u2014|\u81f3|\u5230)\s*(?:e|ep)?[\s._-]*(?P<episode_end>\d{1,3}))?")
 SEASON_DOTTED_EPISODE_RE = re.compile(r"(?i)(?<![a-z0-9])s(?P<season>\d{1,2})[\s._-]+(?P<episode>\d{1,3})(?:\s*(?:-|~|\u2013|\u2014|\u81f3|\u5230)\s*(?P<episode_end>\d{1,3}))?")
 CN_FULL_COUNT_NATIVE_RE = re.compile(
@@ -166,7 +168,8 @@ def _episodes_from_plain_ranges(text: str) -> set[tuple[int, int]]:
 def _episodes_from_update_text(text: str) -> set[tuple[int, int]]:
     episodes: set[tuple[int, int]] = set()
     for match in UPDATE_TO_EPISODE_RE.finditer(text or ""):
-        episode = _number_token_to_int(match.group("episode"))
+        token = match.groupdict().get("episode") or match.groupdict().get("episode_colon")
+        episode = _number_token_to_int(token)
         if episode:
             episodes.update(_expand_episode_range(1, 1, episode))
     return episodes
@@ -193,7 +196,8 @@ def _episodes_from_native_cn_episode_text(text: str) -> set[tuple[int, int]]:
 def _episodes_from_native_update_text(text: str) -> set[tuple[int, int]]:
     episodes: set[tuple[int, int]] = set()
     for match in CN_UPDATE_TO_NATIVE_RE.finditer(text or ""):
-        episode = _number_token_to_int(match.group("episode"))
+        token = match.groupdict().get("episode") or match.groupdict().get("episode_colon")
+        episode = _number_token_to_int(token)
         if episode:
             episodes.update(_expand_episode_range(1, 1, episode))
     return episodes

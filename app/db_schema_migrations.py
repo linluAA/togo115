@@ -254,6 +254,12 @@ def _ensure_indexes(conn: sqlite3.Connection) -> None:
         -- search_blob is filtered with FTS5 (preferred) or LIKE; composite source/has_115 prunes rows.
         CREATE INDEX IF NOT EXISTS idx_resources_subscription_status
             ON resources(subscription_id, status);
+        CREATE INDEX IF NOT EXISTS idx_resources_subscription_status_updated
+            ON resources(subscription_id, status, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_resources_status_updated
+            ON resources(status, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_subscriptions_status_checked
+            ON subscriptions(status, last_checked_at);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_indexed_at
             ON telegram_message_index(indexed_at);
         CREATE INDEX IF NOT EXISTS idx_background_jobs_kind_status

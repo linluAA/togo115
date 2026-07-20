@@ -7,7 +7,14 @@ from typing import Any
 from telethon import TelegramClient
 
 from app.db import add_log
-from app.services.link import TELEGRAM_HISTORY_MAX_RESULTS
+from app.services.link import (
+    TELEGRAM_HISTORY_MAX_RESULTS,
+    context_for_115_link,
+    extract_115_links,
+    message_has_link_button_hint,
+    telegram_message_text,
+    text_has_external_resource_page_hint,
+)
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget, TelegramSearchSharedState
 from app.services.adapters.telegram.pipeline import TelegramPipelineStats
 from app.services.adapters.telegram.rate_limit import telegram_request_gate
@@ -48,7 +55,9 @@ class TelegramDialogSearchQueryMixin:
             for query in self._server_search_queries(queries):
                 if budget.exhausted() or len(results) >= TELEGRAM_HISTORY_MAX_RESULTS:
                     break
-                hits = await self._search_dialog_query(client, entity, source, query, options, budget, seen_messages, stats)
+                hits = await self._search_dialog_query(
+                    client, entity, source, query, options, budget, seen_messages, stats, shared_state=state
+                )
                 results.extend(hits)
             server_ms = _elapsed_ms(server_started)
             if results:
@@ -94,6 +103,62 @@ class TelegramDialogSearchQueryMixin:
         )
         return results, extract_ms
 
+    def _message_suggests_resource_links(self, message: Any) -> bool:
+        text = telegram_message_text(message)
+        if not text and not message_has_link_button_hint(message):
+            return False
+        lowered = text.casefold()
+        return bool(
+            extract_115_links(text)
+            or "magnet:?" in lowered
+            or text_has_external_resource_page_hint(text)
+            or message_has_link_button_hint(message)
+        )
+
+    async def _body_only_extract_message_links(
+        self,
+        source: str,
+        message: Any,
+        query: str,
+        seen_messages: set[int],
+        pipeline_stats: TelegramPipelineStats,
+    ) -> list[SearchResult]:
+        """Cheap extract: only parse 115/magnet from the message body, no neighbors/buttons/pages."""
+        try:
+            message_id = int(getattr(message, "id", 0) or 0)
+        except (TypeError, ValueError):
+            message_id = 0
+        if message_id and message_id in seen_messages:
+            pipeline_stats.duplicate_messages += 1
+            return []
+        text = telegram_message_text(message)
+        urls = list(extract_115_links(text) or [])
+        if "magnet:?" in text.casefold():
+            for token in text.split():
+                token = token.strip().strip("<>\"'()[]")
+                if token.casefold().startswith("magnet:?") and token not in urls:
+                    urls.append(token)
+        if not urls:
+            pipeline_stats.no_link += 1
+            pipeline_stats.skipped_no_link_hint += 1
+            return []
+        hits: list[SearchResult] = []
+        for url in urls:
+            scoped = context_for_115_link(text, url, max(len(urls), 2)) if "115" in url else text
+            hits.append(
+                SearchResult(
+                    title=(scoped.splitlines()[0][:120] if scoped else query) or query,
+                    url=url,
+                    source=source,
+                    message_id=str(message_id or "") or None,
+                    context=scoped or text,
+                )
+            )
+        if message_id:
+            seen_messages.add(message_id)
+        pipeline_stats.extracted_links += len(hits)
+        return hits
+
     async def _search_dialog_query(
         self,
         client: TelegramClient,
@@ -104,6 +169,8 @@ class TelegramDialogSearchQueryMixin:
         budget: TelegramSearchBudget,
         seen_messages: set[int],
         stats: dict[str, int],
+        *,
+        shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
         started = time.perf_counter()
         results: list[SearchResult] = []
@@ -112,6 +179,12 @@ class TelegramDialogSearchQueryMixin:
         timeout = budget.timeout(options.query_budget)
         read_ms = 0
         extract_ms = 0
+        state = shared_state
+        if state is not None:
+            cached = state.get_cached_query_dialog_results(source, query)
+            if cached is not None:
+                stats["cache_hits"] = int(stats.get("cache_hits", 0) or 0) + 1
+                return list(cached)
         try:
             async with asyncio.timeout(timeout):
                 read_started = time.perf_counter()
@@ -120,30 +193,37 @@ class TelegramDialogSearchQueryMixin:
                 read_ms = _elapsed_ms(read_started)
                 pipeline_stats.read = len(messages)
                 extract_started = time.perf_counter()
-                # Deep extract (neighbor/button pipeline) only on top-N ranked messages.
-                deep_budget = min(len(messages), max(2, min(6, int(options.messages_per_query or 6))))
+                # Deep extract (neighbor/button pipeline) only on top-N ranked messages with link hints.
+                deep_budget = min(len(messages), max(2, min(4, int(options.messages_per_query or 4))))
                 for index, message in enumerate(messages):
                     processed += 1
                     stats["searched"] += 1
                     pipeline_stats.title_matched += 1
                     if index >= deep_budget and results:
-                        # Already have links from better-ranked hits; skip remaining deep extracts.
                         break
-                    if index >= deep_budget:
-                        # Still try a cheap body-only extract for a couple more candidates.
-                        if index >= deep_budget + 4:
-                            break
-                    links = await self._pipeline_extract_message_links(
-                        client,
-                        entity,
-                        source,
-                        message,
-                        [query],
-                        None,
-                        seen_messages,
-                        pipeline_stats,
-                        stage="server_search",
-                    )
+                    if index >= deep_budget and index >= deep_budget + 2:
+                        break
+                    suggests = self._message_suggests_resource_links(message)
+                    if index < deep_budget and suggests:
+                        links = await self._pipeline_extract_message_links(
+                            client,
+                            entity,
+                            source,
+                            message,
+                            [query],
+                            None,
+                            seen_messages,
+                            pipeline_stats,
+                            stage="server_search",
+                        )
+                    else:
+                        links = await self._body_only_extract_message_links(
+                            source,
+                            message,
+                            query,
+                            seen_messages,
+                            pipeline_stats,
+                        )
                     results.extend(links)
                     if processed >= options.messages_per_query or len(results) >= TELEGRAM_HISTORY_MAX_RESULTS:
                         break
@@ -162,4 +242,7 @@ class TelegramDialogSearchQueryMixin:
         stats["pipeline_extracted_links"] = stats.get("pipeline_extracted_links", 0) + pipeline_stats.extracted_links
         stats["pipeline_no_link"] = stats.get("pipeline_no_link", 0) + pipeline_stats.no_link
         stats["pipeline_duplicate_messages"] = stats.get("pipeline_duplicate_messages", 0) + pipeline_stats.duplicate_messages
+        stats["pipeline_skipped_no_link_hint"] = stats.get("pipeline_skipped_no_link_hint", 0) + pipeline_stats.skipped_no_link_hint
+        if state is not None:
+            state.set_cached_query_dialog_results(source, query, results)
         return results

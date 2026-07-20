@@ -70,7 +70,14 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
         if not dialogs:
             return []
         dialogs = state.filter_dialogs(dialogs)
-        queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=6))
+        from app.services.adapters.telegram.history.dialog_rank import rank_dialogs
+
+        dialogs = rank_dialogs(
+            dialogs,
+            preferred_sources=list(state.preferred_sources or []),
+            hit_scores=dict(state.dialog_hit_scores or {}),
+        )
+        queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=4))
         if not queries:
             return []
         if not state.force_remote:
@@ -115,15 +122,31 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
         *,
         shared_state: TelegramSearchSharedState | None = None,
     ) -> list[SearchResult]:
+        from app.services.adapters.telegram.history.dialog_search import TELEGRAM_EMPTY_DIALOG_STREAK
+
         semaphore = runtime.telegram_dialog_search_semaphore()
         results: list[SearchResult] = []
         state = shared_state or TelegramSearchSharedState()
-        tasks = [asyncio.create_task(self._guarded_fast_dialog_search(semaphore, client, dialog, query, budget, results, shared_state=state)) for dialog in dialogs]
+        empty_streak = 0
+        tasks = [
+            asyncio.create_task(
+                self._guarded_fast_dialog_search(semaphore, client, dialog, query, budget, results, shared_state=state)
+            )
+            for dialog in dialogs
+        ]
         pending: set[asyncio.Task] = set(tasks)
         try:
             while pending and not budget.exhausted() and not results:
                 done, pending = await asyncio.wait(pending, timeout=budget.timeout(0.5), return_when=asyncio.FIRST_COMPLETED)
+                before = len(results)
                 self._collect_fast_dialog_results(done, results)
+                if results:
+                    empty_streak = 0
+                    break
+                # Count completed empty tasks toward early stop.
+                empty_streak += max(0, len(done) - (len(results) - before))
+                if empty_streak >= TELEGRAM_EMPTY_DIALOG_STREAK and pending:
+                    break
         finally:
             await self._cancel_pending_dialog_searches(pending)
         return results[:TELEGRAM_FAST_RETURN_TARGET]
@@ -180,6 +203,9 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
             if hits and not self._pipeline_is_seen(message, seen_messages, TelegramPipelineStats()):
                 self._pipeline_mark_seen(message, seen_messages)
                 add_log("debug", "telegram", "Telegram 快速搜索单来源命中", {"dialog": source, "query": query, "messages": len(messages), "links": len(hits), "read_ms": read_ms, "extract_ms": _elapsed_ms(extract_started)})
+                state.note_dialog_hits(source, len(hits))
+                from app.services.adapters.telegram.history.dialog_rank import note_dialog_hit
+                note_dialog_hit(source, len(hits))
                 return hits
         add_log("debug", "telegram", "Telegram 快速搜索单来源无结果", {"dialog": source, "query": query, "messages": len(messages), "read_ms": read_ms, "extract_ms": _elapsed_ms(extract_started)})
         return []

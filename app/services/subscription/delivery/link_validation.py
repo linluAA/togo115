@@ -80,14 +80,17 @@ async def _check_115_links(adapter: Pan115Adapter, results: list[SearchResult]) 
     urls = _unique_115_urls(results)
     if not urls:
         return {}
+    # Collapse equivalent share links (same code+pwd, different presentation) to one probe.
+    representatives, url_to_key = _share_probe_plan(urls)
     semaphore = asyncio.Semaphore(PAN115_VALIDATION_CONCURRENCY)
 
     async def check(url: str) -> tuple[str, str]:
         async with semaphore:
             return url, await adapter.share_availability(url)
 
-    pairs = await asyncio.gather(*(check(url) for url in urls))
-    return dict(pairs)
+    pairs = await asyncio.gather(*(check(url) for url in representatives))
+    key_state = {url_to_key[url]: state for url, state in pairs}
+    return {url: key_state[url_to_key[url]] for url in urls}
 
 
 def _unique_115_urls(results: list[SearchResult]) -> list[str]:
@@ -100,6 +103,24 @@ def _unique_115_urls(results: list[SearchResult]) -> list[str]:
         seen.add(url)
         urls.append(url)
     return urls
+
+
+def _share_probe_plan(urls: list[str]) -> tuple[list[str], dict[str, str]]:
+    """Return representative URLs and mapping url -> share identity key."""
+    from app.services.adapters.pan115 import normalize_115_share_link, parse_115_share_link
+
+    representatives: list[str] = []
+    url_to_key: dict[str, str] = {}
+    key_to_rep: dict[str, str] = {}
+    for url in urls:
+        clean = normalize_115_share_link(url) or url
+        share_code, receive_code = parse_115_share_link(clean)
+        key = f"{(share_code or clean).casefold()}|{(receive_code or '').casefold()}"
+        url_to_key[url] = key
+        if key not in key_to_rep:
+            key_to_rep[key] = url
+            representatives.append(url)
+    return representatives, url_to_key
 
 
 async def pick_first_available_115_result(

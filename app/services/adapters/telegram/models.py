@@ -58,6 +58,10 @@ class TelegramSearchSharedState:
     force_remote: bool = False
     # When set, remote search only touches these dialogs (targeted recheck).
     preferred_sources: list[str] = field(default_factory=list)
+    # Process/session hit scores for dialog ranking within one search-all flow.
+    dialog_hit_scores: dict[str, int] = field(default_factory=dict)
+    # Cache remote query results keyed by "source\0query" for fast→full reuse.
+    query_dialog_cache: dict[str, list[Any]] = field(default_factory=dict)
 
     def seen_messages_for(self, source: str) -> set[int]:
         key = str(source or "")
@@ -103,6 +107,25 @@ class TelegramSearchSharedState:
             preferred.append(origin)
         if preferred:
             self.preferred_sources = preferred
+
+    def note_dialog_hits(self, source: str, count: int = 1) -> None:
+        key = str(source or "").strip()
+        if not key or count <= 0:
+            return
+        self.dialog_hit_scores[key] = int(self.dialog_hit_scores.get(key, 0) or 0) + int(count)
+
+    def query_dialog_cache_key(self, source: str, query: str) -> str:
+        return f"{str(source or '').strip()}\0{str(query or '').strip()}"
+
+    def get_cached_query_dialog_results(self, source: str, query: str) -> list[Any] | None:
+        key = self.query_dialog_cache_key(source, query)
+        if key not in self.query_dialog_cache:
+            return None
+        return list(self.query_dialog_cache.get(key) or [])
+
+    def set_cached_query_dialog_results(self, source: str, query: str, results: list[Any]) -> None:
+        key = self.query_dialog_cache_key(source, query)
+        self.query_dialog_cache[key] = list(results or [])
 
     def filter_dialogs(self, dialogs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Optionally narrow dialogs to preferred sources during force_remote recheck."""

@@ -27,6 +27,7 @@ from app.services.types import SearchResult
 
 TELEGRAM_INDEX_WINDOW = 4
 TELEGRAM_INDEX_MAX_PER_SOURCE = 2500
+TELEGRAM_INDEX_MAX_AGE_DAYS = 21
 
 # Compatibility aliases used by tests/patches.
 _search_blob_for = search_blob_for
@@ -151,6 +152,38 @@ def _prune_source_index(conn: Any, source: str) -> None:
         """,
         (source, source, TELEGRAM_INDEX_MAX_PER_SOURCE),
     )
+    # Drop stale rows even if under the per-source cap so FTS stays lean.
+    conn.execute(
+        """
+        DELETE FROM telegram_message_index
+        WHERE source = ?
+          AND indexed_at IS NOT NULL
+          AND indexed_at < datetime('now', ?)
+        """,
+        (source, f"-{int(TELEGRAM_INDEX_MAX_AGE_DAYS)} days"),
+    )
+
+
+def prune_old_index_rows(*, max_age_days: int | None = None) -> int:
+    """Global age-based prune for telegram_message_index. Returns deleted row count."""
+    days = int(TELEGRAM_INDEX_MAX_AGE_DAYS if max_age_days is None else max_age_days)
+    if days <= 0:
+        return 0
+    try:
+        with db() as conn:
+            cur = conn.execute(
+                """
+                DELETE FROM telegram_message_index
+                WHERE indexed_at IS NOT NULL
+                  AND indexed_at < datetime('now', ?)
+                """,
+                (f"-{days} days",),
+            )
+            return int(getattr(cur, "rowcount", 0) or 0)
+    except sqlite3.OperationalError as exc:
+        if _index_table_missing(exc):
+            return 0
+        raise
 
 
 def _index_table_missing(exc: sqlite3.OperationalError) -> bool:

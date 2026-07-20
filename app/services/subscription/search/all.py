@@ -6,12 +6,18 @@ from importlib import import_module
 from app.db import add_log
 import app.services.subscription.runtime as runtime
 from app.services.subscription.crud.service import active_subscriptions, mark_subscription_checked, get_subscription
-from app.services.subscription.library.service import EMBY_SYNC_TIMEOUT_SECONDS, sync_subscriptions_with_emby_snapshot
+from app.services.subscription.library.service import (
+    EMBY_SYNC_TIMEOUT_SECONDS,
+    prefetch_tmdb_for_subscriptions,
+    sync_subscriptions_with_emby_snapshot,
+)
 from app.services.subscription.library.snapshot import library_snapshot_or_none
+from app.services.subscription.search.schedule import filter_subscriptions_for_search_all
 
 
 async def search_all_active_subscriptions() -> dict:
     subscriptions = active_subscriptions()
+    subscriptions, skipped_recent = filter_subscriptions_for_search_all(list(subscriptions))
     wave_size = runtime.search_all_wave_size()
     add_log(
         "info",
@@ -19,12 +25,18 @@ async def search_all_active_subscriptions() -> dict:
         "搜索全部活跃订阅开始",
         {
             "active": len(subscriptions),
+            "skipped_recent_complete": skipped_recent,
             "concurrency": runtime.SUBSCRIPTION_SEARCH_CONCURRENCY,
             "wave_size": wave_size,
             "desired_concurrency": runtime.desired_search_concurrency(),
         },
     )
     snapshot = await library_snapshot_or_none()
+    # Best-effort TMDB refresh for caught-up/stale maps before search waves.
+    try:
+        await asyncio.wait_for(prefetch_tmdb_for_subscriptions(subscriptions), timeout=12.0)
+    except Exception:
+        pass
     # Emby sync is useful, but must not block the first subscription search.
     # Parallel library snapshot sync for this search-all run (not the queued full Emby job).
     emby_task = asyncio.create_task(_sync_emby_in_background(list(subscriptions), snapshot))

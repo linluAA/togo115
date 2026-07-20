@@ -3,6 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from app.db import add_log
+from app.services.sources.haisou.budget import (
+    allow_haisou_search,
+    get_cached_haisou_search,
+    note_haisou_search,
+    search_cache_key,
+    set_cached_haisou_search,
+)
 from app.services.sources.haisou.client import HaisouApiError, HaisouClient
 from app.services.sources.haisou.config import haisou_settings
 from app.services.sources.haisou.mapper import map_haisou_items
@@ -30,8 +37,17 @@ async def search_haisou(
     scope = search_in or source.get("search_in") or settings.get("search_in") or "title"
     name = str(source.get("name") or "海搜 Haisou").strip()
 
+    cache_key = search_cache_key(query, platforms=list(platform_list), page_size=int(size), search_in=str(scope))
+    cached = get_cached_haisou_search(cache_key)
+    if isinstance(cached, list):
+        return list(cached)
+    if not allow_haisou_search():
+        add_log("warning", "haisou", "海搜搜索达到窗口预算，已跳过", {"query": query})
+        return []
+
     client = HaisouClient(api_key=key)
     try:
+        note_haisou_search()
         result = await client.search(
             query,
             platforms=list(platform_list),

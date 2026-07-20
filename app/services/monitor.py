@@ -56,7 +56,7 @@ class MonitorService:
                 if now - self._last_failed_retry > 300:
                     schedule_retry_failed_resources(12)
                     self._last_failed_retry = now
-                if now - self._last_index_prewarm > 900:
+                if now - self._last_index_prewarm > 480:
                     try:
                         await telegram.prewarm_message_index()
                     except Exception as exc:

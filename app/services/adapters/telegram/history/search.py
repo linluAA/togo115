@@ -70,11 +70,30 @@ class TelegramHistorySearchMixin(TelegramDialogSearchMixin, TelegramFastSearchMi
             add_log("warning", "telegram", "Telegram 群组/频道解析失败或无可用来源", {"sources": len(source_values), "resolve_ms": resolve_ms})
             return []
         dialogs = state.filter_dialogs(dialogs)
-        queries = _expanded_search_queries(title, keywords, max_queries=6)
+        from app.services.adapters.telegram.history.dialog_rank import rank_dialogs
+
+        dialogs = rank_dialogs(
+            dialogs,
+            preferred_sources=list(state.preferred_sources or []),
+            hit_scores=dict(state.dialog_hit_scores or {}),
+        )
+        queries = _expanded_search_queries(title, keywords, max_queries=4)
         if not queries:
             return []
 
         options = self._history_options(config)
+        from app.services.adapters.telegram.history.config import adaptive_messages_per_query
+
+        tuned = adaptive_messages_per_query(options.messages_per_query)
+        if tuned != options.messages_per_query:
+            options = TelegramHistoryOptions(
+                history_limit=options.history_limit,
+                fallback_scan_limit=options.fallback_scan_limit,
+                messages_per_query=tuned,
+                total_budget=options.total_budget,
+                query_budget=options.query_budget,
+                recent_budget=options.recent_budget,
+            )
         budget = TelegramSearchBudget(options.total_budget)
         add_log(
             "info",

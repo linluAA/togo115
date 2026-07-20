@@ -80,9 +80,26 @@ async def _missing_tmdb_details(subscriptions: list[dict]) -> dict[int, dict[str
 
 
 def _needs_tmdb_detail(subscription: dict) -> bool:
+    if subscription.get("media_type") != "tv" or not subscription.get("tmdb_id"):
+        return False
+    if str(subscription.get("status") or "").casefold() == "completed":
+        return False
     tmdb_total_count = int(subscription.get("tmdb_total_count") or 0)
     tmdb_seasons = subscription.get("tmdb_seasons") or []
-    return bool(subscription.get("media_type") == "tv" and subscription.get("tmdb_id") and not (tmdb_total_count and tmdb_seasons))
+    if not (tmdb_total_count and tmdb_seasons):
+        return True
+    emby_count = int(subscription.get("emby_count") or 0)
+    # Re-fetch when library has caught up: TMDB episode map for airing shows drifts.
+    if emby_count >= tmdb_total_count > 0:
+        return True
+    try:
+        from app.services.subscription.episode.parser import missing_episode_keys
+
+        if str(subscription.get("status") or "active").casefold() == "active" and not missing_episode_keys(subscription):
+            return True
+    except Exception:
+        return True
+    return False
 
 
 def _subscription_state_unchanged(subscription: dict, state: dict[str, Any]) -> bool:

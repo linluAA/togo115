@@ -72,3 +72,21 @@ def server_search_queries(queries: list[str], *, limit: int = 1) -> list[str]:
             break
     return selected
 
+
+def adaptive_messages_per_query(base: int) -> int:
+    """Shrink remote message fetch when recent extract latency is high."""
+    try:
+        from app.services.metrics.snapshot import metrics_snapshot
+
+        p95 = float(((metrics_snapshot().get("telegram") or {}).get("p95_extract_ms") or 0))
+    except Exception:
+        return int(base)
+    value = max(1, int(base or 1))
+    if p95 <= 0:
+        return value
+    if p95 >= 900:
+        return max(3, min(value, 5))
+    if p95 >= 450:
+        return max(4, min(value, 8))
+    return value
+

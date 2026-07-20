@@ -48,8 +48,13 @@ def _tmdb_metadata(subscription: dict, tmdb_detail: dict[str, Any] | None) -> tu
     tmdb_total_count = int(subscription.get("tmdb_total_count") or 0)
     tmdb_seasons = subscription.get("tmdb_seasons") or []
     if tmdb_detail:
-        tmdb_total_count = tmdb_total_count or int(tmdb_detail.get("number_of_episodes") or 0)
-        tmdb_seasons = tmdb_seasons_from_detail(tmdb_detail)
+        # Prefer fresh TMDB detail when available so airing totals can grow past cache.
+        fresh_total = int(tmdb_detail.get("number_of_episodes") or 0)
+        if fresh_total:
+            tmdb_total_count = fresh_total
+        fresh_seasons = tmdb_seasons_from_detail(tmdb_detail)
+        if fresh_seasons:
+            tmdb_seasons = fresh_seasons
     return tmdb_total_count, tmdb_seasons
 
 

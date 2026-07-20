@@ -50,9 +50,49 @@ class RssTorznabConfigMixin:
 
     def _source_priority(self, source: dict[str, Any]) -> int:
         try:
-            return int(source.get("priority") or 0)
+            base = int(source.get("priority") or 0)
         except (TypeError, ValueError):
+            base = 0
+        return base + self._source_priority_boost(source)
+
+    def _source_priority_boost(self, source: dict[str, Any]) -> int:
+        """Nudge source order by recent health/success without overriding user priority."""
+        try:
+            from app.services.source_stats import _source_stats_key, source_health_status
+            from app.db import db
+        except Exception:
             return 0
+        name = str(source.get("name") or "").strip()
+        url = str(source.get("url") or "").strip()
+        key = _source_stats_key(self._source_type(source), name, url)
+        health = source_health_status(key)
+        if health.get("degraded"):
+            return -80
+        try:
+            with db() as conn:
+                row = conn.execute(
+                    "SELECT success_count, fail_count, match_count FROM source_stats WHERE source_key = ?",
+                    (key,),
+                ).fetchone()
+        except Exception:
+            return 0
+        if row is None:
+            return 0
+        success = int(row["success_count"] if hasattr(row, "keys") else row[0] or 0)
+        fail = int(row["fail_count"] if hasattr(row, "keys") else row[1] or 0)
+        matches = int(row["match_count"] if hasattr(row, "keys") else row[2] or 0)
+        total = success + fail
+        if total <= 0:
+            return 0
+        rate = success / total
+        boost = 0
+        if rate >= 0.8 and total >= 5:
+            boost += 8
+        elif rate <= 0.25 and fail >= 5:
+            boost -= 20
+        if matches >= 5:
+            boost += 4
+        return boost
 
     def _source_dedupe_key(self, source: dict[str, Any]) -> str:
         source_type = self._source_type(source)

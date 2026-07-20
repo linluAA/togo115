@@ -13,10 +13,10 @@ from app.services.adapters.telegram.scan.message_index import index_telegram_mes
 from app.services.search_metrics import record_prewarm
 
 
-TELEGRAM_INDEX_PREWARM_LIMIT = 50
+TELEGRAM_INDEX_PREWARM_LIMIT = 60
 TELEGRAM_INDEX_PREWARM_DIALOG_CONCURRENCY = 3
 # When a source is already warm, only pull a small recent window to catch new posts.
-TELEGRAM_INDEX_PREWARM_DELTA_LIMIT = 18
+TELEGRAM_INDEX_PREWARM_DELTA_LIMIT = 30
 
 
 class TelegramIndexPrewarmMixin:
@@ -84,7 +84,7 @@ class TelegramIndexPrewarmMixin:
             return (0, 0)
         already = max_indexed_message_id(source)
         # Warm sources only need a small recent window; cold sources get the full limit.
-        fetch_limit = TELEGRAM_INDEX_PREWARM_DELTA_LIMIT if already > 0 else max(5, min(int(limit), 80))
+        fetch_limit = TELEGRAM_INDEX_PREWARM_DELTA_LIMIT if already > 0 else max(8, min(int(limit), 100))
         try:
             messages = await asyncio.wait_for(get_messages(entity, limit=fetch_limit), timeout=8)
             items = messages if isinstance(messages, list) else list(messages or [])

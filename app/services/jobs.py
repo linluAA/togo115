@@ -110,6 +110,20 @@ def job_queue_stats() -> dict[str, Any]:
     except Exception:
         counts["running_workers"] = 0
     counts["worker_id"] = worker_instance_id()
+    try:
+        with db() as conn:
+            row = conn.execute(
+                """
+                SELECT MIN(COALESCE(heartbeat_at, started_at, updated_at)) AS oldest
+                FROM background_jobs
+                WHERE status = 'running'
+                """
+            ).fetchone()
+            counts["oldest_running_heartbeat_at"] = (
+                row["oldest"] if row is not None and hasattr(row, "keys") else (row[0] if row else None)
+            )
+    except Exception:
+        counts["oldest_running_heartbeat_at"] = None
     return counts
 
 
