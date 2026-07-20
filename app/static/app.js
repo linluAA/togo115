@@ -2,12 +2,13 @@
 
 /* source: static/src/js/00_state.js */
 const VIEW_KEYS = ["tmdb", "emby", "subscriptions", "logs", "settings"];
-const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "haisou", "tg_bot", "emby", "backup"];
+const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "tg_bot", "emby", "backup"];
 const TMDB_MORE_MIN_PAGE_SIZE = 40;
-const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4"]);
+const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4", "haisou"]);
 const BUILTIN_RSS_SOURCES = [
   { id: "builtin_bt1207", name: "BT1207", type: "site_plugin", plugin: "bt1207", url: "https://bt1207to.cc/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
   { id: "builtin_qmp4", name: "QMP4 / 七味", type: "site_plugin", plugin: "qmp4", url: "https://www.qmp4.com/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
+  { id: "builtin_haisou", name: "海搜 Haisou", type: "site_plugin", plugin: "haisou", url: "https://haisou.cc/", enabled: false, use_proxy: false, priority: 10, refresh_interval: 30, test_query: "", api_key: "", page_size: 20, search_in: "title", match_fuzzy: "", match_exact: "", match_exclude: "" },
 ];
 
 const state = {
@@ -1570,7 +1571,6 @@ function renderSettings() {
     ["telegram", "Telegram"],
     ["tmdb", "TMDB"],
     ["proxy", "代理设置"],
-    ["haisou", "海搜"],
     ["rss_sources", "订阅源"],
     ["tg_bot", "TG Bot"],
     ["emby", "媒体库"],
@@ -1583,8 +1583,7 @@ function renderSettings() {
     telegram: ["Telegram", "配置账号登录、群组/频道选择和历史消息搜索范围。"],
     tmdb: ["TMDB", "配置 TMDB API Key，用于榜单、搜索、封面和剧集信息。"],
     proxy: ["代理设置", "填写一个代理地址，并勾选需要走代理的模块。"],
-    haisou: ["海搜", "配置 iDataRiver 海搜 API Key。启用后作为 Telegram 未命中时的 115 分享补充源（官方 API，按次计费）。"],
-    rss_sources: ["订阅源", "管理 RSS、Torznab 和站点插件式订阅源，作为 Telegram 未命中后的补充来源。"],
+    rss_sources: ["订阅源", "管理 RSS、Torznab、站点插件和海搜官方 API 订阅源。Telegram 未命中后作为补充来源；海搜按次计费。"],
     tg_bot: ["TG Bot", "配置机器人命令入口和允许操作的聊天范围。"],
     emby: ["媒体库", "配置 Emby 服务地址和 API Key，用于入库状态与缺集判断。"],
     backup: ["备份恢复", "导出或导入系统配置、订阅和订阅源数据。"],
@@ -1598,7 +1597,6 @@ function renderSettings() {
     delivery: settingsCard("推送方式", "delivery", [["mode", "全局推送方式"]]),
     115: settingsCard("115 网盘", "115", [["cookie", "Cookie"], ["target_path", "默认转存目录"], ["qr_login", "扫码登录状态"]]),
     telegram: settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道"], ["history_limit", "历史搜索条数"]]),
-    haisou: settingsCard("海搜", "haisou", [["api_key", "API Key"], ["enabled", "启用"], ["page_size", "每页数量"], ["search_in", "搜索范围"]]),
     tmdb: settingsCard("TMDB", "tmdb", [["api_key", "API Key"]]),
     proxy: settingsCard("代理设置", "proxy", [["url", "代理地址"], ["modules", "启用代理的模块"]]),
     rss_sources: rssSourcesCard(),
@@ -1688,21 +1686,6 @@ function fieldHtml(key, name, label, current, type = "text") {
       <option value="telegram_bot" ${selected === "telegram_bot" ? "selected" : ""}>发送到 TG Bot</option>
     </select></label>`;
   }
-  if (key === "haisou" && name === "enabled") {
-    const selected = String(current || "true");
-    const on = selected === "true" || selected === "1" || selected === "on";
-    return `<label>${label}<select name="enabled">
-      <option value="true" ${on ? "selected" : ""}>启用</option>
-      <option value="false" ${on ? "" : "selected"}>关闭</option>
-    </select></label>`;
-  }
-  if (key === "haisou" && name === "search_in") {
-    const selected = String(current || "title");
-    return `<label>${label}<select name="search_in">
-      <option value="title" ${selected === "title" ? "selected" : ""}>标题</option>
-      <option value="files" ${selected === "files" ? "selected" : ""}>文件名</option>
-    </select></label>`;
-  }
   if (key === "proxy" && name === "modules") {
     const selected = Array.isArray(current) ? current : String(current || "").split(",").filter(Boolean);
     const options = [["tmdb", "TMDB"], ["telegram", "Telegram"], ["pan115", "115 网盘"], ["haisou", "海搜"], ["emby", "Emby"]];
@@ -1746,17 +1729,29 @@ function builtinRssOverrides() {
 function builtinRssSourcesValue() {
   const overrides = builtinRssOverrides();
   const legacySources = Array.isArray(rssSourcesConfig().sources) ? rssSourcesConfig().sources.filter(isBuiltinRssSource) : [];
+  const legacyHaisou = state.settings.haisou?.value || {};
   return BUILTIN_RSS_SOURCES.map((source) => {
     const legacy = legacySources.find((item) => normalizeSitePlugin(item) === source.plugin) || {};
     const override = overrides[source.id] || {};
+    const migrated = source.plugin === "haisou" && !Object.keys(override).length
+      ? {
+          api_key: legacyHaisou.api_key || "",
+          enabled: legacyHaisou.enabled !== false && Boolean(legacyHaisou.api_key),
+          page_size: legacyHaisou.page_size || 20,
+          search_in: legacyHaisou.search_in || "title",
+          use_proxy: Boolean(legacyHaisou.use_proxy),
+        }
+      : {};
     return normalizeRssSource({
       ...source,
       ...legacy,
+      ...migrated,
       ...override,
       id: source.id,
       name: source.name,
       type: "site_plugin",
       plugin: source.plugin,
+      url: source.plugin === "haisou" ? "https://haisou.cc/" : (override.url || legacy.url || source.url),
     });
   });
 }
@@ -1764,7 +1759,8 @@ function builtinRssSourcesValue() {
 function builtinRssOverrideFromSource(source) {
   const priority = Number.parseInt(source.priority, 10);
   const refreshInterval = Number.parseInt(source.refresh_interval, 10);
-  return {
+  const pageSize = Number.parseInt(source.page_size, 10);
+  const base = {
     url: source.url || "",
     enabled: source.enabled !== false,
     use_proxy: Boolean(source.use_proxy),
@@ -1774,21 +1770,57 @@ function builtinRssOverrideFromSource(source) {
     priority: Number.isFinite(priority) ? priority : -50,
     refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
   };
+  if (normalizeSitePlugin(source) !== "haisou") return base;
+  return {
+    ...base,
+    url: "https://haisou.cc/",
+    api_key: source.api_key || "",
+    page_size: Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100)),
+    search_in: source.search_in === "files" ? "files" : "title",
+    match_fuzzy: matchWordsToText(source.match_fuzzy),
+    match_exact: matchWordsToText(source.match_exact),
+    match_exclude: matchWordsToText(source.match_exclude),
+  };
+}
+
+function matchWordsToText(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
+  return String(value || "").trim();
+}
+
+function matchTextToWords(value) {
+  return String(value || "")
+    .replace(/，/g, ",")
+    .split(/[\n\r,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function normalizeRssSource(source) {
-  return {
+  const plugin = normalizeSitePlugin(source);
+  const normalized = {
     ...source,
     id: source.id || `rss_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     enabled: source.enabled !== false,
     type: normalizeRssSourceType(source.type),
-    plugin: normalizeSitePlugin(source),
+    plugin,
     priority: Number.parseInt(source.priority, 10) || 0,
     refresh_interval: Math.max(Number.parseInt(source.refresh_interval, 10) || 30, 5),
     test_query: source.test_query || "",
     keywords: source.keywords || "",
     quality: source.quality || "",
   };
+  if (plugin === "haisou") {
+    const pageSize = Number.parseInt(source.page_size, 10);
+    normalized.url = "https://haisou.cc/";
+    normalized.api_key = source.api_key || "";
+    normalized.page_size = Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100));
+    normalized.search_in = source.search_in === "files" ? "files" : "title";
+    normalized.match_fuzzy = matchWordsToText(source.match_fuzzy);
+    normalized.match_exact = matchWordsToText(source.match_exact);
+    normalized.match_exclude = matchWordsToText(source.match_exclude);
+  }
+  return normalized;
 }
 
 function ensureRssSourceIds(sources) {
@@ -1803,9 +1835,11 @@ function normalizeRssSourceType(type) {
 
 function normalizeSitePlugin(source) {
   const url = String(source?.url || "").toLowerCase();
+  if (url.includes("haisou.cc") || url.includes("apiok.us/api/b9d1")) return "haisou";
   if (url.includes("qmp4.com")) return "qmp4";
   if (url.includes("bt1207")) return "bt1207";
   const raw = String(source?.plugin || source?.site_plugin || "").toLowerCase();
+  if (["haisou", "海搜"].includes(raw)) return "haisou";
   if (["bt1207", "bt1207_magnet"].includes(raw)) return "bt1207";
   if (["qmp4", "qiwei", "qmp4_magnet"].includes(raw)) return "qmp4";
   return "generic_magnet";
@@ -1820,6 +1854,7 @@ function sitePluginLabel(plugin) {
   const normalized = normalizeSitePlugin({ plugin });
   if (normalized === "bt1207") return "BT1207";
   if (normalized === "qmp4") return "QMP4";
+  if (normalized === "haisou") return "海搜";
   return "通用磁力站";
 }
 
@@ -1846,6 +1881,7 @@ function rssSourceUrlPlaceholder(type, plugin = "generic_magnet") {
     const normalized = normalizeSitePlugin({ plugin });
     if (normalized === "bt1207") return "例如：https://bt1207to.cc/";
     if (normalized === "qmp4") return "例如：https://www.qmp4.com/";
+    if (normalized === "haisou") return "https://haisou.cc/";
     return "例如：https://yhdm33.com/s/{query}.html，也可以只填站点首页";
   }
   if (value === "torznab") return "例如：https://example.com/api?t=search&q={query}";
@@ -1913,21 +1949,32 @@ function builtinRssSourceItemHtml(source) {
   const testQuery = source.test_query || "";
   const plugin = normalizeSitePlugin(source);
   const stat = sourceStatFor(source);
-  return `<section class="rss-source-item builtin-source-item expanded" data-source-id="${escapeHtml(source.id)}" data-builtin-source-id="${escapeHtml(source.id)}">
-    <div class="rss-source-title">
-      <div class="rss-source-summary">
-        <strong>${escapeHtml(source.name)}</strong>
-        <span class="rss-source-url-text" title="${escapeHtml(source.url || "")}">${escapeHtml(source.url || "")}</span>
-        <div class="rss-source-chips">
-          <span>内置</span>
+  const isHaisou = plugin === "haisou";
+  const chips = isHaisou
+    ? `<span>内置</span>
+          <span>海搜 API</span>
+          <span>优先级 ${escapeHtml(priority)}</span>
+          <span>${escapeHtml(interval)} 分钟</span>
+          <span>${source.enabled === false ? "停用" : "启用"}</span>
+          <span>${source.use_proxy ? "代理" : "直连"}</span>
+          <span>${source.search_in === "files" ? "搜文件名" : "搜标题"}</span>
+          ${source.api_key ? `<span>Key 已配置</span>` : `<span>未配置 Key</span>`}
+          ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
+          ${stat ? `<span>成功率 ${escapeHtml(stat.success_rate || 0)}%</span><span>命中 ${escapeHtml(stat.match_count || 0)}</span><span>${escapeHtml(stat.last_latency_ms || "-")} ms</span>` : ""}`
+    : `<span>内置</span>
           <span>${sitePluginLabel(source.plugin)}</span>
           <span>优先级 ${escapeHtml(priority)}</span>
           <span>${escapeHtml(interval)} 分钟</span>
           <span>${source.enabled === false ? "停用" : "启用"}</span>
           <span>${source.use_proxy ? "代理" : "直连"}</span>
           ${testQuery ? `<span>测试 ${escapeHtml(testQuery)}</span>` : ""}
-          ${stat ? `<span>成功率 ${escapeHtml(stat.success_rate || 0)}%</span><span>命中 ${escapeHtml(stat.match_count || 0)}</span><span>${escapeHtml(stat.last_latency_ms || "-")} ms</span>` : ""}
-        </div>
+          ${stat ? `<span>成功率 ${escapeHtml(stat.success_rate || 0)}%</span><span>命中 ${escapeHtml(stat.match_count || 0)}</span><span>${escapeHtml(stat.last_latency_ms || "-")} ms</span>` : ""}`;
+  return `<section class="rss-source-item builtin-source-item expanded" data-source-id="${escapeHtml(source.id)}" data-builtin-source-id="${escapeHtml(source.id)}">
+    <div class="rss-source-title">
+      <div class="rss-source-summary">
+        <strong>${escapeHtml(source.name)}</strong>
+        <span class="rss-source-url-text" title="${escapeHtml(source.url || "")}">${escapeHtml(source.url || "")}</span>
+        <div class="rss-source-chips">${chips}</div>
       </div>
       <div class="inline-actions">
         <button type="button" class="secondary" data-toggle-builtin-source="${escapeHtml(source.id)}">收起</button>
@@ -1938,10 +1985,39 @@ function builtinRssSourceItemHtml(source) {
       <input type="hidden" class="rss-source-name" value="${escapeHtml(source.name)}" />
       <input type="hidden" class="rss-source-type" value="site_plugin" />
       <input type="hidden" class="rss-source-plugin" value="${escapeHtml(source.plugin)}" />
-      ${rssSourceCommonFields(source, "site_plugin", plugin, priority, interval, testQuery, true)}
+      ${isHaisou ? haisouBuiltinFields(source, priority, interval, testQuery) : rssSourceCommonFields(source, "site_plugin", plugin, priority, interval, testQuery, true)}
     </div>
     <div class="rss-source-test-result muted hidden" data-rss-test-result="${escapeHtml(source.id)}"></div>
   </section>`;
+}
+
+function haisouBuiltinFields(source, priority, interval, testQuery) {
+  const pageSize = Number.parseInt(source.page_size, 10) || 20;
+  const searchIn = source.search_in === "files" ? "files" : "title";
+  return `
+    <input type="hidden" class="rss-source-url-input" value="https://haisou.cc/" />
+    <label>API Key <input class="rss-source-api-key" type="password" autocomplete="off" placeholder="iDataRiver 海搜 API Key" value="${escapeHtml(source.api_key || "")}" /></label>
+    <label>每页数量 <input class="rss-source-page-size" type="number" min="1" max="100" step="1" value="${escapeHtml(pageSize)}" /></label>
+    <label>搜索范围
+      <select class="rss-source-search-in">
+        <option value="title" ${searchIn === "title" ? "selected" : ""}>标题</option>
+        <option value="files" ${searchIn === "files" ? "selected" : ""}>文件名</option>
+      </select>
+    </label>
+    <label>优先级 <input class="rss-source-priority" type="number" step="1" value="${escapeHtml(priority)}" /></label>
+    <label>刷新间隔 <input class="rss-source-interval" type="number" min="5" step="1" value="${escapeHtml(interval)}" /></label>
+    <label>测试关键字 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
+    <label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>
+    <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
+    <div class="rss-source-match-panel">
+      <strong>匹配类型</strong>
+      <span class="muted">对应海搜站点的模糊 / 精准 / 反向匹配。官方搜索 API 无该参数，这里在返回结果后本地过滤。</span>
+      <label class="rss-source-filter">模糊匹配 <textarea class="rss-source-match-fuzzy" rows="2" placeholder="每行一个关键词，标题需包含全部词元">${escapeHtml(matchWordsToText(source.match_fuzzy))}</textarea></label>
+      <label class="rss-source-filter">精准匹配 <textarea class="rss-source-match-exact" rows="2" placeholder="每行一个短语，标题需完整包含">${escapeHtml(matchWordsToText(source.match_exact))}</textarea></label>
+      <label class="rss-source-filter">反向匹配 <textarea class="rss-source-match-exclude" rows="2" placeholder="每行一个关键词，标题包含则排除">${escapeHtml(matchWordsToText(source.match_exclude))}</textarea></label>
+    </div>
+    <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="2">${escapeHtml(source.keywords || "")}</textarea></label>
+    <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="2">${escapeHtml(source.quality || "")}</textarea></label>`;
 }
 
 function rssSourceItemHtml(source, index) {
@@ -2042,7 +2118,7 @@ function updateRssSourceDraftFromRow(row, type, plugin) {
 function rssSourceFromRow(row, id, original, type, plugin) {
   const refreshInterval = Number.parseInt(row.querySelector(".rss-source-interval")?.value || "30", 10);
   const priority = Number.parseInt(row.querySelector(".rss-source-priority")?.value || "0", 10);
-  return {
+  const base = {
     id,
     name: row.querySelector(".rss-source-name")?.value.trim() || "",
     url: row.querySelector(".rss-source-url-input")?.value.trim() || "",
@@ -2056,6 +2132,18 @@ function rssSourceFromRow(row, id, original, type, plugin) {
     priority: Number.isFinite(priority) ? priority : 0,
     refresh_interval: Math.max(Number.isFinite(refreshInterval) ? refreshInterval : 30, 5),
     ...(original.last_checked_at ? { last_checked_at: original.last_checked_at } : {}),
+  };
+  if (plugin !== "haisou") return base;
+  const pageSize = Number.parseInt(row.querySelector(".rss-source-page-size")?.value || "20", 10);
+  return {
+    ...base,
+    url: "https://haisou.cc/",
+    api_key: row.querySelector(".rss-source-api-key")?.value.trim() || "",
+    page_size: Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100)),
+    search_in: row.querySelector(".rss-source-search-in")?.value === "files" ? "files" : "title",
+    match_fuzzy: row.querySelector(".rss-source-match-fuzzy")?.value.trim() || "",
+    match_exact: row.querySelector(".rss-source-match-exact")?.value.trim() || "",
+    match_exclude: row.querySelector(".rss-source-match-exclude")?.value.trim() || "",
   };
 }
 
@@ -2142,6 +2230,25 @@ async function saveRssSources(event) {
   });
 
   await api("/api/settings/rss_sources", { method: "PUT", body: JSON.stringify({ value: { ...rssSourcesConfig(), sources, builtin_sources } }) });
+  // Keep legacy haisou settings in sync so older code paths and backups stay consistent.
+  if (builtin_sources.builtin_haisou) {
+    const hs = builtin_sources.builtin_haisou;
+    await api("/api/settings/haisou", {
+      method: "PUT",
+      body: JSON.stringify({
+        value: {
+          api_key: hs.api_key || "",
+          enabled: hs.enabled !== false,
+          page_size: hs.page_size || 20,
+          search_in: hs.search_in === "files" ? "files" : "title",
+          match_fuzzy: hs.match_fuzzy || "",
+          match_exact: hs.match_exact || "",
+          match_exclude: hs.match_exclude || "",
+          use_proxy: Boolean(hs.use_proxy),
+        },
+      }),
+    });
+  }
   state.settings = await api("/api/settings");
   state.rssSourceExpanded.clear();
   state.builtinRssSourceExpanded.clear();
@@ -2170,7 +2277,7 @@ async function testRssSource(event) {
     const data = await api("/api/rss-sources/test", {
       method: "POST",
       body: JSON.stringify({ source, query: rssSourceTestQuery(source) }),
-      timeoutMs: 60000,
+      timeoutMs: plugin === "haisou" ? 90000 : 60000,
     });
     if (data.ok) {
       const sample = Array.isArray(data.sample) && data.sample.length

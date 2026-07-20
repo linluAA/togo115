@@ -30,6 +30,25 @@ async function saveRssSources(event) {
   });
 
   await api("/api/settings/rss_sources", { method: "PUT", body: JSON.stringify({ value: { ...rssSourcesConfig(), sources, builtin_sources } }) });
+  // Keep legacy haisou settings in sync so older code paths and backups stay consistent.
+  if (builtin_sources.builtin_haisou) {
+    const hs = builtin_sources.builtin_haisou;
+    await api("/api/settings/haisou", {
+      method: "PUT",
+      body: JSON.stringify({
+        value: {
+          api_key: hs.api_key || "",
+          enabled: hs.enabled !== false,
+          page_size: hs.page_size || 20,
+          search_in: hs.search_in === "files" ? "files" : "title",
+          match_fuzzy: hs.match_fuzzy || "",
+          match_exact: hs.match_exact || "",
+          match_exclude: hs.match_exclude || "",
+          use_proxy: Boolean(hs.use_proxy),
+        },
+      }),
+    });
+  }
   state.settings = await api("/api/settings");
   state.rssSourceExpanded.clear();
   state.builtinRssSourceExpanded.clear();
@@ -58,7 +77,7 @@ async function testRssSource(event) {
     const data = await api("/api/rss-sources/test", {
       method: "POST",
       body: JSON.stringify({ source, query: rssSourceTestQuery(source) }),
-      timeoutMs: 60000,
+      timeoutMs: plugin === "haisou" ? 90000 : 60000,
     });
     if (data.ok) {
       const sample = Array.isArray(data.sample) && data.sample.length

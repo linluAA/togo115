@@ -6,7 +6,6 @@ function renderSettings() {
     ["telegram", "Telegram"],
     ["tmdb", "TMDB"],
     ["proxy", "代理设置"],
-    ["haisou", "海搜"],
     ["rss_sources", "订阅源"],
     ["tg_bot", "TG Bot"],
     ["emby", "媒体库"],
@@ -19,8 +18,7 @@ function renderSettings() {
     telegram: ["Telegram", "配置账号登录、群组/频道选择和历史消息搜索范围。"],
     tmdb: ["TMDB", "配置 TMDB API Key，用于榜单、搜索、封面和剧集信息。"],
     proxy: ["代理设置", "填写一个代理地址，并勾选需要走代理的模块。"],
-    haisou: ["海搜", "配置 iDataRiver 海搜 API Key。启用后作为 Telegram 未命中时的 115 分享补充源（官方 API，按次计费）。"],
-    rss_sources: ["订阅源", "管理 RSS、Torznab 和站点插件式订阅源，作为 Telegram 未命中后的补充来源。"],
+    rss_sources: ["订阅源", "管理 RSS、Torznab、站点插件和海搜官方 API 订阅源。Telegram 未命中后作为补充来源；海搜按次计费。"],
     tg_bot: ["TG Bot", "配置机器人命令入口和允许操作的聊天范围。"],
     emby: ["媒体库", "配置 Emby 服务地址和 API Key，用于入库状态与缺集判断。"],
     backup: ["备份恢复", "导出或导入系统配置、订阅和订阅源数据。"],
@@ -34,7 +32,6 @@ function renderSettings() {
     delivery: settingsCard("推送方式", "delivery", [["mode", "全局推送方式"]]),
     115: settingsCard("115 网盘", "115", [["cookie", "Cookie"], ["target_path", "默认转存目录"], ["qr_login", "扫码登录状态"]]),
     telegram: settingsCard("Telegram", "telegram", [["api_id", "API ID"], ["api_hash", "API HASH"], ["sources", "群组/频道"], ["history_limit", "历史搜索条数"]]),
-    haisou: settingsCard("海搜", "haisou", [["api_key", "API Key"], ["enabled", "启用"], ["page_size", "每页数量"], ["search_in", "搜索范围"]]),
     tmdb: settingsCard("TMDB", "tmdb", [["api_key", "API Key"]]),
     proxy: settingsCard("代理设置", "proxy", [["url", "代理地址"], ["modules", "启用代理的模块"]]),
     rss_sources: rssSourcesCard(),
@@ -122,21 +119,6 @@ function fieldHtml(key, name, label, current, type = "text") {
     return `<label>${label}<select name="mode">
       <option value="115" ${selected === "115" ? "selected" : ""}>转存到 115</option>
       <option value="telegram_bot" ${selected === "telegram_bot" ? "selected" : ""}>发送到 TG Bot</option>
-    </select></label>`;
-  }
-  if (key === "haisou" && name === "enabled") {
-    const selected = String(current || "true");
-    const on = selected === "true" || selected === "1" || selected === "on";
-    return `<label>${label}<select name="enabled">
-      <option value="true" ${on ? "selected" : ""}>启用</option>
-      <option value="false" ${on ? "" : "selected"}>关闭</option>
-    </select></label>`;
-  }
-  if (key === "haisou" && name === "search_in") {
-    const selected = String(current || "title");
-    return `<label>${label}<select name="search_in">
-      <option value="title" ${selected === "title" ? "selected" : ""}>标题</option>
-      <option value="files" ${selected === "files" ? "selected" : ""}>文件名</option>
     </select></label>`;
   }
   if (key === "proxy" && name === "modules") {

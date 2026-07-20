@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 from app.config import settings
 from app.db import init_db
 from app.services.sources.haisou.client import HaisouApiError, HaisouClient
-from app.services.sources.haisou.config import haisou_enabled, haisou_settings, haisou_source_entry
+from app.services.sources.haisou.config import apply_haisou_match_filters, haisou_enabled, haisou_settings, haisou_source_entry
 from app.services.sources.haisou.mapper import build_haisou_share_url, map_haisou_items
 from app.services.sources.haisou.search import search_haisou
 from app.services.sources.rss_torznab import RssTorznabAdapter
@@ -107,6 +107,58 @@ class HaisouSourceTest(unittest.IsolatedAsyncioTestCase):
                 await client.search("q")
         self.assertEqual(ctx.exception.code, 1000)
         self.assertFalse(ctx.exception.retryable)
+
+    def test_settings_from_builtin_override(self) -> None:
+        save_setting(
+            "rss_sources",
+            {
+                "sources": [],
+                "builtin_sources": {
+                    "builtin_haisou": {
+                        "api_key": "override-key",
+                        "enabled": True,
+                        "page_size": 15,
+                        "search_in": "files",
+                        "match_exact": "1080p",
+                        "match_exclude": "抢先版",
+                    }
+                },
+            },
+        )
+        cfg = haisou_settings()
+        self.assertEqual(cfg["api_key"], "override-key")
+        self.assertEqual(cfg["page_size"], 15)
+        self.assertEqual(cfg["search_in"], "files")
+        self.assertEqual(cfg["match_exact"], ["1080p"])
+        self.assertEqual(cfg["match_exclude"], ["抢先版"])
+        sources = RssTorznabAdapter()._sources()
+        self.assertTrue(
+            any(item.get("plugin") == "haisou" and item.get("api_key") == "override-key" for item in sources)
+        )
+
+    def test_match_filters_exact_and_exclude(self) -> None:
+        class Item:
+            def __init__(self, title: str) -> None:
+                self.title = title
+
+        items = [Item("Demo 1080p 完整版"), Item("Demo 抢先版"), Item("Other Show 1080p")]
+        filtered = apply_haisou_match_filters(
+            items,
+            {"match_exact": ["Demo", "1080p"], "match_exclude": ["抢先版"], "match_fuzzy": []},
+        )
+        self.assertEqual([item.title for item in filtered], ["Demo 1080p 完整版"])
+
+    def test_match_filters_fuzzy_tokens(self) -> None:
+        class Item:
+            def __init__(self, title: str) -> None:
+                self.title = title
+
+        items = [Item("Foo Bar Baz 2024"), Item("Foo Baz")]
+        filtered = apply_haisou_match_filters(
+            items,
+            {"match_fuzzy": ["Foo Bar"], "match_exact": [], "match_exclude": []},
+        )
+        self.assertEqual([item.title for item in filtered], ["Foo Bar Baz 2024"])
 
 
 if __name__ == "__main__":

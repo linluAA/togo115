@@ -86,6 +86,13 @@ class RssTorznabConfigMixin:
                         "keywords",
                         "quality",
                         "test_query",
+                        "api_key",
+                        "page_size",
+                        "search_in",
+                        "match_fuzzy",
+                        "match_exact",
+                        "match_exclude",
+                        "platforms",
                     )
                     if key in override
                 },
@@ -96,6 +103,10 @@ class RssTorznabConfigMixin:
                 "_builtin": True,
                 "last_checked_at": last_checked.get(identity),
             }
+            if source.get("plugin") == "haisou" or truthy(source.get("_haisou")):
+                merged = self._merge_haisou_builtin(merged, override)
+                if not merged:
+                    continue
             if truthy(merged.get("enabled"), True):
                 builtins.append(merged)
         return builtins
@@ -163,17 +174,76 @@ class RssTorznabConfigMixin:
             enabled_sources.append({**source, "_order": index})
         for index, source in enumerate(self._builtin_sources(config, enabled_sources), start=len(enabled_sources)):
             enabled_sources.append({**source, "_order": index})
-        haisou_source = self._haisou_source_entry()
-        if haisou_source is not None:
-            enabled_sources.append({**haisou_source, "_order": -1})
         return sorted(enabled_sources, key=lambda item: (-self._source_priority(item), int(item.get("_order") or 0)))
 
-    def _haisou_source_entry(self) -> dict[str, Any] | None:
+    def _merge_haisou_builtin(self, merged: dict[str, Any], override: dict[str, Any]) -> dict[str, Any] | None:
         try:
-            from app.services.sources.haisou import haisou_source_entry
+            from app.services.sources.haisou.config import (
+                REQUEST_TIMEOUT_SECONDS,
+                SOURCE_URL,
+                haisou_settings,
+            )
         except Exception:
             return None
-        return haisou_source_entry()
+        settings = haisou_settings()
+        api_key = str(override.get("api_key") or merged.get("api_key") or settings.get("api_key") or "").strip()
+        # Override wins; otherwise reuse unified settings (includes legacy haisou migration).
+        if "enabled" in override:
+            enabled = truthy(override.get("enabled"), False)
+        else:
+            enabled = bool(settings.get("enabled"))
+        if not enabled or not api_key:
+            return None
+        page_size = override.get("page_size", merged.get("page_size", settings.get("page_size")))
+        search_in = override.get("search_in", merged.get("search_in", settings.get("search_in")))
+        match_fuzzy = override.get("match_fuzzy", merged.get("match_fuzzy", settings.get("match_fuzzy")))
+        match_exact = override.get("match_exact", merged.get("match_exact", settings.get("match_exact")))
+        match_exclude = override.get("match_exclude", merged.get("match_exclude", settings.get("match_exclude")))
+        platforms = override.get("platforms", merged.get("platforms", settings.get("platforms")))
+        return {
+            **merged,
+            "enabled": True,
+            "url": SOURCE_URL,
+            "plugin": "haisou",
+            "_haisou": True,
+            "_request_timeout": REQUEST_TIMEOUT_SECONDS,
+            "api_key": api_key,
+            "page_size": page_size,
+            "search_in": search_in,
+            "match_fuzzy": match_fuzzy,
+            "match_exact": match_exact,
+            "match_exclude": match_exclude,
+            "platforms": platforms,
+            "use_proxy": truthy(
+                override.get("use_proxy") if "use_proxy" in override else merged.get("use_proxy"),
+                False,
+            ),
+            "priority": int(
+                override.get("priority")
+                if "priority" in override
+                else merged.get("priority") or settings.get("priority") or 10
+            ),
+            "refresh_interval": int(
+                override.get("refresh_interval")
+                if "refresh_interval" in override
+                else merged.get("refresh_interval") or settings.get("refresh_interval") or 30
+            ),
+            "test_query": str(
+                override.get("test_query")
+                if "test_query" in override
+                else merged.get("test_query") or settings.get("test_query") or ""
+            ),
+            "keywords": str(
+                override.get("keywords")
+                if "keywords" in override
+                else merged.get("keywords") or settings.get("keywords") or ""
+            ),
+            "quality": str(
+                override.get("quality")
+                if "quality" in override
+                else merged.get("quality") or settings.get("quality") or ""
+            ),
+        }
 
     def _source_proxy(self, source: dict[str, Any]) -> str | None:
         if truthy(source.get("use_proxy")):

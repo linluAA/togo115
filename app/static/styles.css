@@ -2588,6 +2588,26 @@ legend {
   min-width: 0;
 }
 
+
+.rss-source-match-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2, var(--surface)) 88%, transparent);
+}
+
+.rss-source-match-panel > strong {
+  font-size: 0.92rem;
+}
+
+.rss-source-match-panel > .muted {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 /* source: static/src/css/10_desktop_shell.css */
 @media (min-width: 861px) {
   body {

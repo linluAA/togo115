@@ -4,7 +4,7 @@ from typing import Any
 
 from app.db import add_log
 from app.services.sources.haisou.client import HaisouApiError, HaisouClient
-from app.services.sources.haisou.config import haisou_settings
+from app.services.sources.haisou.config import apply_haisou_match_filters, haisou_settings
 from app.services.sources.haisou.mapper import map_haisou_items
 from app.services.types import SearchResult
 
@@ -55,10 +55,17 @@ async def search_haisou(
     if not isinstance(items, list):
         items = []
     mapped = map_haisou_items(items, source_name=name, platforms=list(platform_list))
+    filtered = apply_haisou_match_filters(mapped, source)
     add_log(
         "info",
         "haisou",
         "海搜搜索完成",
-        {"query": query, "raw": len(items), "usable": len(mapped), "platforms": list(platform_list)},
+        {
+            "query": query,
+            "raw": len(items),
+            "usable": len(mapped),
+            "matched": len(filtered),
+            "platforms": list(platform_list),
+        },
     )
-    return mapped
+    return filtered

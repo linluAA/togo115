@@ -91,6 +91,19 @@ class RssTorznabAdapter(
             "refresh_interval": 30,
             "_builtin": True,
         },
+        {
+            "id": "builtin_haisou",
+            "name": "海搜 Haisou",
+            "type": "site_plugin",
+            "plugin": "haisou",
+            "url": "https://haisou.cc/",
+            "enabled": False,
+            "use_proxy": False,
+            "priority": 10,
+            "refresh_interval": 30,
+            "_builtin": True,
+            "_haisou": True,
+        },
     )
 
 
