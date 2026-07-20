@@ -63,23 +63,7 @@ function builtinRssOverrideFromSource(source) {
     api_key: source.api_key || "",
     page_size: Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100)),
     search_in: source.search_in === "files" ? "files" : "title",
-    match_fuzzy: matchWordsToText(source.match_fuzzy),
-    match_exact: matchWordsToText(source.match_exact),
-    match_exclude: matchWordsToText(source.match_exclude),
   };
-}
-
-function matchWordsToText(value) {
-  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
-  return String(value || "").trim();
-}
-
-function matchTextToWords(value) {
-  return String(value || "")
-    .replace(/，/g, ",")
-    .split(/[\n\r,]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 function normalizeRssSource(source) {
@@ -102,9 +86,6 @@ function normalizeRssSource(source) {
     normalized.api_key = source.api_key || "";
     normalized.page_size = Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100));
     normalized.search_in = source.search_in === "files" ? "files" : "title";
-    normalized.match_fuzzy = matchWordsToText(source.match_fuzzy);
-    normalized.match_exact = matchWordsToText(source.match_exact);
-    normalized.match_exclude = matchWordsToText(source.match_exclude);
   }
   return normalized;
 }

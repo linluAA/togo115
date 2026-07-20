@@ -833,23 +833,20 @@ legend {
   min-width: 0;
 }
 
+.field-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
 
-.rss-source-match-panel {
+.field-hint a {
+  color: color-mix(in srgb, var(--accent, #5ad1c9) 88%, white);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rss-source-api-key-field {
   grid-column: 1 / -1;
-  display: grid;
-  gap: 0.55rem;
-  padding: 0.75rem 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-2, var(--surface)) 88%, transparent);
-}
-
-.rss-source-match-panel > strong {
-  font-size: 0.92rem;
-}
-
-.rss-source-match-panel > .muted {
-  font-size: 0.82rem;
-  line-height: 1.4;
 }
 

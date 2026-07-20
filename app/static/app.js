@@ -8,7 +8,7 @@ const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4", "haisou"]);
 const BUILTIN_RSS_SOURCES = [
   { id: "builtin_bt1207", name: "BT1207", type: "site_plugin", plugin: "bt1207", url: "https://bt1207to.cc/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
   { id: "builtin_qmp4", name: "QMP4 / 七味", type: "site_plugin", plugin: "qmp4", url: "https://www.qmp4.com/", enabled: true, use_proxy: false, priority: -50, refresh_interval: 30, test_query: "" },
-  { id: "builtin_haisou", name: "海搜 Haisou", type: "site_plugin", plugin: "haisou", url: "https://haisou.cc/", enabled: false, use_proxy: false, priority: 10, refresh_interval: 30, test_query: "", api_key: "", page_size: 20, search_in: "title", match_fuzzy: "", match_exact: "", match_exclude: "" },
+  { id: "builtin_haisou", name: "海搜 Haisou", type: "site_plugin", plugin: "haisou", url: "https://haisou.cc/", enabled: false, use_proxy: false, priority: 10, refresh_interval: 30, test_query: "", api_key: "", page_size: 20, search_in: "title" },
 ];
 
 const state = {
@@ -1777,23 +1777,7 @@ function builtinRssOverrideFromSource(source) {
     api_key: source.api_key || "",
     page_size: Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100)),
     search_in: source.search_in === "files" ? "files" : "title",
-    match_fuzzy: matchWordsToText(source.match_fuzzy),
-    match_exact: matchWordsToText(source.match_exact),
-    match_exclude: matchWordsToText(source.match_exclude),
   };
-}
-
-function matchWordsToText(value) {
-  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
-  return String(value || "").trim();
-}
-
-function matchTextToWords(value) {
-  return String(value || "")
-    .replace(/，/g, ",")
-    .split(/[\n\r,]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 function normalizeRssSource(source) {
@@ -1816,9 +1800,6 @@ function normalizeRssSource(source) {
     normalized.api_key = source.api_key || "";
     normalized.page_size = Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100));
     normalized.search_in = source.search_in === "files" ? "files" : "title";
-    normalized.match_fuzzy = matchWordsToText(source.match_fuzzy);
-    normalized.match_exact = matchWordsToText(source.match_exact);
-    normalized.match_exclude = matchWordsToText(source.match_exclude);
   }
   return normalized;
 }
@@ -1996,7 +1977,10 @@ function haisouBuiltinFields(source, priority, interval, testQuery) {
   const searchIn = source.search_in === "files" ? "files" : "title";
   return `
     <input type="hidden" class="rss-source-url-input" value="https://haisou.cc/" />
-    <label>API Key <input class="rss-source-api-key" type="password" autocomplete="off" placeholder="iDataRiver 海搜 API Key" value="${escapeHtml(source.api_key || "")}" /></label>
+    <label class="rss-source-api-key-field">API Key
+      <input class="rss-source-api-key" type="password" autocomplete="off" placeholder="iDataRiver 海搜 API Key" value="${escapeHtml(source.api_key || "")}" />
+      <span class="field-hint muted">在 <a href="https://www.idatariver.com/zh-cn/project/haisou-api-b9d1" target="_blank" rel="noopener noreferrer">iDataRiver 海搜 API</a> 购买/开通后，于控制台获取 apikey；请求按次计费。</span>
+    </label>
     <label>每页数量 <input class="rss-source-page-size" type="number" min="1" max="100" step="1" value="${escapeHtml(pageSize)}" /></label>
     <label>搜索范围
       <select class="rss-source-search-in">
@@ -2009,13 +1993,6 @@ function haisouBuiltinFields(source, priority, interval, testQuery) {
     <label>测试关键字 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
     <label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>
     <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
-    <div class="rss-source-match-panel">
-      <strong>匹配类型</strong>
-      <span class="muted">对应海搜站点的模糊 / 精准 / 反向匹配。官方搜索 API 无该参数，这里在返回结果后本地过滤。</span>
-      <label class="rss-source-filter">模糊匹配 <textarea class="rss-source-match-fuzzy" rows="2" placeholder="每行一个关键词，标题需包含全部词元">${escapeHtml(matchWordsToText(source.match_fuzzy))}</textarea></label>
-      <label class="rss-source-filter">精准匹配 <textarea class="rss-source-match-exact" rows="2" placeholder="每行一个短语，标题需完整包含">${escapeHtml(matchWordsToText(source.match_exact))}</textarea></label>
-      <label class="rss-source-filter">反向匹配 <textarea class="rss-source-match-exclude" rows="2" placeholder="每行一个关键词，标题包含则排除">${escapeHtml(matchWordsToText(source.match_exclude))}</textarea></label>
-    </div>
     <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="2">${escapeHtml(source.keywords || "")}</textarea></label>
     <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="2">${escapeHtml(source.quality || "")}</textarea></label>`;
 }
@@ -2141,9 +2118,6 @@ function rssSourceFromRow(row, id, original, type, plugin) {
     api_key: row.querySelector(".rss-source-api-key")?.value.trim() || "",
     page_size: Math.max(1, Math.min(Number.isFinite(pageSize) ? pageSize : 20, 100)),
     search_in: row.querySelector(".rss-source-search-in")?.value === "files" ? "files" : "title",
-    match_fuzzy: row.querySelector(".rss-source-match-fuzzy")?.value.trim() || "",
-    match_exact: row.querySelector(".rss-source-match-exact")?.value.trim() || "",
-    match_exclude: row.querySelector(".rss-source-match-exclude")?.value.trim() || "",
   };
 }
 
@@ -2241,9 +2215,6 @@ async function saveRssSources(event) {
           enabled: hs.enabled !== false,
           page_size: hs.page_size || 20,
           search_in: hs.search_in === "files" ? "files" : "title",
-          match_fuzzy: hs.match_fuzzy || "",
-          match_exact: hs.match_exact || "",
-          match_exclude: hs.match_exclude || "",
           use_proxy: Boolean(hs.use_proxy),
         },
       }),

@@ -89,9 +89,6 @@ class RssTorznabConfigMixin:
                         "api_key",
                         "page_size",
                         "search_in",
-                        "match_fuzzy",
-                        "match_exact",
-                        "match_exclude",
                         "platforms",
                     )
                     if key in override
@@ -196,9 +193,6 @@ class RssTorznabConfigMixin:
             return None
         page_size = override.get("page_size", merged.get("page_size", settings.get("page_size")))
         search_in = override.get("search_in", merged.get("search_in", settings.get("search_in")))
-        match_fuzzy = override.get("match_fuzzy", merged.get("match_fuzzy", settings.get("match_fuzzy")))
-        match_exact = override.get("match_exact", merged.get("match_exact", settings.get("match_exact")))
-        match_exclude = override.get("match_exclude", merged.get("match_exclude", settings.get("match_exclude")))
         platforms = override.get("platforms", merged.get("platforms", settings.get("platforms")))
         return {
             **merged,
@@ -210,9 +204,6 @@ class RssTorznabConfigMixin:
             "api_key": api_key,
             "page_size": page_size,
             "search_in": search_in,
-            "match_fuzzy": match_fuzzy,
-            "match_exact": match_exact,
-            "match_exclude": match_exclude,
             "platforms": platforms,
             "use_proxy": truthy(
                 override.get("use_proxy") if "use_proxy" in override else merged.get("use_proxy"),

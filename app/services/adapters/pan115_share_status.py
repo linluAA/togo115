@@ -91,6 +91,8 @@ class ShareAvailability:
             "network_error": "网络异常",
             "parse_error": "响应解析失败",
             "empty_share": "分享内容为空",
+            "haisou_valid": "海搜备用检测可用",
+            "haisou_unknown": "海搜备用检测结果未知",
         }
         return labels.get(self.reason, self.reason or self.status)
 

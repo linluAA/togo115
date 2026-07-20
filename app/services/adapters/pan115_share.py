@@ -58,6 +58,10 @@ async def probe_share_availability(
         return cached
 
     if not cookie:
+        add_log("warning", "115", "115 Cookie 尚未配置，尝试海搜备用检测", {"link": clean_link})
+        fallback = await _fallback_with_haisou(clean_link, receive_code, trigger="cookie_missing")
+        if fallback is not None:
+            return _cache_set(cache_key, fallback)
         result = ShareAvailability(SHARE_AUTH_REQUIRED, "cookie_missing")
         add_log("warning", "115", "115 Cookie 尚未配置，分享有效性待复检", {"link": clean_link})
         return _cache_set(cache_key, result)
@@ -129,6 +133,15 @@ async def probe_share_availability(
             {"link": clean_link, "reason": result.reason, "message": result.message, "response": payload},
         )
     elif result.status == SHARE_AUTH_REQUIRED:
+        add_log(
+            "warning",
+            "115",
+            "115 Cookie 可能失效，尝试海搜备用检测",
+            {"link": clean_link, "message": result.message},
+        )
+        fallback = await _fallback_with_haisou(clean_link, receive_code, trigger="cookie_invalid")
+        if fallback is not None:
+            return _cache_set(cache_key, fallback)
         add_log("warning", "115", "115 Cookie 可能失效，分享有效性待复检", {"link": clean_link, "message": result.message})
     elif result.status in {SHARE_UNKNOWN, SHARE_RATE_LIMITED}:
         add_log(
@@ -138,3 +151,14 @@ async def probe_share_availability(
             {"link": clean_link, "status": result.status, "reason": result.reason, "message": result.message},
         )
     return _cache_set(cache_key, result)
+
+
+async def _fallback_with_haisou(
+    link: str,
+    receive_code: str | None,
+    *,
+    trigger: str,
+) -> ShareAvailability | None:
+    from app.services.adapters.pan115_share_haisou import try_haisou_share_fallback
+
+    return await try_haisou_share_fallback(link=link, receive_code=receive_code, trigger=trigger)

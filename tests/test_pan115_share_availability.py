@@ -149,5 +149,93 @@ class Pan115ShareProbeTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await adapter.share_availability("https://115.com/s/a"), SHARE_UNKNOWN)
 
 
+
+class HaisouValidateClassifyTest(unittest.TestCase):
+    def test_valid_result(self) -> None:
+        from app.services.adapters.pan115_share_haisou import classify_haisou_validate_result
+
+        info = classify_haisou_validate_result({"valid": True, "status": "valid", "reason": "该分享有效"})
+        self.assertEqual(info.status, SHARE_AVAILABLE)
+        self.assertEqual(info.reason, "haisou_valid")
+
+    def test_expired_result(self) -> None:
+        from app.services.adapters.pan115_share_haisou import classify_haisou_validate_result
+
+        info = classify_haisou_validate_result({"valid": False, "status": "expired", "reason": "分享已过期"})
+        self.assertEqual(info.status, SHARE_UNAVAILABLE)
+        self.assertEqual(info.reason, "expired")
+
+
+class HaisouShareFallbackProbeTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        clear_share_availability_cache()
+
+    async def test_cookie_missing_fallback_available(self) -> None:
+        with patch(
+            "app.services.adapters.pan115_share._fallback_with_haisou",
+            new=AsyncMock(return_value=__import__("app.services.adapters.pan115_share_status", fromlist=["ShareAvailability"]).ShareAvailability(SHARE_AVAILABLE, "haisou_valid", message="ok")),
+        ) as fallback:
+            info = await probe_share_availability(
+                link="https://115.com/s/fb1?password=1111",
+                share_code="fb1",
+                receive_code="1111",
+                cookie=None,
+                client_factory=lambda: FakeClient(FakeResponse({"state": True})),
+                normalize_link=normalize_115_share_link,
+            )
+        self.assertEqual(info.status, SHARE_AVAILABLE)
+        self.assertEqual(info.reason, "haisou_valid")
+        fallback.assert_awaited()
+
+    async def test_cookie_invalid_fallback_available(self) -> None:
+        client = FakeClient(FakeResponse({"state": False, "message": "请先登录", "errno": 99}))
+        with patch(
+            "app.services.adapters.pan115_share._fallback_with_haisou",
+            new=AsyncMock(return_value=__import__("app.services.adapters.pan115_share_status", fromlist=["ShareAvailability"]).ShareAvailability(SHARE_AVAILABLE, "haisou_valid")),
+        ) as fallback:
+            info = await probe_share_availability(
+                link="https://115.com/s/fb2?password=2222",
+                share_code="fb2",
+                receive_code="2222",
+                cookie="UID=1",
+                client_factory=lambda: client,
+                normalize_link=normalize_115_share_link,
+            )
+        self.assertEqual(info.status, SHARE_AVAILABLE)
+        self.assertEqual(info.reason, "haisou_valid")
+        fallback.assert_awaited()
+
+    async def test_cookie_missing_without_fallback_keeps_auth_required(self) -> None:
+        with patch("app.services.adapters.pan115_share._fallback_with_haisou", new=AsyncMock(return_value=None)):
+            info = await probe_share_availability(
+                link="https://115.com/s/fb3?password=3333",
+                share_code="fb3",
+                receive_code="3333",
+                cookie=None,
+                client_factory=lambda: FakeClient(FakeResponse({"state": True})),
+                normalize_link=normalize_115_share_link,
+            )
+        self.assertEqual(info.status, SHARE_AUTH_REQUIRED)
+        self.assertEqual(info.reason, "cookie_missing")
+
+    async def test_try_haisou_fallback_calls_validate(self) -> None:
+        from app.services.adapters.pan115_share_haisou import try_haisou_share_fallback
+
+        with patch("app.services.sources.haisou.haisou_enabled", return_value=True), patch(
+            "app.services.sources.haisou.HaisouClient"
+        ) as client_cls:
+            client_cls.return_value.validate = AsyncMock(
+                return_value={"valid": False, "status": "invalid", "reason": "分享不存在"}
+            )
+            info = await try_haisou_share_fallback(
+                link="https://115.com/s/x?password=ab",
+                receive_code="ab",
+                trigger="cookie_missing",
+            )
+        self.assertIsNotNone(info)
+        self.assertEqual(info.status, SHARE_UNAVAILABLE)
+        self.assertEqual(info.reason, "not_found")
+
+
 if __name__ == "__main__":
     unittest.main()

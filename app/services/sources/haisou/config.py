@@ -52,9 +52,6 @@ def haisou_settings() -> dict[str, Any]:
         "test_query": str(raw.get("test_query") or "").strip(),
         "keywords": str(raw.get("keywords") or "").strip(),
         "quality": str(raw.get("quality") or "").strip(),
-        "match_fuzzy": _normalize_match_words(raw.get("match_fuzzy") or raw.get("fuzzy_keywords")),
-        "match_exact": _normalize_match_words(raw.get("match_exact") or raw.get("exact_keywords")),
-        "match_exclude": _normalize_match_words(raw.get("match_exclude") or raw.get("exclude_keywords") or raw.get("reverse_keywords")),
         "url": SOURCE_URL,
     }
 
@@ -88,38 +85,11 @@ def haisou_source_entry(config: dict[str, Any] | None = None) -> dict[str, Any] 
         "platforms": list(settings["platforms"]),
         "page_size": settings["page_size"],
         "search_in": settings["search_in"],
-        "match_fuzzy": list(settings.get("match_fuzzy") or []),
-        "match_exact": list(settings.get("match_exact") or []),
-        "match_exclude": list(settings.get("match_exclude") or []),
     }
 
 
 def haisou_proxy() -> str | None:
     return module_proxy("haisou")
-
-
-def apply_haisou_match_filters(results: list[Any], source: dict[str, Any] | None = None) -> list[Any]:
-    """Post-filter results. Official search API has no match-type params; website match rows are local filters."""
-    settings = haisou_settings()
-    source = source or {}
-    fuzzy = _normalize_match_words(source.get("match_fuzzy") if "match_fuzzy" in source else settings.get("match_fuzzy"))
-    exact = _normalize_match_words(source.get("match_exact") if "match_exact" in source else settings.get("match_exact"))
-    exclude = _normalize_match_words(source.get("match_exclude") if "match_exclude" in source else settings.get("match_exclude"))
-    if not fuzzy and not exact and not exclude:
-        return list(results or [])
-
-    filtered: list[Any] = []
-    for item in results or []:
-        title = _result_title(item)
-        haystack = title.casefold()
-        if exclude and any(word.casefold() in haystack for word in exclude):
-            continue
-        if exact and not all(word.casefold() in haystack for word in exact):
-            continue
-        if fuzzy and not _fuzzy_match(haystack, fuzzy):
-            continue
-        filtered.append(item)
-    return filtered
 
 
 def _merged_raw_settings() -> dict[str, Any]:
@@ -146,43 +116,3 @@ def _normalize_platforms(value: Any) -> list[str]:
     allowed = [item for item in items if item in SUPPORTED_PLATFORMS]
     deliverable = [item for item in allowed if item == "115"]
     return deliverable or list(DEFAULT_PLATFORMS)
-
-
-def _normalize_match_words(value: Any) -> list[str]:
-    if value is None or value == "":
-        return []
-    if isinstance(value, (list, tuple, set)):
-        items = [str(part).strip() for part in value if str(part).strip()]
-    else:
-        text = str(value).replace("，", ",").replace("\r", "\n")
-        pieces: list[str] = []
-        for line in text.split("\n"):
-            pieces.extend(part.strip() for part in line.split(",") if part.strip())
-        items = pieces
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for item in items:
-        key = item.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-    return deduped
-
-
-def _fuzzy_match(haystack: str, words: list[str]) -> bool:
-    for word in words:
-        tokens = [token for token in word.replace("　", " ").split() if token]
-        if not tokens:
-            if word.casefold() not in haystack:
-                return False
-            continue
-        if not all(token.casefold() in haystack for token in tokens):
-            return False
-    return True
-
-
-def _result_title(item: Any) -> str:
-    if isinstance(item, dict):
-        return str(item.get("title") or "")
-    return str(getattr(item, "title", "") or "")
