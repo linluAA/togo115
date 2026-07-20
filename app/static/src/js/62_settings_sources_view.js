@@ -96,8 +96,14 @@ function haisouBuiltinFields(source, priority, interval, testQuery) {
     <label>测试关键字 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
     <label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>
     <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
-    <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="2">${escapeHtml(source.keywords || "")}</textarea></label>
-    <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="2">${escapeHtml(source.quality || "")}</textarea></label>`;
+    <label class="rss-source-filter">关键词过滤
+      <textarea class="rss-source-keywords" rows="2" placeholder="例如：国语,简体">${escapeHtml(source.keywords || "")}</textarea>
+      <span class="field-hint muted">多个用英文逗号、中文逗号或换行分隔；需全部命中。</span>
+    </label>
+    <label class="rss-source-filter">质量过滤
+      <textarea class="rss-source-quality" rows="2" placeholder="例如：4K,2160p,HDR">${escapeHtml(source.quality || "")}</textarea>
+      <span class="field-hint muted">多个用英文逗号、中文逗号或换行分隔；命中任一即可。</span>
+    </label>`;
 }
 
 function rssSourceItemHtml(source, index) {
@@ -163,8 +169,14 @@ function rssSourceCommonFields(source, type, plugin, priority, interval, testQue
     <label>测试关键字 <input class="rss-source-test-query" placeholder="例如：斗罗大陆" value="${escapeHtml(testQuery)}" /></label>
     ${builtin ? `<label class="toggle-row"><input class="rss-source-enabled" type="checkbox" ${source.enabled === false ? "" : "checked"} /> 启用此内置源</label>` : ""}
     <label class="toggle-row"><input class="rss-source-proxy" type="checkbox" ${source.use_proxy ? "checked" : ""} /> 是否启用代理</label>
-    <label class="rss-source-filter">关键词过滤 <textarea class="rss-source-keywords" rows="3">${escapeHtml(source.keywords || "")}</textarea></label>
-    <label class="rss-source-filter">质量过滤 <textarea class="rss-source-quality" rows="3">${escapeHtml(source.quality || "")}</textarea></label>`;
+    <label class="rss-source-filter">关键词过滤
+      <textarea class="rss-source-keywords" rows="3" placeholder="例如：国语,简体">${escapeHtml(source.keywords || "")}</textarea>
+      <span class="field-hint muted">多个用英文逗号、中文逗号或换行分隔；需全部命中。</span>
+    </label>
+    <label class="rss-source-filter">质量过滤
+      <textarea class="rss-source-quality" rows="3" placeholder="例如：4K,2160p,HDR">${escapeHtml(source.quality || "")}</textarea>
+      <span class="field-hint muted">多个用英文逗号、中文逗号或换行分隔；命中任一即可。</span>
+    </label>`;
 }
 
 function syncRssSourceTypeUi(event) {
@@ -225,7 +237,7 @@ function rssSourceFromRow(row, id, original, type, plugin) {
 }
 
 function splitFilterText(value) {
-  return String(value || "").split(/[,，\n\r]+/).map((item) => item.trim()).filter(Boolean);
+  return String(value || "").split(/[,，;；\n\r]+/).map((item) => item.trim()).filter(Boolean);
 }
 
 function addRssSource() {

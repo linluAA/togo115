@@ -11,7 +11,7 @@ LOCAL_SEARCH_DROP_RE = re.compile(r"[\W_]+", re.UNICODE)
 def _split_filter_words(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
-    return [part.strip() for part in re.split(r"[,?\n\r]+", str(value or "")) if part.strip()]
+    return [part.strip() for part in re.split(r"[,，;；\n\r]+", str(value or "")) if part.strip()]
 
 
 def years_from_text(text: str | None) -> set[int]:
