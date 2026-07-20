@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from app.db import add_log, db, json_dumps, utc_now
-from app.services.adapters.media import EmbyAdapter, TmdbAdapter
+from app.services.adapters.media import TmdbAdapter
 from app.services.subscription.library.health import enrich_subscriptions_with_health
 from app.services.subscription.library.match import (
     _emby_configured,
@@ -27,11 +27,13 @@ async def enrich_subscription_with_library(subscription: dict, snapshot: dict[st
         return subscription
     if snapshot is EMBY_SNAPSHOT_FAILED or (snapshot is not None and "__failed__" in snapshot):
         return {**subscription, "emby_snapshot_failed": True}
-    try:
-        snapshot = snapshot if snapshot is not None else await EmbyAdapter().library_snapshot()
-    except Exception as exc:
-        add_log("warning", "emby", "缺集过滤获取 Emby 快照失败，已跳过本轮推送", {"id": subscription.get("id"), "error": str(exc)})
-        return {**subscription, "emby_snapshot_failed": True}
+    if snapshot is None:
+        # Always go through shared cache/single-flight helper (not a raw short timeout call).
+        snapshot = await library_snapshot_or_none()
+        if snapshot is None:
+            return subscription
+        if snapshot is EMBY_SNAPSHOT_FAILED or "__failed__" in snapshot:
+            return {**subscription, "emby_snapshot_failed": True}
 
     if subscription.get("media_type") == "movie":
         match = next((item for item in snapshot.get("movies", []) if _emby_item_matches(subscription, item)), None)

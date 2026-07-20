@@ -111,12 +111,14 @@ def _emby_configured() -> bool:
 
 
 def result_matches_missing_episodes(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
+    # Emby snapshot failure must not freeze subscription attach/delivery.
+    # Treat library state as unknown and keep searching/saving.
     if subscription.get("media_type") != "tv":
         if subscription.get("emby_snapshot_failed"):
-            return False
+            return True
         return not bool(subscription.get("in_library"))
     if subscription.get("emby_snapshot_failed"):
-        return False
+        return True
     text = result_text(result, *extra_texts)
     episodes = episode_keys_from_text_for_subscription(subscription, text)
     owned = _owned_episode_keys(subscription)
@@ -130,11 +132,23 @@ def result_matches_missing_episodes(subscription: dict, result: SearchResult, *e
         return False
     if episodes:
         return bool(episodes & missing)
-    # Bare TG/115 packs without episode labels: only accept as a last-resort primary
-    # hit when we already know the subscription still misses episodes.
-    if missing and _result_is_primary_115_resource(result):
+    # Bare 115 share packs without episode labels (TG primary or Haisou/site plugin):
+    # accept as last-resort when the subscription still misses episodes.
+    # Magnets still require episode/pack labels to avoid noisy dumps.
+    if missing and _is_115_share_last_resort(result):
         return True
     return False
+
+
+def _is_115_share_last_resort(result: SearchResult) -> bool:
+    if _result_is_primary_115_resource(result):
+        return True
+    url = str(getattr(result, "url", "") or "").casefold()
+    if "115.com/s/" not in url and "115cdn.com/s/" not in url:
+        return False
+    # site_plugin / haisou 115 shares are usable full packs even without E labels.
+    source = str(getattr(result, "source", "") or "").casefold()
+    return source.startswith("site_plugin:") or source.startswith("rss:") or source.startswith("torznab:")
 
 
 def _owned_episode_keys(subscription: dict) -> set[tuple[int, int]]:

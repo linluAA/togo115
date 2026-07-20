@@ -22,51 +22,54 @@ async def search_and_attach_resources(
     if not subscription or subscription.get("status") != "active":
         return []
 
-    subscription = await enrich_subscription_with_library(subscription, snapshot)
-    _log_subscription_episode_snapshot(subscription)
-    if subscription_should_hide(subscription):
-        mark_completed_subscription(subscription)
-        add_log(
-            "info",
-            "subscription",
-            "订阅已完整入库，跳过搜索并停止监听",
-            {"id": subscription_id, "title": subscription.get("title")},
+    created: list[dict] = []
+    try:
+        subscription = await enrich_subscription_with_library(subscription, snapshot)
+        _log_subscription_episode_snapshot(subscription)
+        if subscription_should_hide(subscription):
+            mark_completed_subscription(subscription)
+            add_log(
+                "info",
+                "subscription",
+                "订阅已完整入库，跳过搜索并停止监控",
+                {"id": subscription_id, "title": subscription.get("title")},
+            )
+            return []
+        if not subscription_needs_resource_search(subscription):
+            add_log(
+                "debug",
+                "subscription",
+                "订阅当前无缺集，跳过资源搜索",
+                {
+                    "id": subscription_id,
+                    "title": subscription.get("title"),
+                    "media_type": subscription.get("media_type"),
+                },
+            )
+            return []
+
+        created, telegram_matches, telegram_summary = await _search_telegram_first(
+            subscription, incremental_telegram
         )
-        return []
-    if not subscription_needs_resource_search(subscription):
+        if created:
+            if await _deliver_created_resources(created):
+                return created
+            add_log(
+                "warning",
+                "subscription",
+                "TG 资源已保存但投递失败，继续搜索订阅源/磁力兜底",
+                {"id": subscription_id, "count": len(created)},
+            )
+        if not created and telegram_matches and _telegram_should_skip_fallback(telegram_summary, subscription):
+            return []
+
+        fallback_created = await _search_fallback_when_needed(subscription, deliver_func=deliver_resource)
+        if fallback_created:
+            created.extend(fallback_created)
+        return created
+    finally:
+        # Always clear "等待搜索 / 还没有完成首次历史搜索" once a search attempt finishes.
         _mark_subscription_checked(subscription_id)
-        add_log("debug",
-            "subscription",
-            "订阅当前无缺集，跳过资源搜索",
-            {
-                "id": subscription_id,
-                "title": subscription.get("title"),
-                "media_type": subscription.get("media_type"),
-            },
-        )
-        return []
-
-    created, telegram_matches, telegram_summary = await _search_telegram_first(subscription, incremental_telegram)
-    if created:
-        if await _deliver_created_resources(created):
-            return created
-        add_log(
-            "warning",
-            "subscription",
-            "TG 资源已保存但投递失败，继续搜索订阅源/磁力兜底",
-            {"id": subscription_id, "count": len(created)},
-        )
-    if not created and telegram_matches and _telegram_should_skip_fallback(telegram_summary, subscription):
-        _mark_subscription_checked(subscription_id)
-        return []
-
-    fallback_created = await _search_fallback_when_needed(subscription, deliver_func=deliver_resource)
-    if fallback_created:
-        created.extend(fallback_created)
-
-    _mark_subscription_checked(subscription_id)
-    return created
-
 
 
 

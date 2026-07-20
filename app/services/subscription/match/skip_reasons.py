@@ -62,7 +62,7 @@ def _episode_skip_reason(subscription: dict, result: SearchResult, *extra_texts:
     if subscription.get("media_type") != "tv":
         return "电影已入库" if subscription.get("in_library") else "已匹配"
     if subscription.get("emby_snapshot_failed"):
-        return "Emby 快照失败"
+        return ""
     expected = _all_tmdb_episode_keys(subscription)
     if not expected:
         return "已匹配"

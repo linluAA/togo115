@@ -308,6 +308,14 @@ class SubscriptionMatchingTest(unittest.TestCase):
         self.assertTrue(result_matches_missing_episodes(subscription, tg_result))
         self.assertFalse(result_matches_missing_episodes(subscription, fallback_result))
 
+        haisou_result = SearchResult(
+            title="Drama 1080p",
+            url="https://115.com/s/haisoucode?password=1234",
+            source="site_plugin:海搜 Haisou",
+            context="Drama 1080p\nhttps://115.com/s/haisoucode?password=1234",
+        )
+        self.assertTrue(result_matches_missing_episodes(subscription, haisou_result))
+
     def test_quality_rules_reject_excluded_words_and_pack_mode(self) -> None:
         subscription = {
             "title": "南部档案",

@@ -132,14 +132,22 @@ class JobWorker:
                 _default_search,
                 _search_and_attach_resources_guarded,
             )
+            from app.services.subscription import runtime as runtime
 
             subscription_id = int(job.get("target_id") or (job.get("payload") or {}).get("id") or 0)
             if subscription_id <= 0:
                 raise RuntimeError("subscription_search missing target_id")
-            created = await _search_and_attach_resources_guarded(
-                subscription_id,
-                search_func=_default_search,
-            )
+            timeout = float(getattr(runtime, "SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS", 120) or 120)
+            try:
+                created = await asyncio.wait_for(
+                    _search_and_attach_resources_guarded(
+                        subscription_id,
+                        search_func=_default_search,
+                    ),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError(f"subscription_search timed out after {timeout}s") from exc
             return {"id": subscription_id, "created": len(created or [])}
         if kind == "subscription_search_all":
             from app.services.subscription.search.tasks import _default_search_all

@@ -79,15 +79,59 @@ async def _search_and_attach_resources_guarded(
 def _reuse_or_create_job(kind: str, target_id: int | None = None, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     existing = latest_job(kind, target_id)
     if existing and existing.get("status") in {"queued", "running"}:
-        return {
-            "ok": True,
-            "queued": existing.get("status") == "queued",
-            "running": True,
-            "job_id": existing.get("id"),
-            "reused": True,
-        }
+        if not _job_is_stale(existing):
+            return {
+                "ok": True,
+                "queued": existing.get("status") == "queued",
+                "running": True,
+                "job_id": existing.get("id"),
+                "reused": True,
+            }
+        try:
+            from app.services.jobs import mark_job_failed
+
+            mark_job_failed(int(existing["id"]), "stale job superseded by reschedule")
+        except Exception:
+            pass
+        add_log(
+            "warning",
+            "subscription",
+            "后台任务卡住已超时，重新排队",
+            {"kind": kind, "target_id": target_id, "old_job_id": existing.get("id"), "status": existing.get("status")},
+        )
     job_id = create_job(kind, target_id, payload)
     return {"ok": True, "queued": True, "running": True, "job_id": job_id, "reused": False}
+
+
+def _job_is_stale(job: dict[str, Any], max_age_seconds: float = 180.0) -> bool:
+    """Treat long-lived queued/running jobs as stale so first-search cannot hang forever."""
+    from datetime import datetime, timezone
+
+    stamps = [
+        job.get("heartbeat_at"),
+        job.get("started_at"),
+        job.get("updated_at"),
+        job.get("created_at"),
+    ]
+    now = datetime.now(timezone.utc)
+    for stamp in stamps:
+        text = str(stamp or "").strip()
+        if not text:
+            continue
+        try:
+            value = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            age = (now - value.astimezone(timezone.utc)).total_seconds()
+            # For running jobs, heartbeat should refresh every ~15s.
+            # For queued jobs, use created_at age.
+            if job.get("status") == "running":
+                # Stale if latest known stamp is older than max_age.
+                return age > max_age_seconds
+            return age > max_age_seconds * 2
+        except Exception:
+            continue
+    return False
 
 
 def schedule_subscription_search(subscription_id: int) -> dict:
