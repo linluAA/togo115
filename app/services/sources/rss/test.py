@@ -44,6 +44,9 @@ class RssTorznabTestMixin:
         # Keep source tests responsive: limit detail page crawling.
         if self._source_type(normalized) == "site_plugin":
             plugin_id = self._site_plugin_id(normalized)
+            if plugin_id == "haisou":
+                normalized.setdefault("url", "https://haisou.cc/")
+                normalized.setdefault("plugin", "haisou")
             if plugin_id == "bt1207":
                 normalized.setdefault("_fast_detail_limit", 2)
                 normalized.setdefault("_bt1207_detail_delay", 0.15)
@@ -77,12 +80,38 @@ class RssTorznabTestMixin:
         client: httpx.AsyncClient,
         started: float,
     ) -> tuple[str, httpx.Response | None, list]:
+        if self._site_plugin_id(source) == "haisou":
+            return await self._test_haisou_source(source, url, query, started)
         if self._site_plugin_id(source) == "qmp4":
             return await self._test_qmp4_source(source, url, query, client, started)
         res = await self._get_magnet_web_page(client, url)
         self._raise_if_challenged(source, url, res, started)
         results = await self._parse_magnet_web_source(source, url, res.text, client, self._query_release_year(query))
         return url, res, results
+
+
+    async def _test_haisou_source(
+        self,
+        source: dict[str, Any],
+        url: str,
+        query: str,
+        started: float,
+    ) -> tuple[str, httpx.Response | None, list]:
+        from app.services.sources.haisou import haisou_enabled, search_haisou
+
+        if not haisou_enabled() and not str(source.get("api_key") or "").strip():
+            raise _SourceTestFailure(
+                {
+                    "ok": False,
+                    "source": str(source.get("name") or "Haisou"),
+                    "url": url,
+                    "query": query,
+                    "latency_ms": round((time.perf_counter() - started) * 1000),
+                    "error": "Haisou API Key is missing or disabled",
+                }
+            )
+        results = await search_haisou(query, source=source)
+        return url, None, results
 
     async def _test_qmp4_source(
         self,

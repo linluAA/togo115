@@ -59,6 +59,8 @@ class RssTorznabAdapter(
         "qmp4": "qmp4",
         "qiwei": "qmp4",
         "qmp4_magnet": "qmp4",
+        "haisou": "haisou",
+        "海搜": "haisou",
     }
     MAGNET_WEB_BROWSER_UA = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

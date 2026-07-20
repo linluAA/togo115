@@ -1,5 +1,5 @@
 const VIEW_KEYS = ["tmdb", "emby", "subscriptions", "logs", "settings"];
-const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "tg_bot", "emby", "backup"];
+const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "haisou", "tg_bot", "emby", "backup"];
 const TMDB_MORE_MIN_PAGE_SIZE = 40;
 const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "qmp4"]);
 const BUILTIN_RSS_SOURCES = [

@@ -38,6 +38,8 @@ class RssTorznabConfigMixin:
         plugin_id = self.SITE_PLUGIN_ALIASES.get(raw)
         if plugin_id:
             return plugin_id
+        if raw == "haisou" or truthy(source.get("_haisou")):
+            return "haisou"
         source_type = str(source.get("type") or "").strip().lower()
         if source_type in self.LEGACY_SITE_PLUGIN_TYPES:
             return "generic_magnet"
@@ -56,7 +58,7 @@ class RssTorznabConfigMixin:
         source_type = self._source_type(source)
         if source_type == "site_plugin":
             plugin_id = self._site_plugin_id(source)
-            if plugin_id in ("bt1207", "qmp4"):
+            if plugin_id in ("bt1207", "qmp4", "haisou"):
                 return f"site_plugin:{plugin_id}"
         url = str(source.get("url") or "").strip().rstrip("/")
         return f"{source_type}:{url or self._source_identity(source)}"
@@ -135,6 +137,13 @@ class RssTorznabConfigMixin:
     def _source_queries(self, source: dict[str, Any], queries: list[str]) -> list[str | None]:
         if not self._source_supports_query(source):
             return [None]
+        # Paid API: one compact query per search to avoid duplicate billing.
+        if self._site_plugin_id(source) == "haisou":
+            for query in queries:
+                value = str(query or "").strip()
+                if value:
+                    return [value]
+            return []
         if self._site_plugin_id(source) != "qmp4":
             return list(dict.fromkeys(query for query in queries if query))
         expanded: list[str] = []
@@ -154,7 +163,17 @@ class RssTorznabConfigMixin:
             enabled_sources.append({**source, "_order": index})
         for index, source in enumerate(self._builtin_sources(config, enabled_sources), start=len(enabled_sources)):
             enabled_sources.append({**source, "_order": index})
+        haisou_source = self._haisou_source_entry()
+        if haisou_source is not None:
+            enabled_sources.append({**haisou_source, "_order": -1})
         return sorted(enabled_sources, key=lambda item: (-self._source_priority(item), int(item.get("_order") or 0)))
+
+    def _haisou_source_entry(self) -> dict[str, Any] | None:
+        try:
+            from app.services.sources.haisou import haisou_source_entry
+        except Exception:
+            return None
+        return haisou_source_entry()
 
     def _source_proxy(self, source: dict[str, Any]) -> str | None:
         if truthy(source.get("use_proxy")):

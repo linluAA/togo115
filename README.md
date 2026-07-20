@@ -169,7 +169,7 @@ echo <GITHUB_TOKEN> | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
 - TMDB：配置 API Key 后读取热门剧集和电影，支持一键订阅。
 - 我的订阅：区分电视剧和电影，支持添加、取消、编辑关键词、手动触发搜索。
 - 日志：支持简易日志和 Debug 日志切换。
-- 设置：账号安全、115 Cookie/扫码、Telegram API/手机号验证码/扫码、TMDB、代理、订阅源、TG Bot、Emby。
+- 设置：账号安全、115 Cookie/扫码、Telegram API/手机号验证码/扫码、TMDB、代理、海搜（Haisou API）、订阅源、TG Bot、Emby。
 - 后台监控：定时检查 Telegram/TG Bot 监听状态、同步 Emby 入库状态，并按间隔触发全部活跃订阅重搜（Telegram 历史 + 订阅源/磁力兜底）；创建订阅、手动搜索、TG 实时消息仍会即时触发。
 - TG Bot：支持 `订阅 剧名` 搜索候选、选择剧集海报后确认订阅，支持 `订阅列表` 和 `取消订阅 名称/ID`。
 
@@ -182,9 +182,22 @@ echo <GITHUB_TOKEN> | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
 
 系统会在创建订阅、手动搜索、以及监控定时重搜时搜索 Telegram 历史消息；实时追新依赖 Telegram 新消息监听。如果消息带按钮，会尝试点击包含 `115`、`链接`、`查看`、`打开`、`资源`、`link` 的按钮并从响应里提取 115 分享链接。
 
+
+## 海搜（Haisou）订阅源
+
+官方开放 API（[iDataRiver 海搜 API](https://www.idatariver.com/zh-cn/project/haisou-api-b9d1)）接入：
+
+1. 在设置 → **海搜** 填写 iDataRiver API Key，选择启用
+2. 启用后会自动加入订阅源搜索链路（Telegram 未命中后的 fallback）
+3. 当前仅拉取 **115** 平台分享（与现有转存/校验链路兼容），并附带提取码
+4. 超时按官方建议 ≥ 65s；若 credits > 0 不会对同一失败请求盲目重试
+5. 代理设置中可勾选模块 海搜
+
+说明：接口前 100 次/日搜索通常免费，之后按量计费；请自行保管 API Key，不要提交到仓库。
+
 ## 订阅源配置
 
-设置里的“订阅源”支持三种类型：
+设置里的“订阅源”支持 RSS / Torznab / 站点插件；另可通过 **海搜** 设置启用官方 API 源（自动参与 fallback 搜索）：
 
 - `RSS`：填写 RSS URL，系统在定时重搜/手动搜索时读取条目并提取 115、magnet、torrent 链接。
 - `Torznab`：填写 Torznab API URL，可使用 `{query}` 占位符，或让系统自动补 `t=search&q=剧名`。

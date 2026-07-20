@@ -7,6 +7,7 @@ import httpx
 
 from app.db import add_log
 from app.services.source_stats import _source_stats_key, record_source_fetch, source_health_status
+from app.services.link import truthy
 from app.services.types import SearchResult
 
 
@@ -52,9 +53,13 @@ class RssTorznabFetchSourceMixin:
 
     def _source_timeout(self, source: dict[str, Any]) -> float:
         try:
-            return max(2.0, min(float(source.get("_request_timeout") or source.get("timeout") or 25), 30.0))
+            raw = float(source.get("_request_timeout") or source.get("timeout") or 25)
         except (TypeError, ValueError):
             return 25.0
+        # Haisou official API docs require client timeout > 60s to avoid partial billing.
+        if self._site_plugin_id(source) == "haisou" or truthy(source.get("_haisou")):
+            return max(65.0, min(raw, 90.0))
+        return max(2.0, min(raw, 30.0))
 
     async def _fetch_source_results(
         self,
@@ -79,6 +84,8 @@ class RssTorznabFetchSourceMixin:
         query: str | None,
         query_context: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
+        if self._site_plugin_id(source) == "haisou":
+            return await self._fetch_haisou_results(source, context, query)
         res = await self._get_magnet_web_page(client, context.url)
         if self._is_magnet_web_challenge(str(res.url), res.text):
             add_log("warning", "rss", "站点插件订阅源被浏览器验证拦截", {"source": context.name, "url": context.url, "plugin": self._site_plugin_id(source)})
@@ -89,6 +96,26 @@ class RssTorznabFetchSourceMixin:
         else:
             results = await self._parse_magnet_web_source(source, context.url, res.text, client, self._query_release_year(query))
         add_log("debug", "rss", f"站点插件订阅源搜索完成：{len(results)} 条", {"source": context.name, "url": context.url, "plugin": self._site_plugin_id(source), "count": len(results)})
+        return results
+
+
+    async def _fetch_haisou_results(
+        self,
+        source: dict[str, Any],
+        context: "_FetchContext",
+        query: str | None,
+    ) -> list[SearchResult]:
+        from app.services.sources.haisou import search_haisou
+
+        if not str(query or "").strip():
+            return []
+        results = await search_haisou(str(query).strip(), source=source)
+        add_log(
+            "debug",
+            "rss",
+            f"haisou source search done: {len(results)}",
+            {"source": context.name, "url": context.url, "plugin": "haisou", "count": len(results)},
+        )
         return results
 
 
