@@ -1691,11 +1691,17 @@ function fieldHtml(key, name, label, current, type = "text") {
   if (key === "haisou" && name === "enabled") {
     const selected = String(current || "true");
     const on = selected === "true" || selected === "1" || selected === "on";
-    return <label><select name="enabled"><option value="true" >启用</option><option value="false" >关闭</option></select></label>;
+    return `<label>${label}<select name="enabled">
+      <option value="true" ${on ? "selected" : ""}>启用</option>
+      <option value="false" ${on ? "" : "selected"}>关闭</option>
+    </select></label>`;
   }
   if (key === "haisou" && name === "search_in") {
     const selected = String(current || "title");
-    return <label><select name="search_in"><option value="title" >标题</option><option value="files" >文件名</option></select></label>;
+    return `<label>${label}<select name="search_in">
+      <option value="title" ${selected === "title" ? "selected" : ""}>标题</option>
+      <option value="files" ${selected === "files" ? "selected" : ""}>文件名</option>
+    </select></label>`;
   }
   if (key === "proxy" && name === "modules") {
     const selected = Array.isArray(current) ? current : String(current || "").split(",").filter(Boolean);
