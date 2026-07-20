@@ -42,7 +42,7 @@ class FirstSearchChainTest(unittest.IsolatedAsyncioTestCase):
             )
             return int(cur.lastrowid)
 
-    def test_emby_snapshot_failed_does_not_block_haisou_115(self) -> None:
+    def test_emby_snapshot_failed_still_allows_full_pack(self) -> None:
         subscription = {
             "title": "西游记",
             "media_type": "tv",
@@ -52,28 +52,36 @@ class FirstSearchChainTest(unittest.IsolatedAsyncioTestCase):
             "emby_snapshot_failed": True,
         }
         result = SearchResult(
-            title="西游记",
-            url="https://115.com/s/swfsc2b36dh?password=z730",
+            title="西游记.1986-2000.全41集.4k修复",
+            url="https://115.com/s/swz2lcn3z5t?password=x823",
             source="site_plugin:海搜 Haisou",
-            context="西游记",
+            context="西游记.1986-2000.全41集.4k修复",
         )
         self.assertTrue(result_matches_missing_episodes(subscription, result))
 
-    def test_haisou_115_bare_title_allowed_when_missing(self) -> None:
+    def test_haisou_full_pack_allowed_bare_title_rejected(self) -> None:
         subscription = {
             "title": "西游记",
             "media_type": "tv",
             "keywords": ["西游记"],
+            "release_year": 1986,
             "tmdb_total_count": 25,
             "emby_episode_keys": [],
         }
-        result = SearchResult(
+        bare = SearchResult(
             title="西游记",
             url="https://115.com/s/swfsc2b36dh?password=z730",
             source="site_plugin:海搜 Haisou",
             context="西游记",
         )
-        self.assertTrue(result_matches_missing_episodes(subscription, result))
+        pack = SearchResult(
+            title="西游记.1986-2000.全41集.4k修复",
+            url="https://115.com/s/swz2lcn3z5t?password=x823",
+            source="site_plugin:海搜 Haisou",
+            context="西游记.1986-2000.全41集.4k修复",
+        )
+        self.assertFalse(result_matches_missing_episodes(subscription, bare))
+        self.assertTrue(result_matches_missing_episodes(subscription, pack))
 
     def test_magnet_bare_title_still_rejected(self) -> None:
         subscription = {

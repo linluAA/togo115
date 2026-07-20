@@ -132,23 +132,11 @@ def result_matches_missing_episodes(subscription: dict, result: SearchResult, *e
         return False
     if episodes:
         return bool(episodes & missing)
-    # Bare 115 share packs without episode labels (TG primary or Haisou/site plugin):
-    # accept as last-resort when the subscription still misses episodes.
-    # Magnets still require episode/pack labels to avoid noisy dumps.
-    if missing and _is_115_share_last_resort(result):
+    # Bare title with no episode/pack labels: only Telegram primary 115 may pass as
+    # last-resort. Haisou/site plugins must carry pack/episode markers (e.g. 全41集).
+    if missing and _result_is_primary_115_resource(result):
         return True
     return False
-
-
-def _is_115_share_last_resort(result: SearchResult) -> bool:
-    if _result_is_primary_115_resource(result):
-        return True
-    url = str(getattr(result, "url", "") or "").casefold()
-    if "115.com/s/" not in url and "115cdn.com/s/" not in url:
-        return False
-    # site_plugin / haisou 115 shares are usable full packs even without E labels.
-    source = str(getattr(result, "source", "") or "").casefold()
-    return source.startswith("site_plugin:") or source.startswith("rss:") or source.startswith("torznab:")
 
 
 def _owned_episode_keys(subscription: dict) -> set[tuple[int, int]]:

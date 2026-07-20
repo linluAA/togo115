@@ -308,13 +308,21 @@ class SubscriptionMatchingTest(unittest.TestCase):
         self.assertTrue(result_matches_missing_episodes(subscription, tg_result))
         self.assertFalse(result_matches_missing_episodes(subscription, fallback_result))
 
-        haisou_result = SearchResult(
+        haisou_bare = SearchResult(
             title="Drama 1080p",
             url="https://115.com/s/haisoucode?password=1234",
             source="site_plugin:海搜 Haisou",
             context="Drama 1080p\nhttps://115.com/s/haisoucode?password=1234",
         )
-        self.assertTrue(result_matches_missing_episodes(subscription, haisou_result))
+        # Haisou bare titles without pack/episode labels must not pass missing filter.
+        self.assertFalse(result_matches_missing_episodes(subscription, haisou_bare))
+        haisou_pack = SearchResult(
+            title="Drama 1986-2000 全10集 4K",
+            url="https://115.com/s/haisoupack?password=1234",
+            source="site_plugin:海搜 Haisou",
+            context="Drama 1986-2000 全10集 4K",
+        )
+        self.assertTrue(result_matches_missing_episodes(subscription, haisou_pack))
 
     def test_quality_rules_reject_excluded_words_and_pack_mode(self) -> None:
         subscription = {

@@ -104,9 +104,18 @@ def fallback_candidate_sort_key(subscription: dict | None, result: SearchResult)
     decision = decide_resource_candidate(subscription, result) if subscription else None
     coverage_count = decision.coverage_count if decision else 0
     exact_missing = bool(decision and decision.episodes and decision.episodes == decision.missing_coverage)
+    full_missing = bool(
+        decision
+        and decision.missing_episodes
+        and decision.episodes
+        and decision.episodes == decision.missing_episodes
+    )
+    pack_bonus = _full_pack_title_bonus(result)
     return (
+        0 if full_missing else 1,  # complete-missing coverage first (e.g. 全41集 covering all missing)
         -coverage_count,
         0 if exact_missing else 1,
+        -pack_bonus,
         -_quality_preference_score(subscription, result),
         -result_priority(result),
         0 if _result_is_site_plugin(result) else 1,
@@ -114,6 +123,26 @@ def fallback_candidate_sort_key(subscription: dict | None, result: SearchResult)
         str(getattr(result, "message_id", "") or ""),
         str(getattr(result, "url", "") or ""),
     )
+
+
+def _full_pack_title_bonus(result: SearchResult) -> int:
+    """Prefer explicit full-series/pack titles over bare titles or partial updates."""
+    text = result_text(result)
+    if not text:
+        return 0
+    try:
+        from app.services.subscription.episode.patterns import STRONG_PACK_WORD_RE, FULL_SERIES_PACK_RE
+
+        if FULL_SERIES_PACK_RE.search(text) or STRONG_PACK_WORD_RE.search(text):
+            return 2
+    except Exception:
+        pass
+    lowered = text.casefold()
+    if "全" in text and ("集" in text or "季" in text or "部" in text):
+        return 1
+    if "complete" in lowered or "pack" in lowered:
+        return 1
+    return 0
 
 
 def _quality_preference_score(subscription: dict | None, result: SearchResult) -> int:
