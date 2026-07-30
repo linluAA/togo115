@@ -118,20 +118,15 @@ class TelegramHistorySearchMixin(TelegramDialogSearchMixin, TelegramFastSearchMi
         if not state.force_remote:
             indexed_results = self._search_indexed_telegram_messages(dialogs, queries)
             if indexed_results:
-                results = self._dedupe_results(state.remember_results(indexed_results))
+                results = self._dedupe_results(indexed_results)
                 metrics.index_hits = len(results)
-                metrics.extra["cache"] = extract_cache_stats()
-                payload = {
-                    "title": title,
-                    "count": len(results),
-                    "sources": len(dialogs),
-                    "total_ms": _elapsed_ms(total_started),
-                    **metrics.as_payload(),
-                }
-                add_log("info", "telegram", "Telegram 本地索引命中资源，跳过远端历史搜索", payload)
-                add_log("info", "telegram", "Telegram 搜索指标", payload)
-                record_telegram_search(payload)
-                return results
+                indexed_results = results
+                add_log(
+                    "debug",
+                    "telegram",
+                    "Telegram 本地索引命中，继续远程复核",
+                    {"title": title, "count": len(results), "sources": len(dialogs), "force_remote": state.force_remote},
+                )
 
         search_started = time.perf_counter()
         remote_results, search_metrics = await self._search_dialogs_concurrently(

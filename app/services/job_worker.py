@@ -132,7 +132,7 @@ class JobWorker:
             add_log(
                 "error",
                 "jobs",
-                "????????",
+                "后台任务执行失败",
                 {"id": job_id, "kind": kind, "error": str(exc), "error_type": type(exc).__name__},
             )
         finally:

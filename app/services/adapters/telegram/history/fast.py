@@ -91,9 +91,20 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
                 )
                 return results
         budget = TelegramSearchBudget(TELEGRAM_FAST_TOTAL_BUDGET_SECONDS)
-        add_log("debug", "telegram", "Telegram 快速搜索开始", {**self._fast_search_start_payload(title, dialogs, queries[0]), "resolve_ms": resolve_ms})
+        add_log(
+            "debug",
+            "telegram",
+            "Telegram 快速搜索开始",
+            {**self._fast_search_start_payload(title, dialogs, queries[0]), "query_count": len(queries), "resolve_ms": resolve_ms},
+        )
         search_started = time.perf_counter()
-        results = await self._search_dialogs_fast(client, dialogs, queries[0], budget, shared_state=state)
+        results: list[SearchResult] = []
+        for query in queries[:2]:
+            if budget.exhausted():
+                break
+            results = await self._search_dialogs_fast(client, dialogs, query, budget, shared_state=state)
+            if results:
+                break
         add_log("debug",
             "telegram",
             "Telegram 快速搜索完成",

@@ -23,7 +23,7 @@ LOG_TEXT_FILES = [
     Path("app/services/adapters/telegram/scan/message_links.py"),
     Path("app/services/adapters/telegram/scan/message_context.py"),
     Path("app/services/adapters/telegram/scan/button_links.py"),
-    Path("app/services/link_telegram_hints.py"),
+    Path("app/services/link/telegram_hints.py"),
     Path("app/services/adapters/telegram/monitor.py"),
     Path("app/services/adapters/telegram/pipeline.py"),
     Path("app/services/adapters/telegram/bot/polling.py"),

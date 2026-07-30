@@ -15,6 +15,7 @@ from app.services.adapters.telegram.history.dialog_search import (
     TELEGRAM_EMPTY_DIALOG_STREAK,
     TelegramDialogSearchMixin,
 )
+from app.services.adapters.telegram.history.fast import TelegramFastSearchMixin
 from app.services.adapters.telegram.history.dialog_search_query import TelegramDialogSearchQueryMixin
 from app.services.adapters.telegram.history.prewarm import (
     TELEGRAM_INDEX_PREWARM_DELTA_LIMIT,
@@ -56,6 +57,44 @@ class SharedStateCacheTest(unittest.TestCase):
         state.note_dialog_hits("ch1", 2)
         state.note_dialog_hits("ch1", 1)
         self.assertEqual(state.dialog_hit_scores["ch1"], 3)
+
+
+class FastMultiQueryFallbackTest(unittest.IsolatedAsyncioTestCase):
+    async def test_fast_search_tries_second_query_when_first_is_empty(self) -> None:
+        class Harness(TelegramFastSearchMixin):
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+
+            async def _authorized_client_for_search(self):
+                return object()
+
+            def _config(self):
+                return {"sources": ["-1001"]}
+
+            def _configured_sources(self, config):
+                return ["-1001"]
+
+            async def _resolve_dialogs_for_fast_search(self, client, source_values):
+                return [{"entity": "e", "source": "-1001", "canonical": "-1001"}]
+
+            def _server_search_queries(self, queries):
+                return ["primary", "alias"]
+
+            async def _search_dialogs_fast(self, client, dialogs, query, budget, *, shared_state=None):
+                self.queries.append(query)
+                if query == "alias":
+                    return [SearchResult(title="hit", url="https://115.com/s/alias?password=1111", source="tg")]
+                return []
+
+            def _dedupe_results(self, results):
+                return results
+
+        harness = Harness()
+        with patch("app.services.adapters.telegram.history.fast.search_telegram_message_index", return_value=[]):
+            results = await harness.search_history_fast("金特务", [])
+
+        self.assertEqual(harness.queries, ["primary", "alias"])
+        self.assertEqual(results[0].url, "https://115.com/s/alias?password=1111")
 
 
 class AdaptiveMessagesTest(unittest.TestCase):

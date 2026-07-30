@@ -240,13 +240,14 @@ class SharedStateHarness(TelegramHistorySearchMixin):
 
 
 class TelegramSearchP1Test(unittest.IsolatedAsyncioTestCase):
-    async def test_full_search_returns_index_hits_without_remote(self) -> None:
+    async def test_full_search_keeps_remote_recheck_after_index_hits(self) -> None:
         harness = IndexEarlyReturnHarness()
         with patch("app.services.adapters.telegram.history.search._expanded_search_queries", return_value=["将夜"]):
             results = await harness.search_history("将夜", [])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results), 2)
         self.assertTrue(str(results[0].source).startswith("TelegramIndex"))
-        self.assertEqual(harness.remote_calls, 0)
+        self.assertEqual(results[1].url, "https://115.com/s/remote?password=1111")
+        self.assertEqual(harness.remote_calls, 1)
 
     async def test_full_search_force_remote_skips_index(self) -> None:
         from app.services.adapters.telegram.models import TelegramSearchSharedState
