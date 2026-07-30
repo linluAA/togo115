@@ -35,6 +35,62 @@ class BotCallbackHarness(TelegramBotCallbackMixin, TelegramBotMessageMixin):
 
 
 class TelegramBotCallbackTest(unittest.IsolatedAsyncioTestCase):
+    async def test_subscribe_reply_mentions_existing_movie_in_library(self) -> None:
+        bot = BotCallbackHarness()
+        client = FakeClient()
+        callback = {
+            "id": "callback-3",
+            "data": "subscribe:movie:123",
+            "message": {"message_id": 101, "chat": {"id": 456}},
+        }
+        subscription = {
+            "id": 7,
+            "title": "流浪地球",
+            "media_type": "movie",
+            "in_library": True,
+            "emby_count": 1,
+        }
+
+        with (
+            patch("app.services.adapters.telegram.bot.callbacks.TmdbAdapter") as tmdb_cls,
+            patch.object(bot, "_create_subscription_from_detail", AsyncMock(return_value=subscription)),
+        ):
+            tmdb_cls.return_value.detail = AsyncMock(return_value={"title": "流浪地球"})
+            await bot._handle_callback(client, "token", callback)
+
+        sent = client.posts[-2]["data"]["text"]
+        self.assertIn("已添加订阅：流浪地球", sent)
+        self.assertIn("媒体库中已存在该电影", sent)
+
+    async def test_subscribe_reply_mentions_existing_tv_episodes(self) -> None:
+        bot = BotCallbackHarness()
+        client = FakeClient()
+        callback = {
+            "id": "callback-4",
+            "data": "subscribe:tv:456",
+            "message": {"message_id": 102, "chat": {"id": 456}},
+        }
+        subscription = {
+            "id": 8,
+            "title": "庆余年",
+            "media_type": "tv",
+            "in_library": True,
+            "emby_count": 12,
+            "tmdb_total_count": 36,
+        }
+
+        with (
+            patch("app.services.adapters.telegram.bot.callbacks.TmdbAdapter") as tmdb_cls,
+            patch.object(bot, "_create_subscription_from_detail", AsyncMock(return_value=subscription)),
+        ):
+            tmdb_cls.return_value.detail = AsyncMock(return_value={"name": "庆余年"})
+            await bot._handle_callback(client, "token", callback)
+
+        sent = client.posts[-2]["data"]["text"]
+        self.assertIn("已添加订阅：庆余年", sent)
+        self.assertIn("媒体库中已存在 12/36 集", sent)
+        self.assertIn("补缺集", sent)
+
     async def test_magnet_choice_replaces_options_with_searching_message(self) -> None:
         bot = BotCallbackHarness()
         client = FakeClient()

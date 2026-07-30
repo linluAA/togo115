@@ -81,17 +81,37 @@ class TelegramBotCallbackMixin:
             detail = await TmdbAdapter().detail(media_type, int(tmdb_id))
             subscription = await self._create_subscription_from_detail(media_type, int(tmdb_id), detail)
             if chat_id:
+                library_notice = self._subscription_library_notice(subscription)
                 await self._send_bot_message(
                     client,
                     token,
                     chat_id,
-                    f"已添加订阅：{subscription.get('title')}，ID {subscription.get('id')}\n已进入后台搜索，找到资源后会按当前投递方式处理。",
+                    (
+                        f"已添加订阅：{subscription.get('title')}，ID {subscription.get('id')}\n"
+                        f"{library_notice}"
+                        "已进入后台搜索，找到资源后会按当前投递方式处理。"
+                    ),
                 )
             await self._clear_message_buttons(client, token, message)
         except Exception as exc:
             add_log("warning", "tg_bot", "TG Bot 回调订阅失败", {"data": data, "error": str(exc)})
             if chat_id:
                 await self._send_bot_message(client, token, chat_id, f"订阅失败：{str(exc)[:120]}")
+
+    def _subscription_library_notice(self, subscription: dict[str, Any]) -> str:
+        if not subscription.get("in_library") and not int(subscription.get("emby_count") or 0):
+            return ""
+        if subscription.get("media_type") == "movie":
+            return "提示：媒体库中已存在该电影。\n"
+        emby_count = int(subscription.get("emby_count") or 0)
+        total = int(subscription.get("tmdb_total_count") or 0)
+        if str(subscription.get("status") or "").casefold() == "completed":
+            if total:
+                return f"提示：媒体库中已存在 {emby_count}/{total} 集，已完整入库。\n"
+            return f"提示：媒体库中已存在 {emby_count} 集，已完整入库。\n"
+        if total:
+            return f"提示：媒体库中已存在 {emby_count}/{total} 集，后续只会继续补缺集。\n"
+        return f"提示：媒体库中已存在 {emby_count} 集，后续只会继续补缺集。\n"
 
     async def _handle_magnet_callback(
         self,
