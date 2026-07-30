@@ -37,17 +37,23 @@ async def search_all_active_subscriptions(*, force: bool = False) -> dict:
         },
     )
     snapshot = await library_snapshot_or_none()
-    # Best-effort TMDB refresh for caught-up/stale maps before search waves.
-    try:
-        await asyncio.wait_for(prefetch_tmdb_for_subscriptions(subscriptions), timeout=12.0)
-    except Exception:
-        pass
+    # Best-effort TMDB refresh runs in background so search waves can start sooner.
+    tmdb_task = asyncio.create_task(prefetch_tmdb_for_subscriptions(subscriptions))
     # Emby sync is useful, but must not block the first subscription search.
     # Parallel library snapshot sync for this search-all run (not the queued full Emby job).
     emby_task = asyncio.create_task(_sync_emby_in_background(list(subscriptions), snapshot))
     try:
         outcomes = await _search_subscriptions_in_waves(list(subscriptions), snapshot)
     finally:
+        try:
+            await asyncio.wait_for(asyncio.shield(tmdb_task), timeout=1.0)
+        except Exception:
+            if not tmdb_task.done():
+                tmdb_task.cancel()
+                try:
+                    await tmdb_task
+                except Exception:
+                    pass
         try:
             await asyncio.wait_for(asyncio.shield(emby_task), timeout=max(1.0, EMBY_SYNC_TIMEOUT_SECONDS))
         except Exception:

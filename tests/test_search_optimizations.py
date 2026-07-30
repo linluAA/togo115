@@ -56,6 +56,27 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
         # Search should have started before emby finished.
         self.assertLess(started.index("search"), started.index("emby_done"))
 
+    async def test_search_all_starts_without_waiting_tmdb_prefetch(self) -> None:
+        started = []
+
+        async def slow_tmdb(subs):
+            started.append("tmdb")
+            await asyncio.sleep(0.2)
+            started.append("tmdb_done")
+
+        async def fast_search(sub, snapshot):
+            started.append("search")
+            return (1, 0, 0)
+
+        with patch.object(search_all_module, "active_subscriptions", return_value=[{"id": 1, "title": "x", "status": "active"}]), \
+             patch.object(search_all_module, "library_snapshot_or_none", AsyncMock(return_value=None)), \
+             patch.object(search_all_module, "prefetch_tmdb_for_subscriptions", side_effect=slow_tmdb), \
+             patch.object(search_all_module, "_search_one", side_effect=fast_search):
+            result = await search_all_module.search_all_active_subscriptions()
+        self.assertTrue(result["ok"])
+        self.assertIn("search", started)
+        self.assertLess(started.index("search"), started.index("tmdb_done"))
+
     async def test_search_all_force_includes_recent_subscriptions(self) -> None:
         started: list[int] = []
         now = datetime.now(timezone.utc).isoformat()

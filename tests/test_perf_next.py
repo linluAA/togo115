@@ -8,7 +8,7 @@ from unittest.mock import patch
 from app.config import settings
 from app.db import init_db
 from app.services.adapters.telegram.scan import message_index_query as index_query
-from app.services.resource_queries import list_recent_resources, invalidate_recent_resources_cache
+from app.services.resource_queries import list_recent_resources, invalidate_recent_resources_cache, merge_resource_rows
 from app.services.subscription.search.all import _prefer_incremental_telegram
 
 
@@ -74,6 +74,28 @@ class PerfNextTest(unittest.TestCase):
             b = list_recent_resources(10, 0)
         self.assertEqual(a, [])
         self.assertEqual(b, [])
+        self.assertEqual(calls["n"], 1)
+
+    def test_resource_episode_parse_cache_reuses_row_parse(self) -> None:
+        calls = {"n": 0}
+
+        def fake_parse(subscription, text):
+            calls["n"] += 1
+            return {(1, 1)}
+
+        row = {
+            "id": 1,
+            "subscription_id": 10,
+            "subscription_title": "剧集",
+            "title": "剧集 S01E01",
+            "url": "https://115.com/s/a",
+            "message_id": "m1",
+            "status": "delivered",
+        }
+        with patch("app.services.resource_queries.episode_keys_from_text_for_subscription", side_effect=fake_parse):
+            merged = merge_resource_rows([dict(row), dict(row)])
+
+        self.assertEqual(len(merged), 1)
         self.assertEqual(calls["n"], 1)
 
 

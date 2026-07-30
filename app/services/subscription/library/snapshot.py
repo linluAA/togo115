@@ -7,6 +7,7 @@ from typing import Any
 from app.db import add_log
 from app.services.adapters.media import EmbyAdapter
 from app.services.subscription.library.match import _emby_configured
+from app.services.subscription.match.matching import compact_match_text
 
 
 EMBY_SNAPSHOT_FAILED: dict[str, list[dict[str, Any]]] = {"__failed__": []}
@@ -28,10 +29,10 @@ def reset_library_snapshot_cache() -> None:
 
 
 def index_snapshot_episodes(snapshot: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
-    """Attach series->episodes map for O(series) library enrichment."""
+    """Attach lookup maps for O(1) common library enrichment paths."""
     if not isinstance(snapshot, dict) or snapshot is EMBY_SNAPSHOT_FAILED or "__failed__" in snapshot:
         return snapshot
-    if snapshot.get("_episodes_by_series") is not None:
+    if snapshot.get("_episodes_by_series") is not None and snapshot.get("_series_by_tmdb") is not None:
         return snapshot
     index: dict[str, list[dict[str, Any]]] = {}
     for episode in snapshot.get("episodes") or []:
@@ -40,7 +41,34 @@ def index_snapshot_episodes(snapshot: dict[str, list[dict[str, Any]]]) -> dict[s
             continue
         index.setdefault(series_id, []).append(episode)
     snapshot["_episodes_by_series"] = index
+    snapshot["_movies_by_tmdb"] = _items_by_tmdb(snapshot.get("movies") or [])
+    snapshot["_series_by_tmdb"] = _items_by_tmdb(snapshot.get("series") or [])
+    snapshot["_movies_by_name"] = _items_by_name(snapshot.get("movies") or [])
+    snapshot["_series_by_name"] = _items_by_name(snapshot.get("series") or [])
     return snapshot
+
+
+def _items_by_tmdb(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    for item in items:
+        provider_ids = item.get("ProviderIds") or {}
+        if not isinstance(provider_ids, dict):
+            continue
+        for key in ("Tmdb", "TMDB", "TheMovieDb"):
+            value = str(provider_ids.get(key) or "").strip()
+            if value and value not in indexed:
+                indexed[value] = item
+    return indexed
+
+
+def _items_by_name(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    for item in items:
+        for field in ("Name", "OriginalTitle", "SortName", "SeriesName"):
+            key = compact_match_text(item.get(field))
+            if key and key not in indexed:
+                indexed[key] = item
+    return indexed
 
 
 def _snapshot_lock() -> asyncio.Lock:

@@ -8,6 +8,7 @@ from app.services.adapters.media_emby import EmbyAdapter
 from app.services.subscription.library import snapshot as snapshot_mod
 from app.services.subscription.library.snapshot import (
     EMBY_SNAPSHOT_FAILED,
+    index_snapshot_episodes,
     library_snapshot_or_none,
     reset_library_snapshot_cache,
 )
@@ -107,6 +108,20 @@ class EmbySnapshotResilienceTest(unittest.IsolatedAsyncioTestCase):
             cls.return_value.library_snapshot = AsyncMock(side_effect=RuntimeError("down"))
             result = await library_snapshot_or_none(force=True)
         self.assertIn("__failed__", result)
+
+    async def test_snapshot_indexes_common_movie_and_series_lookups(self) -> None:
+        snapshot = index_snapshot_episodes(
+            {
+                "movies": [{"Id": "m1", "Name": "Movie A", "ProviderIds": {"Tmdb": "101"}}],
+                "series": [{"Id": "s1", "Name": "剧集 A", "ProviderIds": {"Tmdb": "202"}}],
+                "episodes": [{"Id": "e1", "SeriesId": "s1", "IndexNumber": 1, "ParentIndexNumber": 1}],
+            }
+        )
+
+        self.assertEqual(snapshot["_movies_by_tmdb"]["101"]["Id"], "m1")
+        self.assertEqual(snapshot["_series_by_tmdb"]["202"]["Id"], "s1")
+        self.assertEqual(snapshot["_series_by_name"]["剧集a"]["Id"], "s1")
+        self.assertEqual(snapshot["_episodes_by_series"]["s1"][0]["Id"], "e1")
 
 
 if __name__ == "__main__":

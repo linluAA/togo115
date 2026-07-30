@@ -14,8 +14,15 @@ from app.services.monitor import monitor_service
 class AppStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
-        response.headers["Cache-Control"] = "no-store"
-        response.headers["Pragma"] = "no-cache"
+        query_string = (scope.get("query_string") or b"").decode("latin-1", errors="ignore")
+        versioned = "v=" in query_string and path.endswith((".js", ".css"))
+        if versioned:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            if "Pragma" in response.headers:
+                del response.headers["Pragma"]
+        else:
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
         if path.endswith(".js"):
             response.headers["Content-Type"] = "text/javascript; charset=utf-8"
         elif path.endswith(".css"):

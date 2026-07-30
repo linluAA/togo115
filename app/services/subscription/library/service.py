@@ -15,6 +15,7 @@ from app.services.subscription.library.match import (
 from app.services.subscription.library.snapshot import EMBY_SNAPSHOT_FAILED, EMBY_SYNC_TIMEOUT_SECONDS, library_snapshot_or_none
 from app.services.subscription.library.sync import sync_subscription_list_with_emby, sync_subscriptions_with_emby_snapshot
 from app.services.subscription.match.matching import json_episode_key, subscription_release_year, tmdb_seasons_from_detail
+from app.services.subscription.match.matching import compact_match_text
 
 
 _TMDB_REFRESH_MEMO: dict[int, float] = {}
@@ -36,7 +37,7 @@ async def enrich_subscription_with_library(subscription: dict, snapshot: dict[st
             return {**subscription, "emby_snapshot_failed": True}
 
     if subscription.get("media_type") == "movie":
-        match = next((item for item in snapshot.get("movies", []) if _emby_item_matches(subscription, item)), None)
+        match = _find_snapshot_item(subscription, snapshot, "movies")
         return {**subscription, "in_library": bool(match), "emby_count": 1 if match else 0}
     return _enrich_tv_subscription_with_library(subscription, snapshot)
 
@@ -159,7 +160,7 @@ def _release_year_from_detail(detail: dict, subscription: dict) -> int | None:
 def _enrich_tv_subscription_with_library(subscription: dict, snapshot: dict[str, list[dict]]) -> dict:
     series = snapshot.get("series", [])
     episodes = snapshot.get("episodes", [])
-    match = next((item for item in series if _emby_item_matches(subscription, item)), None)
+    match = _find_snapshot_item(subscription, snapshot, "series")
     series_id = str(match.get("Id") or "") if match else ""
     if series_id:
         indexed = snapshot.get("_episodes_by_series") or {}
@@ -170,3 +171,17 @@ def _enrich_tv_subscription_with_library(subscription: dict, snapshot: dict[str,
     if owned_episodes and len(owned_episodes) != int(subscription.get("emby_count") or 0):
         enriched["emby_count"] = len(owned_episodes)
     return enriched
+
+
+def _find_snapshot_item(subscription: dict, snapshot: dict[str, Any], kind: str) -> dict | None:
+    tmdb_id = str(subscription.get("tmdb_id") or "").strip()
+    if tmdb_id:
+        by_tmdb = snapshot.get(f"_{kind}_by_tmdb")
+        if isinstance(by_tmdb, dict) and by_tmdb.get(tmdb_id):
+            return by_tmdb[tmdb_id]
+    title_key = compact_match_text(subscription.get("title"))
+    if title_key:
+        by_name = snapshot.get(f"_{kind}_by_name")
+        if isinstance(by_name, dict) and by_name.get(title_key):
+            return by_name[title_key]
+    return next((item for item in snapshot.get(kind, []) if _emby_item_matches(subscription, item)), None)

@@ -11,6 +11,8 @@ from app.services.subscription.resource.resources import resource_dedupe_key
 
 RECENT_RESOURCES_CACHE_TTL = 8.0
 _recent_resources_cache: dict[tuple[int, int], tuple[float, list[dict]]] = {}
+_resource_episode_cache: dict[tuple[Any, ...], set[tuple[int, int]]] = {}
+_RESOURCE_EPISODE_CACHE_MAX = 2048
 
 
 def list_recent_resources(limit: int = 80, offset: int = 0) -> list[dict]:
@@ -56,6 +58,7 @@ def list_recent_resources(limit: int = 80, offset: int = 0) -> list[dict]:
 
 def invalidate_recent_resources_cache() -> None:
     _recent_resources_cache.clear()
+    _resource_episode_cache.clear()
 
 
 def merge_resource_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -103,6 +106,10 @@ def _episode_group_key(item: dict[str, Any]) -> tuple[Any, ...] | None:
 
 
 def _resource_episodes(item: dict[str, Any]) -> set[tuple[int, int]]:
+    cache_key = _resource_episode_cache_key(item)
+    cached = _resource_episode_cache.get(cache_key)
+    if cached is not None:
+        return set(cached)
     text = "\n".join(
         str(part or "")
         for part in (
@@ -112,12 +119,28 @@ def _resource_episodes(item: dict[str, Any]) -> set[tuple[int, int]]:
             item.get("message_id"),
         )
     )
-    return episode_keys_from_text_for_subscription(
+    episodes = episode_keys_from_text_for_subscription(
         {
             "id": item.get("subscription_id"),
             "title": item.get("subscription_title") or item.get("title"),
         },
         text,
+    )
+    _resource_episode_cache[cache_key] = set(episodes)
+    if len(_resource_episode_cache) > _RESOURCE_EPISODE_CACHE_MAX:
+        for key in list(_resource_episode_cache)[: len(_resource_episode_cache) - _RESOURCE_EPISODE_CACHE_MAX]:
+            _resource_episode_cache.pop(key, None)
+    return set(episodes)
+
+
+def _resource_episode_cache_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        int(item.get("id") or 0),
+        item.get("updated_at") or "",
+        item.get("title") or "",
+        item.get("subscription_title") or "",
+        item.get("url") or "",
+        item.get("message_id") or "",
     )
 
 

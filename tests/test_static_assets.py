@@ -104,3 +104,8 @@ def test_static_assets_are_served_as_utf8_without_cache():
     assert script_response.headers["cache-control"] == "no-store"
     assert script_response.headers["content-type"] == "text/javascript; charset=utf-8"
     assert "片单" in script_response.text
+
+    versioned_response = client.get("/static/app.js?v=123")
+    assert versioned_response.status_code == 200
+    assert versioned_response.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert versioned_response.headers["content-type"] == "text/javascript; charset=utf-8"
