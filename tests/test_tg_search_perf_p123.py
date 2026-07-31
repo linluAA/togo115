@@ -275,7 +275,7 @@ class QueryCacheInDialogQueryTest(unittest.IsolatedAsyncioTestCase):
                 return queries
 
         state = TelegramSearchSharedState()
-        cached = [SearchResult(title="t", url="https://115.com/s/z", source="src")]
+        cached = [SearchResult(title="q resource", url="https://115.com/s/z", source="src", context="q resource")]
         state.set_cached_query_dialog_results("src", "q", cached)
         harness = Harness()
         options = TelegramHistoryOptions(20, 20, 4, 3.0, 1.0, 1.0)
@@ -287,6 +287,37 @@ class QueryCacheInDialogQueryTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(hits), 1)
         self.assertEqual(harness.fetch_calls, 0)
         self.assertEqual(stats.get("cache_hits"), 1)
+
+    async def test_stale_cached_query_result_falls_through_to_remote_fetch(self) -> None:
+        class Harness(TelegramDialogSearchQueryMixin):
+            def __init__(self) -> None:
+                self.fetch_calls = 0
+
+            async def _get_search_messages(self, *args, **kwargs):
+                self.fetch_calls += 1
+                return []
+
+            def _index_telegram_messages(self, *args, **kwargs):
+                return None
+
+            def _server_search_queries(self, queries):
+                return queries
+
+        state = TelegramSearchSharedState()
+        stale = [SearchResult(title="地区：中国", url="https://115.com/s/stale", source="src", context="地区：中国")]
+        state.set_cached_query_dialog_results("src", "金特务", stale)
+        harness = Harness()
+        options = TelegramHistoryOptions(20, 20, 4, 3.0, 1.0, 1.0)
+        budget = TelegramSearchBudget(3.0)
+        stats: dict = {"searched": 0, "fallback": 0, "links": 0, "timeouts": 0, "skipped_no_link_hint": 0}
+
+        hits = await harness._search_dialog_query(
+            object(), object(), "src", "金特务", options, budget, set(), stats, shared_state=state
+        )
+
+        self.assertEqual(hits, [])
+        self.assertEqual(harness.fetch_calls, 1)
+        self.assertEqual(stats.get("cache_hits", 0), 0)
 
 
 class IndexAgePruneTest(unittest.TestCase):

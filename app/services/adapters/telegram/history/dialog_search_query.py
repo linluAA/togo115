@@ -211,14 +211,18 @@ class TelegramDialogSearchQueryMixin:
         if state is not None:
             cached = state.get_cached_query_dialog_results(source, query)
             if cached is not None:
-                stats["cache_hits"] = int(stats.get("cache_hits", 0) or 0) + 1
-                return list(cached)
+                accepted = _cached_results_matching_query(cached, query)
+                if accepted:
+                    stats["cache_hits"] = int(stats.get("cache_hits", 0) or 0) + 1
+                    return accepted
         process_cached = get_cached_query_results(source, query)
         if process_cached is not None:
-            stats["cache_hits"] = int(stats.get("cache_hits", 0) or 0) + 1
-            if state is not None:
-                state.set_cached_query_dialog_results(source, query, process_cached)
-            return list(process_cached)
+            accepted = _cached_results_matching_query(process_cached, query)
+            if accepted:
+                stats["cache_hits"] = int(stats.get("cache_hits", 0) or 0) + 1
+                if state is not None:
+                    state.set_cached_query_dialog_results(source, query, accepted)
+                return accepted
         try:
             async with asyncio.timeout(timeout):
                 read_started = time.perf_counter()
@@ -319,3 +323,16 @@ class TelegramDialogSearchQueryMixin:
             state.set_cached_query_dialog_results(source, query, results)
         set_cached_query_results(source, query, results)
         return results
+
+
+def _cached_results_matching_query(results: list[SearchResult], query: str) -> list[SearchResult]:
+    accepted: list[SearchResult] = []
+    for result in results:
+        context = str(getattr(result, "context", "") or getattr(result, "title", "") or "")
+        if not local_text_matches_query(context, query):
+            continue
+        title = str(getattr(result, "title", "") or "")
+        if title and not title.startswith("Telegram ") and not local_text_matches_query(title, query):
+            continue
+        accepted.append(result)
+    return accepted
