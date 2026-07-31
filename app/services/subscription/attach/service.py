@@ -23,6 +23,7 @@ from app.services.subscription.match.matching import (
     result_is_fallback_source,
     result_priority,
 )
+from app.services.subscription.notifications import notify_subscription_completed
 from app.services.subscription.resource.ops import (
     existing_resource_rows,
     insert_resource_safely,
@@ -59,6 +60,7 @@ async def attach_results_to_matching_subscriptions(
         subscription = await enrich_subscription_with_library(subscription, snapshot)
         if subscription_should_hide(subscription):
             mark_completed_subscription(subscription)
+            await notify_subscription_completed(subscription)
             add_log("info", "subscription", "订阅已完整入库，跳过实时资源并停止监听", {"id": subscription.get("id"), "title": subscription.get("title")})
             continue
         attached += _attach_results_for_subscription(subscription, ordered_results, resource_ids)

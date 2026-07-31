@@ -23,6 +23,17 @@ class FakeClient:
         return FakeResponse()
 
 
+class FakeSharedClient:
+    def __init__(self, client: FakeClient) -> None:
+        self.client = client
+
+    async def __aenter__(self) -> FakeClient:
+        return self.client
+
+    async def __aexit__(self, *args) -> bool:
+        return False
+
+
 class BotCallbackHarness(TelegramBotCallbackMixin, TelegramBotMessageMixin):
     def _config(self) -> dict:
         return {}
@@ -35,6 +46,33 @@ class BotCallbackHarness(TelegramBotCallbackMixin, TelegramBotMessageMixin):
 
 
 class TelegramBotCallbackTest(unittest.IsolatedAsyncioTestCase):
+    async def test_completed_subscription_notification_uses_allowed_chat(self) -> None:
+        class NotifyHarness(BotCallbackHarness):
+            def _config(self) -> dict:
+                return {"bot_token": "token", "allowed_chat_id": 456}
+
+        bot = NotifyHarness()
+        client = FakeClient()
+        with (
+            patch("app.services.adapters.telegram.bot.messages.shared_async_client", return_value=FakeSharedClient(client)),
+            patch("app.services.adapters.telegram.bot.messages.module_proxy", return_value=None),
+        ):
+            sent = await bot.send_subscription_completed_notification(
+                {
+                    "id": 8,
+                    "title": "庆余年",
+                    "media_type": "tv",
+                    "emby_count": 36,
+                    "tmdb_total_count": 36,
+                }
+            )
+
+        self.assertTrue(sent)
+        self.assertEqual(client.posts[0]["url"].rsplit("/", 1)[-1], "sendMessage")
+        self.assertEqual(client.posts[0]["data"]["chat_id"], "456")
+        self.assertIn("订阅已完成", client.posts[0]["data"]["text"])
+        self.assertIn("36/36 集", client.posts[0]["data"]["text"])
+
     async def test_subscribe_reply_mentions_existing_movie_in_library(self) -> None:
         bot = BotCallbackHarness()
         client = FakeClient()

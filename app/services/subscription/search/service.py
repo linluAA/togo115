@@ -9,6 +9,7 @@ from app.services.subscription.delivery.service import deliver_resource
 from app.services.subscription.episode.summary import subscription_episode_snapshot
 from app.services.subscription.episode.parser import _all_tmdb_episode_keys, missing_episode_keys
 from app.services.subscription.library.service import mark_completed_subscription, subscription_should_hide, enrich_subscription_with_library
+from app.services.subscription.notifications import notify_subscription_completed
 from app.services.subscription.search.flow import _search_fallback_when_needed, _search_telegram_first, _telegram_should_skip_fallback
 
 
@@ -28,6 +29,7 @@ async def search_and_attach_resources(
         _log_subscription_episode_snapshot(subscription)
         if subscription_should_hide(subscription):
             mark_completed_subscription(subscription)
+            await notify_subscription_completed(subscription)
             add_log(
                 "info",
                 "subscription",

@@ -12,6 +12,7 @@ from app.services.subscription.library.state import (
     _series_episode_count_by_name,
 )
 from app.services.subscription.match.matching import compact_match_text, json_episode_key
+from app.services.subscription.notifications import notify_subscription_completed
 
 
 async def sync_subscription_list_with_emby(subscriptions: list[dict], force: bool = False) -> dict:
@@ -34,6 +35,7 @@ async def sync_subscriptions_with_emby_snapshot(subscriptions: list[dict], snaps
     counts = _episode_counts(snapshot.get("episodes", []))
     tmdb_details = await _missing_tmdb_details(subscriptions)
     updated = matched = completed_removed = 0
+    completed_notifications: list[dict[str, Any]] = []
     now = utc_now()
 
     with db() as conn:
@@ -41,7 +43,9 @@ async def sync_subscriptions_with_emby_snapshot(subscriptions: list[dict], snaps
             state = _library_state(subscription, snapshot, counts, tmdb_details.get(int(subscription["id"])))
             if state["in_library"]:
                 matched += 1
-            completed_removed += 1 if state["newly_completed"] else 0
+            if state["newly_completed"]:
+                completed_removed += 1
+                completed_notifications.append(_completed_subscription_payload(subscription, state))
             if _subscription_state_unchanged(subscription, state):
                 continue
             _update_subscription_state(conn, subscription["id"], state, now)
@@ -51,7 +55,22 @@ async def sync_subscriptions_with_emby_snapshot(subscriptions: list[dict], snaps
         add_log("info", "emby", "订阅入库状态已同步", {"updated": updated, "matched": matched, "completed": completed_removed})
     if completed_removed:
         add_log("info", "subscription", "已完整入库的订阅已停止监听并从我的订阅移除", {"count": completed_removed})
+        for subscription in completed_notifications:
+            await notify_subscription_completed(subscription)
     return {"ok": True, "updated": updated, "matched": matched, "completed": completed_removed}
+
+
+def _completed_subscription_payload(subscription: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **subscription,
+        "status": "completed",
+        "in_library": bool(state.get("in_library")),
+        "emby_count": int(state.get("emby_count") or 0),
+        "tmdb_total_count": int(state.get("tmdb_total_count") or 0),
+        "tmdb_seasons": state.get("tmdb_seasons") or subscription.get("tmdb_seasons") or [],
+        "emby_episode_keys": [json_episode_key(key) for key in sorted(state.get("owned_episodes") or set())],
+        "completed_at": state.get("completed_at") or subscription.get("completed_at"),
+    }
 
 
 def _episode_counts(episodes: list[dict[str, Any]]) -> dict[str, dict[str, int]]:

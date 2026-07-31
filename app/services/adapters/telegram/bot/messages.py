@@ -167,6 +167,34 @@ class TelegramBotMessageMixin:
         await self._clear_message_buttons(client, token, message)
         return False
 
+    async def send_subscription_completed_notification(self, subscription: dict[str, Any]) -> bool:
+        config = self._config()
+        token = str(config.get("bot_token") or "").strip()
+        chat_id = str(
+            config.get("notify_chat_id")
+            or config.get("allowed_chat_id")
+            or config.get("chat_id")
+            or ""
+        ).strip()
+        if not token or not chat_id:
+            add_log("debug", "tg_bot", "订阅完成通知未发送，TG Bot Token 或 Chat ID 未配置", {"id": subscription.get("id")})
+            return False
+        proxy = module_proxy("telegram")
+        async with shared_async_client(proxy=proxy or None, timeout=15, follow_redirects=True) as client:
+            await self._send_bot_message(client, token, chat_id, self._subscription_completed_text(subscription))
+        add_log("info", "tg_bot", "订阅完成通知已发送", {"id": subscription.get("id"), "chat_id": chat_id})
+        return True
+
+    def _subscription_completed_text(self, subscription: dict[str, Any]) -> str:
+        title = str(subscription.get("title") or "未命名订阅")
+        media_label = "电影" if subscription.get("media_type") == "movie" else "剧集"
+        if subscription.get("media_type") == "tv":
+            emby_count = int(subscription.get("emby_count") or 0)
+            total = int(subscription.get("tmdb_total_count") or 0)
+            progress = f"{emby_count}/{total} 集" if total else f"{emby_count} 集"
+            return f"✅ 订阅已完成\n{title}（{media_label}）\n媒体库已完整入库：{progress}\n已自动停止监控。"
+        return f"✅ 订阅已完成\n{title}（{media_label}）\n媒体库已完整入库，已自动停止监控。"
+
     async def forward_to_bot(self, link: str) -> bool:
         config = get_setting("tg_bot")
         bot_username = config.get("bot_username")
