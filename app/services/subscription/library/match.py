@@ -100,19 +100,24 @@ def subscription_should_hide(subscription: dict) -> bool:
     return subscription.get("status") == "completed" or _subscription_is_complete(subscription)
 
 
-def mark_completed_subscription(subscription: dict) -> None:
+def mark_completed_subscription(subscription: dict) -> bool:
     if subscription.get("status") == "completed":
-        return
+        return False
     with db() as conn:
-        conn.execute(
-            "UPDATE subscriptions SET status = 'completed', completed_at = COALESCE(completed_at, ?), updated_at = ? WHERE id = ?",
+        result = conn.execute(
+            """
+            UPDATE subscriptions
+            SET status = 'completed', completed_at = COALESCE(completed_at, ?), updated_at = ?
+            WHERE id = ? AND COALESCE(status, '') <> 'completed'
+            """,
             (utc_now(), utc_now(), subscription["id"]),
         )
-
-
-
+    if not result.rowcount:
+        return False
     from app.services.subscription.crud.rows import invalidate_subscription_list_cache as _inv_sub_list
+
     _inv_sub_list()
+    return True
 
 def _emby_configured() -> bool:
     config = get_setting("emby")

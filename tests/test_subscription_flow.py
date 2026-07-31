@@ -792,6 +792,38 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(notify.await_args.args[0]["status"], "completed")
         self.assertEqual(notify.await_args.args[0]["emby_count"], 10)
 
+    async def test_emby_sync_notifies_once_for_stale_duplicate_completion(self) -> None:
+        from app.services.subscription.library.sync import sync_subscriptions_with_emby_snapshot
+
+        subscription_id = self._drama_subscription()
+        with db() as conn:
+            row = conn.execute("SELECT * FROM subscriptions WHERE id = ?", (subscription_id,)).fetchone()
+            from app.services.subscription.crud.rows import normalize_subscription
+
+            subscription = normalize_subscription(row)
+        completed_state = {
+            "in_library": True,
+            "emby_count": 10,
+            "tmdb_total_count": 10,
+            "tmdb_seasons": [],
+            "owned_episodes": {(1, episode) for episode in range(1, 11)},
+            "status": "completed",
+            "completed_at": utc_now(),
+            "newly_completed": True,
+        }
+
+        with (
+            patch("app.services.subscription.library.sync._library_state", return_value=completed_state),
+            patch("app.services.subscription.library.sync._missing_tmdb_details", AsyncMock(return_value={})),
+            patch("app.services.subscription.library.sync.notify_subscription_completed", AsyncMock(return_value=True)) as notify,
+        ):
+            first = await sync_subscriptions_with_emby_snapshot([subscription], {"movies": [], "series": [], "episodes": []})
+            second = await sync_subscriptions_with_emby_snapshot([subscription], {"movies": [], "series": [], "episodes": []})
+
+        self.assertEqual(first["completed"], 1)
+        self.assertEqual(second["completed"], 0)
+        notify.assert_awaited_once()
+
     async def test_search_all_writes_visible_summary_logs(self) -> None:
         self._subscription()
 

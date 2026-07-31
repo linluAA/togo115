@@ -43,13 +43,21 @@ async def sync_subscriptions_with_emby_snapshot(subscriptions: list[dict], snaps
             state = _library_state(subscription, snapshot, counts, tmdb_details.get(int(subscription["id"])))
             if state["in_library"]:
                 matched += 1
+            if _subscription_state_unchanged(subscription, state):
+                continue
+            changed = _update_subscription_state(
+                conn,
+                subscription["id"],
+                state,
+                now,
+                only_if_not_completed=bool(state["newly_completed"]),
+            )
+            if not changed:
+                continue
+            updated += 1
             if state["newly_completed"]:
                 completed_removed += 1
                 completed_notifications.append(_completed_subscription_payload(subscription, state))
-            if _subscription_state_unchanged(subscription, state):
-                continue
-            _update_subscription_state(conn, subscription["id"], state, now)
-            updated += 1
 
     if updated:
         add_log("info", "emby", "订阅入库状态已同步", {"updated": updated, "matched": matched, "completed": completed_removed})
@@ -134,13 +142,21 @@ def _subscription_state_unchanged(subscription: dict, state: dict[str, Any]) -> 
     )
 
 
-def _update_subscription_state(conn, subscription_id: int, state: dict[str, Any], now: str) -> None:
-    conn.execute(
-        """
+def _update_subscription_state(
+    conn,
+    subscription_id: int,
+    state: dict[str, Any],
+    now: str,
+    *,
+    only_if_not_completed: bool = False,
+) -> bool:
+    completion_guard = " AND COALESCE(status, '') <> 'completed'" if only_if_not_completed else ""
+    result = conn.execute(
+        f"""
         UPDATE subscriptions
         SET in_library = ?, emby_count = ?, tmdb_total_count = ?, tmdb_seasons = ?,
             emby_episode_keys = ?, status = ?, completed_at = ?, updated_at = ?
-        WHERE id = ?
+        WHERE id = ?{completion_guard}
         """,
         (
             1 if state["in_library"] else 0,
@@ -154,3 +170,4 @@ def _update_subscription_state(conn, subscription_id: int, state: dict[str, Any]
             subscription_id,
         ),
     )
+    return bool(result.rowcount)

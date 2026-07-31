@@ -28,8 +28,8 @@ async def search_and_attach_resources(
         subscription = await enrich_subscription_with_library(subscription, snapshot)
         _log_subscription_episode_snapshot(subscription)
         if subscription_should_hide(subscription):
-            mark_completed_subscription(subscription)
-            await notify_subscription_completed(subscription)
+            if mark_completed_subscription(subscription):
+                await notify_subscription_completed(subscription)
             add_log(
                 "info",
                 "subscription",

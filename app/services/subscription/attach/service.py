@@ -59,8 +59,8 @@ async def attach_results_to_matching_subscriptions(
             continue
         subscription = await enrich_subscription_with_library(subscription, snapshot)
         if subscription_should_hide(subscription):
-            mark_completed_subscription(subscription)
-            await notify_subscription_completed(subscription)
+            if mark_completed_subscription(subscription):
+                await notify_subscription_completed(subscription)
             add_log("info", "subscription", "订阅已完整入库，跳过实时资源并停止监听", {"id": subscription.get("id"), "title": subscription.get("title")})
             continue
         attached += _attach_results_for_subscription(subscription, ordered_results, resource_ids)
