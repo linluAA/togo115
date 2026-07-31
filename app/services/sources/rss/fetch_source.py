@@ -44,8 +44,9 @@ class RssTorznabFetchSourceMixin:
             context.record(True, len(results))
             return results
         except Exception as exc:
-            add_log("warning", "rss", "订阅源读取失败", {"source": name, "url": url, "error": str(exc)})
-            context.record(False, 0, str(exc))
+            payload = _fetch_error_payload(name, url, exc)
+            add_log("warning", "rss", "订阅源读取失败", payload)
+            context.record(False, 0, str(payload.get("error") or exc))
             return []
         finally:
             if owns_client:
@@ -138,3 +139,31 @@ class _FetchContext:
             round((time.perf_counter() - self.started) * 1000),
             error,
         )
+
+
+def _fetch_error_payload(source: str, url: str, exc: Exception) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "source": source,
+        "url": url,
+        "error_type": type(exc).__name__,
+        "error": str(exc),
+    }
+    if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code if exc.response is not None else None
+        payload["status_code"] = status_code
+        payload["url"] = str(exc.request.url) if exc.request is not None else url
+        payload["error"] = _http_status_error_message(status_code)
+    elif isinstance(exc, httpx.RequestError):
+        payload["url"] = str(exc.request.url) if exc.request is not None else url
+        payload["error"] = "网络请求失败，稍后会自动重试"
+    return payload
+
+
+def _http_status_error_message(status_code: int | None) -> str:
+    if status_code == 503:
+        return "HTTP 503：订阅源临时不可用或触发站点限流"
+    if status_code == 429:
+        return "HTTP 429：订阅源请求过快，稍后会自动重试"
+    if status_code:
+        return f"HTTP {status_code}：订阅源请求失败"
+    return "订阅源请求失败"

@@ -56,14 +56,7 @@ function renderLogRows(logs) {
   $(".log-list").innerHTML = grouped.length ? grouped.map((entry, index) => {
     const log = entry.log;
     const time = new Date(log.created_at).toLocaleString();
-    let payload = "";
-    if (log.payload) {
-      try {
-        payload = JSON.stringify(JSON.parse(log.payload), null, 2);
-      } catch {
-        payload = log.payload;
-      }
-    }
+    const payload = formatLogPayload(log.payload);
     const repeat = entry.count > 1 ? `<span class="repeat-badge">×${entry.count}</span>` : "";
     return `<details class="log-line ${log.level}">
       <summary>
@@ -76,6 +69,72 @@ function renderLogRows(logs) {
       ${payload ? `<pre class="log-payload">${escapeHtml(payload)}</pre>` : ""}
     </details>`;
   }).join("") : `<div class="log-empty">暂无日志</div>`;
+}
+
+function formatLogPayload(raw) {
+  if (!raw) return "";
+  try {
+    const value = JSON.parse(raw);
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return formatLogPayloadObject(value);
+    }
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(raw);
+  }
+}
+
+function formatLogPayloadObject(payload) {
+  const labelMap = {
+    source: "来源",
+    plugin: "插件",
+    query: "查询",
+    status_code: "状态码",
+    error_type: "错误类型",
+    error: "错误",
+    url: "地址",
+    final_url: "最终地址",
+    count: "数量",
+  };
+  const priority = ["source", "plugin", "query", "status_code", "error_type", "error", "url", "final_url", "count"];
+  const keys = [...priority, ...Object.keys(payload).filter((key) => !priority.includes(key))];
+  const lines = [];
+  for (const key of keys) {
+    if (!(key in payload)) continue;
+    const value = formatLogPayloadValue(key, payload[key]);
+    if (!value) continue;
+    lines.push(`${labelMap[key] || key}：${value}`);
+  }
+  return lines.join("\n");
+}
+
+function formatLogPayloadValue(key, value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (key === "url" || key === "final_url") return decodeLogUrl(String(value));
+  if (key === "error") return compactLogError(String(value));
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
+function decodeLogUrl(value) {
+  try {
+    const url = new URL(value);
+    const query = decodeURIComponent(url.search);
+    return `${url.origin}${url.pathname}${query}${url.hash}`;
+  } catch {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+}
+
+function compactLogError(value) {
+  const status = value.match(/Server error '(\d{3})/i)?.[1];
+  if (status === "503") return "HTTP 503：订阅源临时不可用或触发站点限流";
+  if (status === "429") return "HTTP 429：订阅源请求过快，稍后会自动重试";
+  return value.replace(/\s*For more information check:.*/is, "").trim();
 }
 
 function groupLogRows(logs) {
