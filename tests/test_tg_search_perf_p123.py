@@ -142,6 +142,42 @@ class MessageSuggestAndBodyExtractTest(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(len(hits), 1)
         self.assertTrue(any("115.com/s/abc" in hit.url for hit in hits))
 
+    async def test_body_only_skips_unmatched_metadata_link(self) -> None:
+        mixin = TelegramDialogSearchQueryMixin()
+        message = SimpleNamespace(id=10, raw_text="地区：中国\nhttps://115.com/s/metadata?password=1", message="", buttons=[])
+        with patch(
+            "app.services.adapters.telegram.history.dialog_search_query.telegram_message_text",
+            return_value="地区：中国\nhttps://115.com/s/metadata?password=1",
+        ):
+            hits = await mixin._body_only_extract_message_links(
+                "src",
+                message,
+                "金特务",
+                set(),
+                __import__("app.services.adapters.telegram.pipeline", fromlist=["TelegramPipelineStats"]).TelegramPipelineStats(),
+            )
+
+        self.assertEqual(hits, [])
+
+    async def test_body_only_restores_matching_title_before_link(self) -> None:
+        mixin = TelegramDialogSearchQueryMixin()
+        text = "电视剧：金特务：本色回归\n地区：中国\nhttps://115.com/s/drama?password=1"
+        message = SimpleNamespace(id=11, raw_text=text, message=text, buttons=[])
+        with patch(
+            "app.services.adapters.telegram.history.dialog_search_query.telegram_message_text",
+            return_value=text,
+        ):
+            hits = await mixin._body_only_extract_message_links(
+                "src",
+                message,
+                "金特务",
+                set(),
+                __import__("app.services.adapters.telegram.pipeline", fromlist=["TelegramPipelineStats"]).TelegramPipelineStats(),
+            )
+
+        self.assertTrue(hits)
+        self.assertTrue(any("金特务" in hit.title for hit in hits))
+
     def test_message_suggests_links(self) -> None:
         mixin = TelegramDialogSearchQueryMixin()
         with patch(

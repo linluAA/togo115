@@ -16,6 +16,7 @@ from app.services.link import (
     TELEGRAM_HISTORY_MAX_RESULTS,
     context_for_115_link,
     extract_115_links,
+    local_text_matches_query,
     message_has_link_button_hint,
     telegram_message_text,
     text_has_external_resource_page_hint,
@@ -163,9 +164,18 @@ class TelegramDialogSearchQueryMixin:
         for url in urls:
             scoped = context_for_115_link(text, url, max(len(urls), 2)) if "115" in url else text
             scoped = _restore_query_title_context(text, scoped, [query]) if "115" in url else scoped
+            title = (
+                _telegram_resource_title(scoped)
+                if "115" in url
+                else (scoped.splitlines()[0][:120] if scoped else query)
+            )
+            if not local_text_matches_query(scoped, query):
+                continue
+            if title and not str(title).startswith("Telegram ") and not local_text_matches_query(title, query):
+                continue
             hits.append(
                 SearchResult(
-                    title=(_telegram_resource_title(scoped) if "115" in url else (scoped.splitlines()[0][:120] if scoped else query)) or query,
+                    title=title or query,
                     url=url,
                     source=source,
                     message_id=str(message_id or "") or None,
