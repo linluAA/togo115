@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -50,6 +51,27 @@ def parse_115_share_link(link: str) -> tuple[str, str | None]:
     if match:
         receive_code = match.group(1)
     return share_code, receive_code
+
+
+_FOLDER_CACHE_TTL_SECONDS = 600
+_folder_cid_cache: dict[str, tuple[float, str]] = {}
+
+
+def _cached_folder_cid(target_path: str) -> str | None:
+    key = str(target_path or "").strip("/") or "/"
+    item = _folder_cid_cache.get(key)
+    if item is None:
+        return None
+    stamp, cid = item
+    if time.monotonic() - stamp > _FOLDER_CACHE_TTL_SECONDS:
+        _folder_cid_cache.pop(key, None)
+        return None
+    return cid
+
+
+def _store_folder_cid(target_path: str, cid: str) -> None:
+    key = str(target_path or "").strip("/") or "/"
+    _folder_cid_cache[key] = (time.monotonic() + _FOLDER_CACHE_TTL_SECONDS, str(cid or ""))
 
 
 class Pan115Adapter(Pan115QrMixin, Pan115OfflineMixin):
@@ -151,6 +173,9 @@ class Pan115Adapter(Pan115QrMixin, Pan115OfflineMixin):
     async def ensure_folder(self, target_path: str | None) -> str:
         if not target_path or target_path == "/":
             return "0"
+        cached = _cached_folder_cid(target_path)
+        if cached:
+            return cached
         config = get_setting("115")
         cookie = config.get("cookie")
         if not cookie:
@@ -162,6 +187,8 @@ class Pan115Adapter(Pan115QrMixin, Pan115OfflineMixin):
                 if res.status_code == 200:
                     data = res.json()
                     parent_id = str(data.get("cid") or data.get("file_id") or data.get("data", {}).get("cid") or parent_id)
+        if parent_id != "0":
+            _store_folder_cid(target_path, parent_id)
         return parent_id
 
     async def transfer(self, link: str, target_path: str | None) -> bool:

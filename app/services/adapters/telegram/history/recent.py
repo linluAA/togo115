@@ -36,6 +36,48 @@ def _recent_message_id(message: Any) -> int:
         return 0
 
 
+# Non-incremental recent scans index a contiguous window from the newest message;
+# the watermark records that window's top so later scans only read messages that
+# are actually newer (previously indexed rows are skipped).
+RECENT_WATERMARK_TTL_SECONDS = 600
+_RECENT_WATERMARKS: dict[str, tuple[float, int]] = {}
+
+
+def _recent_watermark_get(source: str) -> int:
+    key = str(source or "").strip()
+    if not key:
+        return 0
+    item = _RECENT_WATERMARKS.get(key)
+    if item is None:
+        return 0
+    stamp, message_id = item
+    if time.monotonic() - stamp > RECENT_WATERMARK_TTL_SECONDS:
+        _RECENT_WATERMARKS.pop(key, None)
+        return 0
+    return int(message_id or 0)
+
+
+def _recent_watermark_set(source: str, message_id: int) -> None:
+    key = str(source or "").strip()
+    value = int(message_id or 0)
+    if not key or value <= 0:
+        return
+    _RECENT_WATERMARKS[key] = (time.monotonic(), value)
+    if len(_RECENT_WATERMARKS) > 512:
+        oldest = sorted(_RECENT_WATERMARKS.items(), key=lambda item: item[1][0])[:64]
+        for old_key, _ in oldest:
+            _RECENT_WATERMARKS.pop(old_key, None)
+
+
+def clear_recent_watermarks(source: str | None = None) -> None:
+    if source is None:
+        _RECENT_WATERMARKS.clear()
+        return
+    key = str(source or "").strip()
+    if key:
+        _RECENT_WATERMARKS.pop(key, None)
+
+
 from app.services.adapters.telegram.history.recent_windows import TelegramRecentWindowMixin
 from app.services.adapters.telegram.history.recent_extract import TelegramRecentExtractMixin
 
@@ -59,10 +101,11 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
         recent_messages, max_seen_message_id = await self._read_recent_messages(client, entity, source, options, budget, stats, incremental)
         read_ms = _elapsed_ms(read_started)
         if not recent_messages:
+            skipped_existing = not incremental and _recent_watermark_get(source) > 0
             add_log(
-                "warning",
+                "debug" if skipped_existing else "warning",
                 "telegram",
-                "Telegram 最近消息读取为空，已继续尝试服务端搜索",
+                "Telegram 最近消息无新增" if skipped_existing else "Telegram 最近消息读取为空，已继续尝试服务端搜索",
                 {"dialog": source, "limit": options.fallback_scan_limit, "incremental": incremental, "read_ms": read_ms},
             )
         extract_started = time.perf_counter()
@@ -116,6 +159,7 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
         recent_messages: list[Any] = []
         timeout = budget.timeout(options.recent_budget)
         cursor = self._telegram_cursor(source) if incremental else 0
+        watermark = 0 if incremental else _recent_watermark_get(source)
         max_seen_message_id = cursor
         add_log(
             "debug",
@@ -123,6 +167,7 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
             "Telegram 最近消息快速扫描开始",
             {"dialog": source, "limit": options.fallback_scan_limit, "timeout": round(timeout, 2), "incremental": incremental, "cursor": cursor},
         )
+        completed = True
         try:
             async with asyncio.timeout(timeout):
                 messages = await self._get_recent_messages(client, entity, options.fallback_scan_limit)
@@ -131,13 +176,19 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
                     if message_id:
                         if incremental and cursor and message_id <= cursor:
                             break
+                        if not incremental and watermark and message_id <= watermark:
+                            break
                         max_seen_message_id = max(max_seen_message_id, message_id)
                     recent_messages.append(message)
         except asyncio.TimeoutError:
+            completed = False
             stats["timeouts"] += 1
             add_log("warning", "telegram", "Telegram 最近消息兜底扫描超时", {"dialog": source, "read": len(recent_messages), "timeout": round(timeout, 2)})
         except Exception as exc:
+            completed = False
             add_log("warning", "telegram", "Telegram 最近消息兜底扫描失败", {"dialog": source, "error": str(exc), "error_type": type(exc).__name__})
+        if not incremental and completed and max_seen_message_id > 0:
+            _recent_watermark_set(source, max_seen_message_id)
         if recent_messages:
             self._index_telegram_messages(source, recent_messages)
         return recent_messages, max_seen_message_id

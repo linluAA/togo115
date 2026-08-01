@@ -44,6 +44,7 @@ class TelegramDialogsTest(unittest.IsolatedAsyncioTestCase):
         TelegramDialogsMixin._dialog_entity_map_cache = {}
         TelegramDialogsMixin._dialog_entity_map_cache_at = {}
         TelegramDialogsMixin._dialog_negative_cache = {}
+        TelegramDialogsMixin._resolved_dialog_cache = {}
 
     async def test_resolve_dialogs_prefers_cached_dialog_entity_for_peer_id(self) -> None:
         resolver = DialogResolver()
@@ -100,6 +101,7 @@ class TelegramDialogPersistentCacheTest(unittest.IsolatedAsyncioTestCase):
         TelegramDialogsMixin._dialog_entity_map_cache = {}
         TelegramDialogsMixin._dialog_entity_map_cache_at = {}
         TelegramDialogsMixin._dialog_negative_cache = {}
+        TelegramDialogsMixin._resolved_dialog_cache = {}
 
     async def test_resolve_dialogs_uses_persistent_cache_when_map_misses(self) -> None:
         resolver = DialogResolver()

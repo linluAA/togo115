@@ -15,8 +15,6 @@ from app.services.adapters.telegram.models import TelegramHistoryOptions, Telegr
 from app.services.adapters.telegram.rate_limit import telegram_request_gate
 from app.services.types import SearchResult
 
-TELEGRAM_DIALOG_SEARCH_CONCURRENCY = 3
-TELEGRAM_HISTORY_RETURN_TARGET = 2
 # Stop remaining dialogs after this many consecutive empties when still zero hits.
 TELEGRAM_EMPTY_DIALOG_STREAK = 4
 

@@ -82,14 +82,12 @@ async def _check_115_links(adapter: Pan115Adapter, results: list[SearchResult]) 
         return {}
     # Collapse equivalent share links (same code+pwd, different presentation) to one probe.
     representatives, url_to_key = _share_probe_plan(urls)
-    semaphore = asyncio.Semaphore(PAN115_VALIDATION_CONCURRENCY)
+    # Share the process-wide probe cache so bursts from attach/validation/recheck
+    # layers stay under one concurrency ceiling and duplicate URLs hit the network once.
+    from app.services.subscription.search.share115_cache import process_115_cache
 
-    async def check(url: str) -> tuple[str, str]:
-        async with semaphore:
-            return url, await adapter.share_availability(url)
-
-    pairs = await asyncio.gather(*(check(url) for url in representatives))
-    key_state = {url_to_key[url]: state for url, state in pairs}
+    states = await process_115_cache().availability_many(representatives)
+    key_state = {url_to_key[url]: states.get(url, SHARE_UNKNOWN) for url in representatives}
     return {url: key_state[url_to_key[url]] for url in urls}
 
 

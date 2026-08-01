@@ -12,12 +12,16 @@ from app.services.adapters.telegram.session.dialog_store import load_dialog_enti
 
 TELEGRAM_DIALOG_CACHE_TTL_SECONDS = 900
 TELEGRAM_DIALOG_NEGATIVE_TTL_SECONDS = 180
+TELEGRAM_RESOLVED_DIALOG_TTL_SECONDS = 600
 
 
 class TelegramDialogsMixin(TelegramDialogKeysMixin):
     _dialog_entity_map_cache: dict[str, dict[str, dict[str, Any]]] = {}
     _dialog_entity_map_cache_at: dict[str, float] = {}
     _dialog_negative_cache: dict[str, float] = {}
+    # Freshly resolved dialogs keyed by configured source so repeated searches
+    # skip the per-source get_entity network roundtrip.
+    _resolved_dialog_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     async def _resolve_from_persistent_cache(self, client: TelegramClient, source: str) -> dict[str, Any] | None:
         try:
@@ -107,17 +111,47 @@ class TelegramDialogsMixin(TelegramDialogKeysMixin):
         cls._dialog_entity_map_cache = {cache_key: dict(items)}
         cls._dialog_entity_map_cache_at = {cache_key: time.monotonic()}
 
+    def _cached_resolved_dialog(self, source: str, now: float | None = None) -> dict[str, Any] | None:
+        key = str(source or "").strip()
+        if not key:
+            return None
+        stamp = time.monotonic() if now is None else now
+        item = type(self)._resolved_dialog_cache.get(key)
+        if item is None:
+            return None
+        expires_at, dialog = item
+        if expires_at <= stamp:
+            type(self)._resolved_dialog_cache.pop(key, None)
+            return None
+        return dict(dialog)
+
+    def _store_resolved_dialog(self, source: str, dialog: dict[str, Any]) -> None:
+        key = str(source or "").strip()
+        if not key:
+            return
+        cache = type(self)._resolved_dialog_cache
+        cache[key] = (time.monotonic() + TELEGRAM_RESOLVED_DIALOG_TTL_SECONDS, dict(dialog))
+        if len(cache) > 256:
+            oldest = sorted(cache.items(), key=lambda item: item[1][0])[:64]
+            for old_key, _ in oldest:
+                cache.pop(old_key, None)
+
     async def _resolve_dialogs(self, client: TelegramClient, sources: list[str]) -> list[dict[str, Any]]:
         dialogs: list[dict[str, Any]] = []
         pending: list[str] = []
         now = time.monotonic()
-        # 1) Prefer persistent entity rows to avoid cold iter_dialogs.
+        # 1) Reuse freshly resolved dialogs to skip repeated get_entity calls.
         for source in sources:
+            cached = self._cached_resolved_dialog(source, now)
+            if cached is not None:
+                dialogs.append(cached)
+                continue
             if self._dialog_negative_hit(source, now):
                 dialogs.append({"entity": source, "source": source, "canonical": source})
                 continue
             persisted = await self._resolve_from_persistent_cache(client, source)
             if persisted is not None:
+                self._store_resolved_dialog(source, persisted)
                 dialogs.append(persisted)
                 continue
             pending.append(source)
@@ -138,15 +172,19 @@ class TelegramDialogsMixin(TelegramDialogKeysMixin):
                 if matched:
                     break
             if matched:
-                dialogs.append({**matched, "source": source})
+                resolved = {**matched, "source": source}
+                dialogs.append(resolved)
                 entity = matched.get("entity")
                 if entity is not None:
                     self._persist_entity(entity, str(matched.get("canonical") or source), matched.get("title"))
+                self._store_resolved_dialog(source, resolved)
                 continue
             resolved = await self._resolve_dialog(client, source)
             entity = resolved.get("entity")
             if entity is source or (isinstance(entity, str) and entity == source):
                 self._dialog_negative_store(source)
+            else:
+                self._store_resolved_dialog(source, resolved)
             dialogs.append(resolved)
         return dialogs
 

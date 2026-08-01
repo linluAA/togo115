@@ -138,20 +138,31 @@ def search_telegram_message_index(sources: list[str], queries: list[str], limit:
 
 
 def _prune_source_index(conn: Any, source: str) -> None:
-    conn.execute(
-        """
-        DELETE FROM telegram_message_index
-        WHERE source = ?
-          AND message_id NOT IN (
-              SELECT message_id
-              FROM telegram_message_index
-              WHERE source = ?
-              ORDER BY message_id DESC
-              LIMIT ?
-          )
-        """,
-        (source, source, TELEGRAM_INDEX_MAX_PER_SOURCE),
-    )
+    # Only run the cap-based prune when the source is actually over the limit;
+    # the NOT IN subquery is expensive on every index write otherwise.
+    row = conn.execute(
+        "SELECT COUNT(*) AS row_count FROM telegram_message_index WHERE source = ?",
+        (source,),
+    ).fetchone()
+    try:
+        count = int(row["row_count"] if isinstance(row, sqlite3.Row) else row[0] or 0)
+    except Exception:
+        count = TELEGRAM_INDEX_MAX_PER_SOURCE
+    if count > TELEGRAM_INDEX_MAX_PER_SOURCE:
+        conn.execute(
+            """
+            DELETE FROM telegram_message_index
+            WHERE source = ?
+              AND message_id NOT IN (
+                  SELECT message_id
+                  FROM telegram_message_index
+                  WHERE source = ?
+                  ORDER BY message_id DESC
+                  LIMIT ?
+              )
+            """,
+            (source, source, TELEGRAM_INDEX_MAX_PER_SOURCE),
+        )
     # Drop stale rows even if under the per-source cap so FTS stays lean.
     conn.execute(
         """

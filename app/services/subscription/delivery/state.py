@@ -31,6 +31,25 @@ def _existing_effective_delivery(resource) -> dict[str, Any] | None:
     candidate_key = resource_dedupe_key(resource["url"] or "")
     if not candidate_key:
         return None
+    # 115/plain URLs are stored canonically at insert time: an exact equality
+    # lookup covers the common duplicate case with an index-friendly query.
+    # Magnet links can use different presentations for the same hash, so they
+    # still fall back to the full scan below.
+    kind, value = candidate_key
+    if kind != "magnet" and value:
+        with db() as conn:
+            row = conn.execute(
+                """
+                SELECT id, url, status
+                FROM resources
+                WHERE id != ? AND status = 'delivered' AND url = ?
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                (resource["id"], value),
+            ).fetchone()
+        if row:
+            return row_to_dict(row) or {}
     with db() as conn:
         rows = conn.execute(
             """

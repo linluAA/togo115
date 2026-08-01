@@ -42,7 +42,7 @@ def desired_search_concurrency() -> int:
 
 def desired_telegram_dialog_concurrency() -> int:
     """Adaptive cross-dialog TG concurrency; same dialog remains serialized by lock."""
-    base = TELEGRAM_SOURCE_CONCURRENCY
+    base = max(2, TELEGRAM_SOURCE_CONCURRENCY)
     try:
         from app.services.adapters.telegram.rate_limit import telegram_request_gate
 
@@ -51,7 +51,8 @@ def desired_telegram_dialog_concurrency() -> int:
             return 1
         if interval >= 0.25:
             return max(1, min(2, base))
-        return max(1, base)
+        # Low pressure: a slightly wider fan-out fills idle slots faster.
+        return max(1, min(3, base + 1))
     except Exception:
         return max(1, base)
 

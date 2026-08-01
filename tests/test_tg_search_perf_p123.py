@@ -379,7 +379,7 @@ class FirstQueryEarlyStopTest(unittest.IsolatedAsyncioTestCase):
             def __init__(self) -> None:
                 self.queries: list[str] = []
 
-            def _server_search_queries(self, queries):
+            def _server_search_queries(self, queries, *, limit=2):
                 return ["q1", "q2"]
 
             async def _search_dialog_query(self, client, entity, source, query, options, budget, seen_messages, stats, *, shared_state=None):

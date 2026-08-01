@@ -25,16 +25,19 @@ class LinkValidationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             SearchResult(title="C", url="https://115.com/s/c?password=3333", source="tg"),
         ]
 
-        import app.services.subscription.delivery.link_validation as module
+        import app.services.subscription.search.share115_cache as share_cache_module
+        from app.services.subscription.search.share115_cache import reset_process_115_cache
 
-        old_adapter = module.Pan115Adapter
-        module.Pan115Adapter = FakePan115
+        reset_process_115_cache()
+        old_adapter = share_cache_module.Pan115Adapter
+        share_cache_module.Pan115Adapter = FakePan115
         try:
             started = time.perf_counter()
             filtered, recheck, report = await classify_115_results(results)
             elapsed = time.perf_counter() - started
         finally:
-            module.Pan115Adapter = old_adapter
+            share_cache_module.Pan115Adapter = old_adapter
+            reset_process_115_cache()
 
         self.assertEqual(len(filtered), 4)
         self.assertEqual(recheck, [])
@@ -49,14 +52,17 @@ class LinkValidationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
 
         results = [SearchResult(title="A", url="https://115.com/s/a?password=1111", source="tg")]
 
-        import app.services.subscription.delivery.link_validation as module
+        import app.services.subscription.search.share115_cache as share_cache_module
+        from app.services.subscription.search.share115_cache import reset_process_115_cache
 
-        old_adapter = module.Pan115Adapter
-        module.Pan115Adapter = FakePan115
+        reset_process_115_cache()
+        old_adapter = share_cache_module.Pan115Adapter
+        share_cache_module.Pan115Adapter = FakePan115
         try:
             filtered, recheck, report = await classify_115_results(results)
         finally:
-            module.Pan115Adapter = old_adapter
+            share_cache_module.Pan115Adapter = old_adapter
+            reset_process_115_cache()
 
         self.assertEqual(len(filtered), 1)
         self.assertEqual(len(recheck), 1)

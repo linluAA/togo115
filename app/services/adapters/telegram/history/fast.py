@@ -60,6 +60,23 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
         if not source_values:
             add_log("warning", "telegram", "未配置 Telegram 群组/频道 sources")
             return []
+        queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=4))
+        if not queries:
+            return []
+        # Index-only hits need no entity resolution: try raw configured sources
+        # first (canonical == configured value covers most setups).
+        if not state.force_remote:
+            index_sources = [str(item.get("canonical") or item.get("source") or "") for item in (state.dialogs or [])]
+            index_sources = index_sources or [str(source) for source in source_values]
+            indexed_results = search_telegram_message_index(index_sources, queries, TELEGRAM_FAST_RETURN_TARGET)
+            if indexed_results:
+                results = self._dedupe_results(state.remember_results(indexed_results))
+                add_log("debug",
+                    "telegram",
+                    "Telegram 本地索引快速命中资源",
+                    {"title": title, "count": len(results), "sources": len(index_sources), "total_ms": _elapsed_ms(started)},
+                )
+                return results
         resolve_started = time.perf_counter()
         if state.dialogs:
             dialogs = state.dialogs
@@ -77,9 +94,8 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
             preferred_sources=list(state.preferred_sources or []),
             hit_scores=dict(state.dialog_hit_scores or {}),
         )
-        queries = self._server_search_queries(_expanded_search_queries(title, keywords, max_queries=4))
-        if not queries:
-            return []
+        # Canonical-key lookup after resolve covers sources whose configured form
+        # differs from the stored index key.
         if not state.force_remote:
             indexed_results = search_telegram_message_index([str(item["canonical"]) for item in dialogs], queries, TELEGRAM_FAST_RETURN_TARGET)
             if indexed_results:

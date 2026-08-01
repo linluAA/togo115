@@ -13,7 +13,7 @@ from app.services.adapters.telegram.models import TelegramHistoryOptions, Telegr
 from app.services.adapters.telegram.history.metrics import TelegramSearchMetrics
 from app.services.adapters.telegram.scan.extract_cache import extract_cache_stats
 from app.services.search_metrics import record_telegram_search
-from app.services.adapters.telegram.history.dialog_search import TELEGRAM_DIALOG_SEARCH_CONCURRENCY, TelegramDialogSearchMixin
+from app.services.adapters.telegram.history.dialog_search import TelegramDialogSearchMixin
 from app.services.adapters.telegram.history.fast import TelegramFastSearchMixin
 from app.services.adapters.telegram.history.prewarm import TelegramIndexPrewarmMixin
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
@@ -30,10 +30,6 @@ from app.services.types import SearchResult
 from app.services.adapters.telegram.rate_limit import telegram_request_gate
 
 
-TELEGRAM_DIALOG_SEARCH_CONCURRENCY = 3
-TELEGRAM_HISTORY_RETURN_TARGET = 2
-
-
 def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
@@ -42,10 +38,10 @@ class TelegramHistorySearchMixin(TelegramDialogSearchMixin, TelegramFastSearchMi
     def _history_options(self, config: dict[str, Any]) -> TelegramHistoryOptions:
         return build_history_options(config)
 
-    def _server_search_queries(self, queries: list[str]) -> list[str]:
+    def _server_search_queries(self, queries: list[str], *, limit: int = 2) -> list[str]:
         # Keep a small multi-query set so franchise aliases (e.g. 新攻壳机动队 -> 攻壳机动队)
         # can hit traditional titles without exploding Telegram request volume.
-        return server_search_queries(queries, limit=2)
+        return server_search_queries(queries, limit=limit)
 
     async def search_history(
         self,

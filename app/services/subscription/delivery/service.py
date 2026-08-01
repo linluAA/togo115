@@ -35,17 +35,20 @@ async def deliver_resource(
         return False
     dedupe_key = resource_dedupe_key(resource["url"] or "")
     if not dedupe_key:
-        return await _deliver_resource_locked(resource_id, get_setting_func, pan115_adapter_cls, telegram_bot_adapter_cls)
+        return await _deliver_resource_locked(resource_id, get_setting_func, pan115_adapter_cls, telegram_bot_adapter_cls, resource=resource)
     async with _delivery_lock(dedupe_key):
-        return await _deliver_resource_locked(resource_id, get_setting_func, pan115_adapter_cls, telegram_bot_adapter_cls)
+        return await _deliver_resource_locked(resource_id, get_setting_func, pan115_adapter_cls, telegram_bot_adapter_cls, resource=resource)
 
 async def _deliver_resource_locked(
     resource_id: int,
     get_setting_func: Callable[..., dict],
     pan115_adapter_cls: type | None,
     telegram_bot_adapter_cls: type | None,
+    *,
+    resource=None,
 ) -> bool:
-    resource = _load_resource_for_delivery(resource_id)
+    if resource is None:
+        resource = _load_resource_for_delivery(resource_id)
     if not resource:
         return False
     if str(resource["status"] or "").casefold() == "delivered":

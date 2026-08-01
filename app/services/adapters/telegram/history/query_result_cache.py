@@ -6,7 +6,7 @@ from typing import Any
 from app.services.types import SearchResult
 
 # Short process-level cache shared across subscription searches in one worker.
-POSITIVE_TTL_SECONDS = 90.0
+POSITIVE_TTL_SECONDS = 180.0
 NEGATIVE_TTL_SECONDS = 45.0
 MAX_ENTRIES = 512
 

@@ -258,6 +258,8 @@ def _ensure_indexes(conn: sqlite3.Connection) -> None:
             ON resources(subscription_id, status, updated_at);
         CREATE INDEX IF NOT EXISTS idx_resources_status_updated
             ON resources(status, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_resources_status_url
+            ON resources(status, url);
         CREATE INDEX IF NOT EXISTS idx_subscriptions_status_checked
             ON subscriptions(status, last_checked_at);
         CREATE INDEX IF NOT EXISTS idx_telegram_message_index_indexed_at

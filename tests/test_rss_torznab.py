@@ -10,6 +10,7 @@ from app.config import settings
 from app.db import init_db
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget
 from app.services.integrations import RssTorznabAdapter, SearchResult, TelegramClientAdapter, TmdbAdapter, context_for_115_link, extract_download_links, telegram_message_text
+from app.services.adapters.telegram.history.recent import clear_recent_watermarks
 from app.services.adapters.telegram.scan.extract_cache import clear_extract_caches
 from app.services.subscription.match.matching import result_matches_subscription
 
@@ -23,6 +24,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         settings.database_path = settings.data_dir / "togo115-rss-test.sqlite3"
         init_db()
         clear_extract_caches()
+        clear_recent_watermarks()
 
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir

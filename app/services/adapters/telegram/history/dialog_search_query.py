@@ -67,7 +67,8 @@ class TelegramDialogSearchQueryMixin:
         # Non-incremental: prefer server search first. Recent scan is only a fallback.
         if not incremental and not budget.exhausted() and not (stop_event is not None and stop_event.is_set()):
             server_started = time.perf_counter()
-            for query in self._server_search_queries(queries):
+            query_limit = 1 if options.total_budget > 0 and budget.remaining < options.total_budget * 0.35 else 2
+            for query in self._server_search_queries(queries, limit=query_limit):
                 if budget.exhausted() or len(results) >= TELEGRAM_HISTORY_MAX_RESULTS:
                     break
                 if stop_event is not None and stop_event.is_set():
