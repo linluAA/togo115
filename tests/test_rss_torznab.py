@@ -675,6 +675,81 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results[0].url, "https://115.com/s/jintewu2026?password=8888")
         self.assertIn("金特务", results[0].context)
 
+    async def test_telegram_server_search_deep_extracts_late_external_page(self) -> None:
+        class Message:
+            def __init__(self, message_id: int, text: str) -> None:
+                self.id = message_id
+                self.raw_text = text
+                self.message = text
+                self.grouped_id = None
+                self.peer_id = "channel"
+                self.entities = []
+                self.buttons = None
+                self.media = None
+
+        messages = [Message(1, "Drama 2026 https://115.com/s/direct?password=8888")]
+        messages.extend(Message(index, "Drama 2026 poster") for index in range(2, 10))
+        messages.append(Message(10, "Drama 2026 https://telegra.ph/drama-resource-10"))
+        adapter = TelegramClientAdapter()
+
+        async def extract(_client, _entity, _source, message, *_args, **_kwargs):
+            if message.id == 1:
+                return [SearchResult(title="Drama 2026", url="https://115.com/s/direct?password=8888", source="telegram:test")]
+            if message.id == 10:
+                return [SearchResult(title="Drama 2026", url="https://115.com/s/late?password=8888", source="telegram:test")]
+            return []
+
+        class Client:
+            async def get_messages(self, _peer, **_kwargs):
+                return messages
+
+        with patch.object(adapter, "_pipeline_extract_message_links", new=extract):
+            results = await adapter._search_dialog_query(
+                Client(),
+                "dialog",
+                "telegram:test",
+                "Drama",
+                TelegramHistoryOptions(history_limit=20, fallback_scan_limit=20, messages_per_query=12, total_budget=20, query_budget=20, recent_budget=20),
+                TelegramSearchBudget(20),
+                set(),
+                {"searched": 0, "fallback": 0, "links": 0, "timeouts": 0, "skipped_no_link_hint": 0},
+            )
+
+        self.assertEqual([result.url for result in results], [
+            "https://115.com/s/direct?password=8888",
+            "https://115.com/s/late?password=8888",
+        ])
+
+    async def test_telegram_recent_cursor_stays_before_failed_message(self) -> None:
+        class Message:
+            def __init__(self, message_id: int) -> None:
+                self.id = message_id
+
+        adapter = TelegramClientAdapter()
+        adapter._update_telegram_cursor("telegram:test", 10)
+        recent_messages = [Message(13), Message(12), Message(11)]
+
+        async def extract(*args, **_kwargs):
+            args[6]["_recent_safe_ids"] = {12, 11}
+            return []
+
+        with patch.object(adapter, "_read_recent_messages", new=AsyncMock(return_value=(recent_messages, 13))), patch.object(
+            adapter, "_extract_recent_message_links", new=extract
+        ):
+            await adapter._scan_recent_messages(
+                None,
+                None,
+                "telegram:test",
+                ["Drama"],
+                TelegramHistoryOptions(history_limit=20, fallback_scan_limit=20, messages_per_query=12, total_budget=20, query_budget=20, recent_budget=20),
+                TelegramSearchBudget(20),
+                set(),
+                {"timeouts": 0},
+                incremental=True,
+            )
+
+        self.assertEqual(adapter._telegram_cursor("telegram:test"), 10)
+
     async def test_telegram_history_search_falls_back_to_configured_recent_limit(self) -> None:
         class Message:
             def __init__(self, message_id: int, text: str) -> None:
@@ -950,7 +1025,6 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(names[:3], ["高", "中", "低"])
         self.assertIn("BT1207", names)
-        self.assertIn("QMP4 / 七味", names)
 
     def test_builtin_sources_are_available_without_manual_config(self) -> None:
         adapter = RssTorznabAdapter()
@@ -960,7 +1034,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
 
         names = [source["name"] for source in sources]
         self.assertIn("BT1207", names)
-        self.assertIn("QMP4 / 七味", names)
+        self.assertNotIn("海搜 Haisou", names)
         self.assertTrue(all(source.get("_builtin") for source in sources))
         self.assertEqual(adapter._source_url(next(source for source in sources if source["name"] == "BT1207"), "爱丽丝 2020"), "https://bt1207to.cc/search?keyword=%E7%88%B1%E4%B8%BD%E4%B8%9D+2020")
 
@@ -978,7 +1052,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
 
         plugin_ids = [adapter._site_plugin_id(source) for source in sources if adapter._source_type(source) == "site_plugin"]
         self.assertEqual(plugin_ids.count("bt1207"), 1)
-        self.assertEqual(plugin_ids.count("qmp4"), 0)
+        self.assertEqual(plugin_ids.count("qmp4"), 1)
 
     def test_builtin_sources_apply_saved_overrides(self) -> None:
         adapter = RssTorznabAdapter()
@@ -1017,7 +1091,8 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
 
         names = [source["name"] for source in sources]
         self.assertNotIn("BT1207", names)
-        self.assertIn("QMP4 / 七味", names)
+        self.assertNotIn("海搜 Haisou", names)
+        self.assertNotIn("QMP4 / 七味", names)
 
     async def test_priority_search_stops_before_lower_sources_after_match(self) -> None:
         adapter = RssTorznabAdapter()

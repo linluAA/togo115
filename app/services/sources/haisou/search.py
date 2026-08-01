@@ -16,6 +16,9 @@ from app.services.sources.haisou.mapper import map_haisou_items
 from app.services.types import SearchResult
 
 
+MAX_SEARCH_PAGES = 3
+
+
 async def search_haisou(
     query: str,
     *,
@@ -46,15 +49,26 @@ async def search_haisou(
         return []
 
     client = HaisouClient(api_key=key)
+    items: list[Any] = []
     try:
-        note_haisou_search()
-        result = await client.search(
-            query,
-            platforms=list(platform_list),
-            search_in=str(scope),
-            page=1,
-            page_size=int(size),
-        )
+        for page in range(1, MAX_SEARCH_PAGES + 1):
+            if not allow_haisou_search():
+                add_log("warning", "haisou", "海搜分页达到窗口预算，返回已获取结果", {"query": query, "page": page, "items": len(items)})
+                break
+            note_haisou_search()
+            result = await client.search(
+                query,
+                platforms=list(platform_list),
+                search_in=str(scope),
+                page=page,
+                page_size=int(size),
+            )
+            page_items = result.get("items") if isinstance(result, dict) else None
+            if not isinstance(page_items, list):
+                page_items = []
+            items.extend(page_items)
+            if len(page_items) < int(size):
+                break
     except HaisouApiError as exc:
         add_log(
             "warning",
@@ -62,15 +76,16 @@ async def search_haisou(
             "海搜搜索失败",
             {"query": query, "error": str(exc), "code": exc.code, "credits": exc.credits, "retryable": exc.retryable},
         )
-        return []
+        if not items:
+            return []
+        add_log("warning", "haisou", "海搜后续分页失败，返回已获取结果", {"query": query, "items": len(items), "error": str(exc), "code": exc.code})
     except Exception as exc:
         add_log("warning", "haisou", "海搜搜索异常", {"query": query, "error": str(exc)})
-        return []
-
-    items = result.get("items") if isinstance(result, dict) else None
-    if not isinstance(items, list):
-        items = []
+        if not items:
+            return []
+        add_log("warning", "haisou", "海搜后续分页异常，返回已获取结果", {"query": query, "items": len(items), "error": str(exc)})
     mapped = map_haisou_items(items, source_name=name, platforms=list(platform_list))
+    set_cached_haisou_search(cache_key, mapped)
     add_log(
         "info",
         "haisou",

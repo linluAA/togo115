@@ -28,6 +28,15 @@ def _elapsed_ms(start: float) -> int:
 
 
 class TelegramRecentExtractMixin:
+    def _mark_recent_message_safe(self, stats: dict[str, Any], message: Any) -> None:
+        try:
+            message_id = int(getattr(message, "id", 0) or 0)
+        except (TypeError, ValueError):
+            return
+        safe_ids = stats.setdefault("_recent_safe_ids", set())
+        if isinstance(safe_ids, set):
+            safe_ids.add(message_id)
+
     async def _extract_recent_message_links(
         self,
         client: TelegramClient,
@@ -65,6 +74,7 @@ class TelegramRecentExtractMixin:
                 budget,
                 seen_messages,
                 recent_messages,
+                stats,
                 pipeline_stats,
             )
             results.extend(fallback_results)
@@ -123,18 +133,20 @@ class TelegramRecentExtractMixin:
         base_text = telegram_message_text(message)
         matched_queries = self._matched_recent_queries_in_text("\n".join([base_text, *window_texts]), queries)
         if not matched_queries:
+            self._mark_recent_message_safe(stats, message)
             return []
         pipeline_stats.title_matched += 1
         anchor = self._recent_link_anchor(message, window_messages, window_texts)
         if not anchor:
             pipeline_stats.skipped_no_link_hint += 1
+            self._mark_recent_message_safe(stats, message)
             return []
         pipeline_stats.link_windows += 1
         stats["fallback"] += 1
         # Keep the matched title text even when the extract anchor is a nearby
         # link-only message; otherwise query filters drop the share.
         extra_texts = self._recent_extract_extra_texts(message, anchor, window_texts)
-        return await self._pipeline_extract_message_links(
+        hits = await self._pipeline_extract_message_links(
             client,
             entity,
             source,
@@ -145,6 +157,9 @@ class TelegramRecentExtractMixin:
             pipeline_stats,
             stage="recent_title_window",
         )
+        if hits:
+            self._mark_recent_message_safe(stats, message)
+        return hits
 
     def _update_recent_scan_stats(self, stats: dict[str, int], pipeline_stats: TelegramPipelineStats) -> None:
         stats["recent_matched"] = pipeline_stats.title_matched
@@ -164,6 +179,7 @@ class TelegramRecentExtractMixin:
         budget: TelegramSearchBudget,
         seen_messages: set[int],
         recent_messages: list[Any],
+        stats: dict[str, int],
         pipeline_stats: TelegramPipelineStats | None = None,
     ) -> tuple[list[SearchResult], int]:
         results: list[SearchResult] = []
@@ -186,6 +202,7 @@ class TelegramRecentExtractMixin:
             window_texts = self._recent_window_texts(window_messages, message)
             anchor = self._recent_link_anchor(message, window_messages, window_texts)
             if not anchor:
+                self._mark_recent_message_safe(stats, message)
                 continue
             link_windows += 1
             extra_texts = self._recent_extract_extra_texts(message, anchor, window_texts)
@@ -201,6 +218,8 @@ class TelegramRecentExtractMixin:
                 stage="recent_link_window_fallback",
             )
             results.extend(hits)
+            if hits:
+                self._mark_recent_message_safe(stats, message)
         if link_windows:
             add_log(
                 "info",

@@ -29,6 +29,13 @@ def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
+def _recent_message_id(message: Any) -> int:
+    try:
+        return int(getattr(message, "id", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 from app.services.adapters.telegram.history.recent_windows import TelegramRecentWindowMixin
 from app.services.adapters.telegram.history.recent_extract import TelegramRecentExtractMixin
 
@@ -80,8 +87,19 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
                 "total_ms": _elapsed_ms(started),
             },
         )
-        if incremental and max_seen_message_id > cursor:
-            self._update_telegram_cursor(source, max_seen_message_id)
+        safe_ids = stats.get("_recent_safe_ids")
+        safe_max_message_id = cursor
+        if isinstance(safe_ids, set):
+            for message_id in sorted({_recent_message_id(message) for message in recent_messages}, reverse=True):
+                if message_id <= 0:
+                    continue
+                if message_id <= cursor:
+                    break
+                if message_id not in safe_ids:
+                    break
+                safe_max_message_id = message_id
+        if incremental and safe_max_message_id > cursor:
+            self._update_telegram_cursor(source, safe_max_message_id)
         return results
 
     async def _read_recent_messages(
@@ -108,7 +126,7 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
             async with asyncio.timeout(timeout):
                 messages = await self._get_recent_messages(client, entity, options.fallback_scan_limit)
                 for message in messages:
-                    message_id = int(getattr(message, "id", 0) or 0)
+                    message_id = _recent_message_id(message)
                     if message_id:
                         if incremental and cursor and message_id <= cursor:
                             break
