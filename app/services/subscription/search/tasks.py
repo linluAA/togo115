@@ -23,6 +23,7 @@ async def _default_search(
     snapshot: dict[str, list[dict[str, Any]]] | None = None,
     *,
     incremental_telegram: bool = False,
+    mark_checked: bool = True,
 ) -> list[dict]:
     from app.services.subscription.search.service import search_and_attach_resources
 
@@ -35,7 +36,9 @@ async def _default_search(
             {"id": subscription_id, "count": len(cached), "incremental_telegram": incremental_telegram},
         )
         return cached
-    results = await search_and_attach_resources(subscription_id, snapshot, incremental_telegram=incremental_telegram)
+    results = await search_and_attach_resources(
+        subscription_id, snapshot, incremental_telegram=incremental_telegram, mark_checked=mark_checked
+    )
     store_recent_search_results(subscription_id, results, incremental_telegram=incremental_telegram)
     return results
 
@@ -59,6 +62,7 @@ async def _search_and_attach_resources_guarded(
     *,
     incremental_telegram: bool = False,
     search_func: Callable[..., Awaitable[list[dict]]] | None = None,
+    mark_checked: bool = True,
 ) -> list[dict]:
     """Serialize one subscription and respect process-wide search concurrency."""
     search_func = search_func or _default_search
@@ -73,7 +77,9 @@ async def _search_and_attach_resources_guarded(
         return []
     async with lock:
         async with runtime.search_semaphore():
-            return await search_func(subscription_id, snapshot, incremental_telegram=incremental_telegram)
+            return await search_func(
+                subscription_id, snapshot, incremental_telegram=incremental_telegram, mark_checked=mark_checked
+            )
 
 
 def _reuse_or_create_job(kind: str, target_id: int | None = None, payload: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -22,7 +22,7 @@ _log_buffer: list[tuple[str, str, str, str | None, str]] = []
 _log_buffer_lock = threading.Lock()
 _log_buffer_last_flush = 0.0
 # Always flush these immediately so operators still see critical events.
-_IMMEDIATE_LEVELS = {"error", "warning"}
+_IMMEDIATE_LEVELS = {"error"}
 _IMMEDIATE_SCOPES = {"auth", "system"}
 
 
@@ -38,8 +38,9 @@ def add_log(level: str, scope: str, message: str, payload: dict[str, Any] | None
         json_dumps(safe_payload) if safe_payload else None,
         utc_now(),
     )
-    # Batch only debug chatter; info+ stays immediately queryable for operators/tests.
-    if str(level or "").casefold() != "debug":
+    # Batch non-critical chatter on a short window; errors and auth/system stay
+    # immediately queryable for operators/tests.
+    if str(level or "").casefold() in _IMMEDIATE_LEVELS or str(scope or "").casefold() in _IMMEDIATE_SCOPES:
         _flush_log_rows([values], force_prune=True)
         return
     should_flush = False

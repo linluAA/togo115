@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 from importlib import import_module
 
-from app.db import add_log
+from app.db import add_log, db, utc_now
+from app.db_logs import flush_log_buffer
 import app.services.subscription.runtime as runtime
-from app.services.subscription.crud.service import active_subscriptions, mark_subscription_checked, get_subscription
+from app.services.subscription.crud.service import active_subscriptions, get_subscription
 from app.services.subscription.library.service import (
     EMBY_SYNC_TIMEOUT_SECONDS,
     prefetch_tmdb_for_subscriptions,
@@ -36,6 +37,8 @@ async def search_all_active_subscriptions(*, force: bool = False) -> dict:
             "desired_concurrency": runtime.desired_search_concurrency(),
         },
     )
+    global _pending_checked_ids
+    _pending_checked_ids = []
     snapshot = await library_snapshot_or_none()
     # Best-effort TMDB refresh runs in background so search waves can start sooner.
     tmdb_task = asyncio.create_task(prefetch_tmdb_for_subscriptions(subscriptions))
@@ -72,6 +75,8 @@ async def search_all_active_subscriptions(*, force: bool = False) -> dict:
         "搜索全部活跃订阅完成",
         {"active": len(subscriptions), "searched": searched, "created": total, "failed": failed},
     )
+    _flush_pending_checked()
+    flush_log_buffer()
     return {"ok": True, "searched": searched, "count": total, "failed": failed}
 
 
@@ -172,11 +177,16 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
     )
     try:
         results = await asyncio.wait_for(
-            _search_and_attach_resources_guarded(subscription["id"], snapshot, incremental_telegram=incremental),
+            _search_and_attach_resources_guarded(
+                subscription["id"],
+                snapshot,
+                incremental_telegram=incremental,
+                mark_checked=False,
+            ),
             timeout=runtime.SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        mark_subscription_checked(int(subscription["id"]))
+        _note_subscription_checked(int(subscription["id"]))
         add_log(
             "error",
             "subscription",
@@ -199,9 +209,32 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
             },
         )
         return (1, 0, 1)
+    _note_subscription_checked(int(subscription["id"]))
     return (1, len(results), 0)
 
 
 async def _search_and_attach_resources_guarded(subscription_id: int, snapshot, *, incremental_telegram: bool = False):
     guarded = import_module("app.services.subscription.search.tasks")._search_and_attach_resources_guarded
     return await guarded(subscription_id, snapshot, incremental_telegram=incremental_telegram)
+
+
+_pending_checked_ids: list[int] = []
+
+
+def _note_subscription_checked(subscription_id: int) -> None:
+    """Collect a subscription that finished a search attempt for batch marking."""
+    _pending_checked_ids.append(int(subscription_id))
+
+
+def _flush_pending_checked() -> None:
+    """Write collected last_checked_at updates in one transaction."""
+    if not _pending_checked_ids:
+        return
+    ids = list(dict.fromkeys(_pending_checked_ids))
+    _pending_checked_ids.clear()
+    now = utc_now()
+    with db() as conn:
+        conn.executemany(
+            "UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?",
+            [(now, now, subscription_id) for subscription_id in ids],
+        )

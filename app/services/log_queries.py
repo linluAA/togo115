@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.db import db, row_to_dict
+from app.db_logs import flush_log_buffer
 
 
 def list_logs(
@@ -12,6 +13,7 @@ def list_logs(
     before_id: int | None = None,
     after_id: int | None = None,
 ) -> list[dict]:
+    flush_log_buffer()
     limit = max(1, min(int(limit or 100), 300))
     levels = ("info", "warning", "error") if mode != "debug" else ("debug", "info", "warning", "error")
     placeholders = ",".join("?" for _ in levels)

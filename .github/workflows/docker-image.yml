@@ -88,3 +88,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max,ignore-error=true
+
+      - name: Report image size
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          image="ghcr.io/linluaa/togo115-app:main"
+          docker buildx imagetools inspect "$image" > /tmp/image-size.txt 2>&1 || true
+          cat /tmp/image-size.txt
+          {
+            echo "## Image size (ghcr.io/linluaa/togo115-app:main)"
+            echo ""
+            echo '```'
+            cat /tmp/image-size.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

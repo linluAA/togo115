@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.config import settings
-from app.db import db, init_db, utc_now
+from app.db import db, flush_log_buffer, init_db, utc_now
 from app.services.integrations import SearchResult, TelegramClientAdapter
 from app.services.subscription.library import snapshot as snapshot_module
 import app.services.subscription.runtime as runtime_module
@@ -910,6 +910,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first_result, [{"resource_id": 1}])
         self.assertEqual(second, [])
         self.assertEqual(calls, 1)
+        flush_log_buffer()
         with db() as conn:
             row = conn.execute("SELECT message FROM logs WHERE scope = 'subscription' ORDER BY id DESC LIMIT 1").fetchone()
         self.assertEqual(row["message"], "\u8ba2\u9605\u641c\u7d22\u5df2\u5728\u8fd0\u884c\uff0c\u5df2\u8df3\u8fc7\u91cd\u590d\u89e6\u53d1")

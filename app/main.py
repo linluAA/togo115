@@ -2,6 +2,7 @@ from pathlib import Path
 from io import BytesIO
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import qrcode
@@ -31,6 +32,7 @@ class AppStaticFiles(StaticFiles):
 
 
 app = FastAPI(title="ToGo115")
+app.add_middleware(GZipMiddleware, minimum_size=500)
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", AppStaticFiles(directory=static_dir), name="static")
 app.include_router(auth.router)

@@ -66,7 +66,7 @@ def test_static_bundles_are_generated_from_split_sources():
     )
 
     assert (build_static.STATIC / "app.js").read_text(encoding="utf-8") == expected_js
-    assert (build_static.STATIC / "styles.css").read_text(encoding="utf-8") == expected_css
+    assert (build_static.STATIC / "styles.css").read_text(encoding="utf-8") == build_static._minify_css(expected_css) + "\n"
 
 
 def test_static_sources_do_not_contain_common_mojibake_markers():

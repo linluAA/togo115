@@ -18,6 +18,7 @@ async def search_and_attach_resources(
     snapshot: dict[str, list[dict[str, Any]]] | None = None,
     *,
     incremental_telegram: bool = False,
+    mark_checked: bool = True,
 ) -> list[dict]:
     subscription = get_subscription(subscription_id)
     if not subscription or subscription.get("status") != "active":
@@ -71,7 +72,8 @@ async def search_and_attach_resources(
         return created
     finally:
         # Always clear "等待搜索 / 还没有完成首次历史搜索" once a search attempt finishes.
-        _mark_subscription_checked(subscription_id)
+        if mark_checked:
+            _mark_subscription_checked(subscription_id)
 
 
 

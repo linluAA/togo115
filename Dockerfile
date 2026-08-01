@@ -40,7 +40,9 @@ COPY --from=builder /opt/venv /opt/venv
 COPY app ./app
 
 RUN python -m compileall -q app \
-    && mkdir -p /data
+    && mkdir -p /data \
+    && rm -rf /opt/venv/lib/python3.12/site-packages/pip \
+    && rm -f /opt/venv/bin/pip /opt/venv/bin/pip3 /opt/venv/bin/pip3.12
 
 EXPOSE 8000
 

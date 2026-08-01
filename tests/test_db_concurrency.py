@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.config import settings
 from app import db as db_module
-from app.db import add_log, db, init_db
+from app.db import add_log, db, flush_log_buffer, init_db
 from app.services.jobs import create_job, latest_job, list_jobs, mark_job_done, mark_job_failed, mark_job_running
 
 
@@ -33,6 +33,7 @@ class DatabaseConcurrencyTest(unittest.TestCase):
             futures = [executor.submit(write_log, index) for index in range(180)]
             for future in futures:
                 future.result()
+        flush_log_buffer()
 
         with db() as conn:
             count = conn.execute("SELECT COUNT(*) AS count FROM logs WHERE scope = 'test'").fetchone()["count"]
@@ -68,6 +69,7 @@ class DatabaseConcurrencyTest(unittest.TestCase):
         url = f"https://api.telegram.org/bot{token}/getUpdates?timeout=25"
 
         add_log("warning", "tg_bot", f"request failed {url}", {"error": url, "nested": {"token": token}})
+        flush_log_buffer()
 
         with db() as conn:
             row = conn.execute("SELECT message, payload FROM logs WHERE scope = 'tg_bot' ORDER BY id DESC LIMIT 1").fetchone()
