@@ -100,6 +100,7 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
                 safe_max_message_id = message_id
         if incremental and safe_max_message_id > cursor:
             self._update_telegram_cursor(source, safe_max_message_id)
+        stats.pop("_recent_safe_ids", None)
         return results
 
     async def _read_recent_messages(

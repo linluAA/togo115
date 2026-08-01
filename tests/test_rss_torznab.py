@@ -728,6 +728,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         adapter = TelegramClientAdapter()
         adapter._update_telegram_cursor("telegram:test", 10)
         recent_messages = [Message(13), Message(12), Message(11)]
+        stats_dict = {"timeouts": 0}
 
         async def extract(*args, **_kwargs):
             args[6]["_recent_safe_ids"] = {12, 11}
@@ -744,11 +745,12 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
                 TelegramHistoryOptions(history_limit=20, fallback_scan_limit=20, messages_per_query=12, total_budget=20, query_budget=20, recent_budget=20),
                 TelegramSearchBudget(20),
                 set(),
-                {"timeouts": 0},
+                stats_dict,
                 incremental=True,
             )
 
         self.assertEqual(adapter._telegram_cursor("telegram:test"), 10)
+        self.assertNotIn("_recent_safe_ids", stats_dict)
 
     async def test_telegram_history_search_falls_back_to_configured_recent_limit(self) -> None:
         class Message:
