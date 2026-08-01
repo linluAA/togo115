@@ -10,12 +10,27 @@ from app.services.link.telegram_context_segments import (
     _share_code_from_link,
 )
 
+METADATA_FIELD_LINE_RE = re.compile(
+    r"^\s*(?:[#*\-\s\u3010\[\uff08(])*"
+    r"(?:\u5730\u533a|\u56fd\u5bb6|\u8bed\u8a00|\u5b57\u5e55|\u6807\u7b7e|\u7b80\u4ecb|\u4e3b\u6f14|\u5bfc\u6f14|\u8bc4\u5206|\u7c7b\u578b|\u5206\u7c7b|\u5e74\u4efd|\u5e74\u4ee3|\u5b63\u96c6|\u96c6\u6570|\u66f4\u65b0|\u5927\u5c0f|\u8d28\u91cf|TMDB\s*ID)"
+    r"\s*(?:\*\*)?\s*[:\uff1a]\s*",
+    re.I,
+)
+TITLE_LABEL_RE = re.compile(
+    r"(?:^|[\s\[\u3010\uff08(])(?:\u7535\u89c6\u5267|\u7535\u5f71|\u52a8\u6f2b|\u52a8\u753b|\u7efc\u827a|\u5267\u96c6|\u77ed\u5267|\u756a\u5267|\u540d\u79f0|\u7247\u540d|\u5267\u540d|\u6807\u9898|\u8d44\u6e90\u540d|\u8d44\u6e90)\s*[:\uff1a\uff5c|]",
+    re.I,
+)
+
 
 def _resource_title_line_score(line: str | None) -> int:
     value = str(line or "").strip()
     if not value:
         return 0
+    if _metadata_field_line(value):
+        return 0
     label_match = re.search(r"(?:^|[\s📺🎬🎞️💎、。\[【])(电视剧|电影|动漫|动画|综艺|剧集|名称|片名|标题|资源)\s*[：:]*", value, re.I)
+    if not label_match:
+        label_match = TITLE_LABEL_RE.search(value)
     if not label_match:
         return 0
     if re.search(r"(标签|简介|主演|评分|类型|分类|大小|质量|TMDB\s*ID)", value, re.I):
@@ -85,6 +100,8 @@ def _looks_like_plain_title_line(line: str | None) -> bool:
     value = str(line or "").strip()
     if not value or len(value) < 2 or len(value) > 120:
         return False
+    if _metadata_field_line(value):
+        return False
     # Ignore scraped HTML/markup lines so external page URLs above a share stay in context.
     if "<" in value or ">" in value or value.casefold().startswith("http"):
         return False
@@ -96,6 +113,10 @@ def _looks_like_plain_title_line(line: str | None) -> bool:
     has_episode = bool(re.search(r"(S\d{1,2}E\d{1,3}|第\s*\d{1,3}\s*[集话話])", value, re.I))
     has_cjk = bool(re.search(r"[\u3400-\u9fff]", value))
     return has_cjk and (has_year or has_episode)
+
+
+def _metadata_field_line(line: str | None) -> bool:
+    return bool(METADATA_FIELD_LINE_RE.search(str(line or "").strip()))
 
 
 

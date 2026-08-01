@@ -12,6 +12,12 @@ TITLE_CLEAN_RE = re.compile(
     re.I,
 )
 NON_TITLE_RE = re.compile(r"(?:\u63d0\u53d6\u7801|\u8bbf\u95ee\u7801|\u5bc6\u7801|\u590d\u5236|\u4e0b\u8f7d|\u94fe\u63a5|\u6587\u4ef6\u5927\u5c0f|\u6587\u4ef6\u6570\u91cf|\u6536\u5f55\u65f6\u95f4|\u5206\u4eab\u65f6\u95f4)", re.I)
+METADATA_FIELD_LINE_RE = re.compile(
+    r"^\s*(?:[#*\-\s\u3010\[\uff08(])*"
+    r"(?:\u5730\u533a|\u56fd\u5bb6|\u8bed\u8a00|\u5b57\u5e55|\u6807\u7b7e|\u7b80\u4ecb|\u4e3b\u6f14|\u5bfc\u6f14|\u8bc4\u5206|\u7c7b\u578b|\u5206\u7c7b|\u5e74\u4efd|\u5e74\u4ee3|\u5b63\u96c6|\u96c6\u6570|\u66f4\u65b0|\u5927\u5c0f|\u8d28\u91cf|TMDB\s*ID)"
+    r"\s*(?:\*\*)?\s*[:\uff1a]\s*",
+    re.I,
+)
 EPISODE_QUALITY_RE = re.compile(r"(?i)(S\d{1,2}E\d{1,3}|\u7b2c\s*\d{1,3}\s*[\u96c6\u8bdd\u8a71]|1080p|2160p|4K|BluRay|WEB)")
 EPISODE_MARKER_RE = re.compile(r"(?i)(S\d{1,2}E\d{1,3}|第\s*\d{1,3}\s*[集话話]|更新至|全\s*\d{1,3}\s*[集话話])")
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
@@ -89,6 +95,8 @@ def _scored_title_lines(lines: list[str]) -> list[tuple[int, str]]:
 
 def _title_label_score(line: str) -> int:
     value = str(line or "").strip()
+    if _metadata_field_line(value):
+        return 0
     if not value or TITLE_SKIP_RE.search(value):
         return 0
     if not TITLE_LABEL_RE.search(value):
@@ -108,8 +116,14 @@ def _usable_title_line(line: str) -> bool:
     value = str(line or "").strip()
     if len(value) < 2:
         return False
+    if _metadata_field_line(value):
+        return False
     if "115.com/s/" in value or "115cdn.com/s/" in value or value.casefold().startswith("magnet:?"):
         return False
     if NON_TITLE_RE.search(value):
         return False
     return bool(re.search(r"[\u3400-\u9fffA-Za-z0-9]", value))
+
+
+def _metadata_field_line(line: str | None) -> bool:
+    return bool(METADATA_FIELD_LINE_RE.search(str(line or "").strip()))

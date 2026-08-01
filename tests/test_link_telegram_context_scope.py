@@ -44,6 +44,21 @@ def test_context_for_115_link_excludes_following_title() -> None:
     assert "野狗骨头" in scoped
     assert "念念相忘" not in scoped
 
+
+def test_context_for_115_link_ignores_metadata_lines() -> None:
+    text = "\n".join(
+        [
+            "电视剧：金特务：本色回归",
+            "地区：中国",
+            "https://115.com/s/ydgtlink?password=1111",
+        ]
+    )
+    scoped = context_for_115_link(text, "https://115.com/s/ydgtlink?password=1111", 1)
+    assert scoped.startswith("电视剧：金特务：本色回归")
+    assert "地区：中国" in scoped
+    assert _telegram_resource_title(scoped).startswith("金特务")
+
+
 def test_telegram_resource_title_includes_episode_range_from_context() -> None:
     text = "\n".join(
         [

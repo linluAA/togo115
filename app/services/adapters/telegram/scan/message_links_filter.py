@@ -6,7 +6,11 @@ from typing import Any
 from app.services.adapters.telegram.scan.extract_cache import set_cached_message_extract
 from app.services.link import context_for_115_link, extract_115_links, local_text_matches_query
 from app.services.types import SearchResult
-from app.services.adapters.telegram.scan.message_titles import _enrich_title_with_episode_marker, _telegram_resource_title
+from app.services.adapters.telegram.scan.message_titles import (
+    _enrich_title_with_episode_marker,
+    _metadata_field_line,
+    _telegram_resource_title,
+)
 
 
 class TelegramMessageLinkFilterMixin:
@@ -99,7 +103,7 @@ def _restore_query_title_context(context: str, scoped: str, match_queries: list[
 def _query_title_line(context: str, match_queries: list[str]) -> str:
     for line in str(context or "").splitlines():
         value = line.strip()
-        if not value or extract_115_links(value) or CONTEXT_TITLE_NOISE_RE.search(value):
+        if not value or extract_115_links(value) or _metadata_field_line(value) or CONTEXT_TITLE_NOISE_RE.search(value):
             continue
         if any(local_text_matches_query(value, query) for query in match_queries):
             return value[:160]

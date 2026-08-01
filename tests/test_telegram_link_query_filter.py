@@ -15,3 +15,35 @@ def test_filter_link_contexts_requires_title_query_match() -> None:
     }
     filtered = harness._filter_link_contexts_by_query(contexts, ["野狗骨头"])
     assert list(filtered) == ["https://115.com/s/ydgtlink?password=1111"]
+
+
+def test_filter_link_contexts_restores_real_title_before_metadata() -> None:
+    harness = Harness()
+    contexts = {
+        "https://115.com/s/jtwlink?password=1111": "\n".join(
+            [
+                "电视剧：金特务：本色回归",
+                "地区：China",
+                "https://115.com/s/jtwlink?password=1111",
+            ]
+        )
+    }
+
+    filtered = harness._filter_link_contexts_by_query(contexts, ["金特务"])
+
+    assert list(filtered) == ["https://115.com/s/jtwlink?password=1111"]
+    assert filtered["https://115.com/s/jtwlink?password=1111"].startswith("电视剧：金特务：本色回归")
+
+
+def test_filter_link_contexts_skips_metadata_only_context() -> None:
+    harness = Harness()
+    contexts = {
+        "https://115.com/s/metadata?password=1111": "\n".join(
+            [
+                "地区：中国",
+                "https://115.com/s/metadata?password=1111",
+            ]
+        )
+    }
+
+    assert harness._filter_link_contexts_by_query(contexts, ["金特务"]) == {}
