@@ -39,7 +39,7 @@ class RssTorznabSearchGroupsMixin:
             add_log("debug", "rss", "没有启用的订阅源/磁力源，跳过搜索", {"title": title})
             return []
         # Compact queries for faster fallback; full expansion remains for exhaustive search_history.
-        sources = rank_sources_by_health(filter_ready_sources(sources))
+        sources = _rank_sources_for_priority_search(filter_ready_sources(sources), self._source_priority)
         queries = self._priority_search_queries(title, keywords)
         groups: list[dict[str, Any]] = []
         state = _PrioritySearchState()
@@ -50,13 +50,14 @@ class RssTorznabSearchGroupsMixin:
             priority = wave[0]
             wave_sources = wave[1]
             state.begin_priority(priority)
-            wave_groups, searched, matched = await self._search_priority_wave(
+            wave_groups, searched, matched, searched_names = await self._search_priority_wave(
                 wave_sources,
                 queries,
                 matcher,
                 query_context,
             )
             state.searched_sources += searched
+            state.searched_source_names.extend(searched_names)
             groups.extend(wave_groups)
             if matched:
                 state.priority_matched = True
@@ -71,13 +72,14 @@ class RssTorznabSearchGroupsMixin:
         queries: list[str],
         matcher: Callable[[SearchResult], bool],
         query_context: dict[str, Any] | None,
-    ) -> tuple[list[dict[str, Any]], int, bool]:
+    ) -> tuple[list[dict[str, Any]], int, bool, list[str]]:
         """Fetch same-priority sources concurrently; cancel remaining after first usable hit."""
         if not sources:
-            return [], 0, False
+            return [], 0, False, []
         semaphore = asyncio.Semaphore(RSS_SOURCE_CONCURRENCY)
         groups: list[dict[str, Any]] = []
         searched = 0
+        searched_names: list[str] = []
         matched = False
 
         async def fetch_one(source: dict[str, Any]) -> tuple[dict[str, Any], list[SearchResult] | Exception]:
@@ -102,6 +104,7 @@ class RssTorznabSearchGroupsMixin:
                 for task in done:
                     searched += 1
                     source, results = task.result()
+                    searched_names.append(_source_name(source))
                     if isinstance(results, Exception):
                         add_log(
                             "warning",
@@ -125,7 +128,7 @@ class RssTorznabSearchGroupsMixin:
                     break
         finally:
             await _cancel_pending(pending)
-        return groups, searched, matched
+        return groups, searched, matched, searched_names
 
     async def search_history(self, title: str, keywords: list[str], query_context: dict[str, Any] | None = None) -> list[SearchResult]:
         groups = await self.search_history_by_source(title, keywords, query_context)
@@ -138,6 +141,7 @@ class _PrioritySearchState:
         self.current_priority: int | None = None
         self.priority_matched = False
         self.searched_sources = 0
+        self.searched_source_names: list[str] = []
 
     def begin_priority(self, priority: int) -> None:
         self.current_priority = priority
@@ -172,6 +176,21 @@ def _priority_waves(sources: list[dict[str, Any]], priority_fn) -> list[tuple[in
     if current_priority is not None and bucket:
         waves.append((current_priority, bucket))
     return waves
+
+
+def _rank_sources_for_priority_search(sources: list[dict[str, Any]], priority_fn) -> list[dict[str, Any]]:
+    """Keep user priority as the primary order; health only sorts inside a priority."""
+    ranked: list[dict[str, Any]] = []
+    for _priority, bucket in _priority_waves(
+        sorted(sources, key=lambda item: (-int(priority_fn(item) or 0), str(item.get("name") or ""))),
+        priority_fn,
+    ):
+        ranked.extend(rank_sources_by_health(bucket))
+    return ranked
+
+
+def _source_name(source: dict[str, Any]) -> str:
+    return str(source.get("name") or source.get("id") or source.get("url") or "")
 
 
 async def _cancel_pending(pending: set[asyncio.Task]) -> None:
@@ -210,6 +229,7 @@ def _log_priority_search_done(
     queries: list[str] | None = None,
 ) -> None:
     count = sum(len(group["results"]) for group in groups)
+    searched_sources = [str((group.get("source") or {}).get("name") or "") for group in groups]
     add_log(
         "info",
         "rss",
@@ -217,6 +237,8 @@ def _log_priority_search_done(
         {
             "count": count,
             "sources": state.searched_sources,
+            "searched_source_names": [item for item in state.searched_source_names if item][:8],
+            "result_sources": [item for item in searched_sources if item][:8],
             "title": title,
             "queries": list(queries or [])[:4],
             "matched_priority": state.current_priority if state.priority_matched else None,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.link import (
+    extract_115_links,
     local_text_matches_query,
     message_has_link_button_hint,
     nearby_recent_messages_have_button_hint,

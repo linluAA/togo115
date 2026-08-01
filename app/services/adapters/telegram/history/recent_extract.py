@@ -20,6 +20,9 @@ from app.services.link import (
 from app.services.types import SearchResult
 
 
+RECENT_LINK_WINDOW_FALLBACK_LIMIT = 10
+
+
 def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 

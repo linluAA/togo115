@@ -1047,6 +1047,45 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, ["高"])
         self.assertEqual([group["source"]["name"] for group in groups], ["高"])
 
+    async def test_priority_search_keeps_priority_before_health_sort(self) -> None:
+        adapter = RssTorznabAdapter()
+        config = {
+            "sources": [
+                {"name": "BT1207", "url": "https://bt.example/rss", "priority": -50, "enabled": True},
+                {
+                    "name": "海搜 Haisou",
+                    "url": "https://haisou.cc/",
+                    "type": "site_plugin",
+                    "plugin": "haisou",
+                    "priority": 10,
+                    "enabled": True,
+                    "api_key": "test-key",
+                },
+            ]
+        }
+        calls: list[str] = []
+
+        async def fake_fetch(source: dict, queries: list[str], query_context=None) -> list[SearchResult]:
+            calls.append(source["name"])
+            return [
+                SearchResult(
+                    title=f"{source['name']} 南部档案 S01E01 1080p",
+                    url=f"https://115.com/s/{source['name']}?password=1111",
+                    source=f"site_plugin:{source['name']}",
+                )
+            ]
+
+        with patch("app.services.integrations.get_setting", return_value=config):
+            with patch.object(adapter, "_fetch_source_for_queries", side_effect=fake_fetch):
+                groups = await adapter.search_history_by_priority_until_match(
+                    "南部档案",
+                    ["1080p"],
+                    lambda result: "南部档案" in result.title,
+                )
+
+        self.assertEqual(calls, ["海搜 Haisou"])
+        self.assertEqual([group["source"]["name"] for group in groups], ["海搜 Haisou"])
+
     async def test_priority_search_continues_when_matcher_fails_for_one_result(self) -> None:
         adapter = RssTorznabAdapter()
         config = {
