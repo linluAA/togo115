@@ -44,7 +44,12 @@ class RssTorznabCacheMixin:
         source_queries = self._source_queries(source, queries)
         if not source_queries:
             return []
-        async with shared_async_client(proxy=self._source_proxy(source), timeout=self._source_timeout(source), follow_redirects=True) as client:
+        async with shared_async_client(
+            proxy=self._source_proxy(source),
+            timeout=self._source_timeout(source),
+            follow_redirects=True,
+            verify=self._source_verify(source),
+        ) as client:
             for index, query in enumerate(source_queries):
                 cached = self._cached_source_results(source, query)
                 if cached is not None:

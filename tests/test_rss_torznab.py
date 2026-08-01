@@ -1393,6 +1393,31 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("wd=%E6%96%B0%E8%AD%A6%E5%AF%9F", result["url"])
         self.assertIn("新警察故事", result["sample"][0]["context"])
 
+    async def test_qmp4_source_test_disables_certificate_verification(self) -> None:
+        adapter = RssTorznabAdapter()
+        source = {"name": "QMP4 / 七味", "type": "site_plugin", "plugin": "qmp4", "url": "https://www.qmp4.com/", "enabled": True}
+        seen: dict[str, object] = {}
+
+        class FakeClient:
+            async def __aenter__(self):
+                seen["verify"] = self.verify
+                seen["proxy"] = self.proxy
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            def __init__(self, **kwargs):
+                self.verify = kwargs.get("verify")
+                self.proxy = kwargs.get("proxy")
+
+        with patch("app.services.sources.rss.test.httpx.AsyncClient", FakeClient):
+            with patch.object(adapter, "_test_source_with_client", new=AsyncMock(return_value=("https://www.qmp4.com/", None, []))):
+                await adapter.test_source(source, "火遮眼")
+
+        self.assertIs(seen["verify"], False)
+        self.assertIsNone(seen["proxy"])
+
     async def test_magnet_web_detail_urls_prefer_matching_year(self) -> None:
         adapter = RssTorznabAdapter()
         search_html = """

@@ -287,3 +287,5 @@ class RssTorznabConfigMixin:
             return proxy.get("url")
         return None
 
+    def _source_verify(self, source: dict[str, Any]) -> bool:
+        return self._site_plugin_id(source) != "qmp4"

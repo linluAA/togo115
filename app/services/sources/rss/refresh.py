@@ -23,7 +23,12 @@ class RssTorznabRefreshMixin(RssTorznabRefreshStateMixin):
             source_queries = self._source_queries(source, search_queries)
             if not source_queries:
                 continue
-            async with httpx.AsyncClient(proxy=self._source_proxy(source), timeout=25, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                proxy=self._source_proxy(source),
+                timeout=25,
+                follow_redirects=True,
+                verify=self._source_verify(source),
+            ) as client:
                 for query in source_queries:
                     source_results = await self._fetch_source(source, query, client)
                     results.extend(source_results)

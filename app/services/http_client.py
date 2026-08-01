@@ -39,6 +39,7 @@ def shared_async_client(
     proxy: str | None = None,
     timeout: float | httpx.Timeout = 20,
     follow_redirects: bool = True,
+    verify: bool | str = True,
 ) -> SharedAsyncClient:
     """Return a process/loop-local AsyncClient wrapper, creating it on first use."""
     timeout_key: Any
@@ -51,7 +52,7 @@ def shared_async_client(
         )
     else:
         timeout_key = float(timeout)
-    key = (str(proxy or ""), timeout_key, bool(follow_redirects))
+    key = (str(proxy or ""), timeout_key, bool(follow_redirects), bool(verify) if isinstance(verify, bool) else str(verify))
     loop_id = id(asyncio.get_running_loop())
     with _lock:
         existing = _clients.get(key)
@@ -61,6 +62,7 @@ def shared_async_client(
             proxy=proxy or None,
             timeout=timeout,
             follow_redirects=follow_redirects,
+            verify=verify,
             limits=httpx.Limits(max_connections=32, max_keepalive_connections=16, keepalive_expiry=30),
         )
         _clients[key] = client

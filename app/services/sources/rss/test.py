@@ -5,8 +5,6 @@ from typing import Any
 
 import httpx
 
-from app.services.http_client import shared_async_client
-
 from app.services.link import html_page_title
 
 
@@ -21,7 +19,12 @@ class RssTorznabTestMixin:
 
         started = time.perf_counter()
         try:
-            async with httpx.AsyncClient(proxy=self._source_proxy(normalized), timeout=45, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                proxy=self._source_proxy(normalized),
+                timeout=45,
+                follow_redirects=True,
+                verify=self._source_verify(normalized),
+            ) as client:
                 url, res, results = await self._test_source_with_client(normalized, url, query_value, client, started)
             diagnostic = self._source_test_diagnostic(normalized, url, res, results, query_value)
             return self._source_test_success_payload(name, url, res, query_value, started, results, diagnostic)
