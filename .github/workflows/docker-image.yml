@@ -94,12 +94,20 @@ jobs:
         shell: bash
         run: |
           image="ghcr.io/linluaa/togo115-app:main"
-          docker buildx imagetools inspect "$image" > /tmp/image-size.txt 2>&1 || true
-          cat /tmp/image-size.txt
+          index_out="$(docker buildx imagetools inspect "$image" 2>/dev/null || true)"
+          echo "$index_out"
+          sizes=""
+          for digest in $(printf '%s' "$index_out" | grep -oE '@sha256:[0-9a-f]{64}' | sort -u); do
+            one="$(docker buildx imagetools inspect "$image@$digest" 2>/dev/null || true)"
+            total="$(printf '%s\n' "$one" | grep -m1 'Total Image Size' || true)"
+            sizes="$sizes
+            $digest  ${total:-n/a}"
+          done
           {
             echo "## Image size (ghcr.io/linluaa/togo115-app:main)"
             echo ""
             echo '```'
-            cat /tmp/image-size.txt
+            echo "$index_out"
+            printf '%s\n' "$sizes"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
