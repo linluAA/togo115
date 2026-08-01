@@ -33,7 +33,6 @@ concurrency:
 permissions:
   contents: read
   packages: write
-  issues: write
 
 env:
   REGISTRY: ghcr.io
@@ -57,16 +56,9 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          set -o pipefail
-          pytest -q --cov=app --cov-report=term --cov-report=xml --cov-fail-under=70 2>&1 | tee pytest.out
-
-      - name: Upload pytest output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-output
-          path: pytest.out
-          if-no-files-found: ignore
+          # `python -m pytest` puts the repo root on sys.path; the bare
+          # `pytest` entry point does not, which broke app imports on CI.
+          python -m pytest -q --cov=app --cov-report=term --cov-report=xml --cov-fail-under=70
 
       - name: Upload coverage report
         if: always()
@@ -75,28 +67,6 @@ jobs:
           name: coverage-report
           path: coverage.xml
           if-no-files-found: ignore
-
-      - name: Report pytest failure to issue
-        if: failure()
-        shell: bash
-        run: |
-          python - <<'PYEOF'
-          import json, os, urllib.request
-          try:
-              body = open("pytest.out", encoding="utf-8", errors="replace").read()[-6000:]
-          except Exception:
-              body = "(pytest.out missing)"
-          payload = json.dumps({"body": "CI pytest failed:\n```\n" + body + "\n```"}).encode()
-          req = urllib.request.Request(
-              "https://api.github.com/repos/${{ github.repository }}/issues",
-              data=payload,
-              headers={"Authorization": "token " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json"},
-              method="POST",
-          )
-          urllib.request.urlopen(req, timeout=30).read()
-          PYEOF
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
     runs-on: ubuntu-latest
