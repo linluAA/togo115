@@ -978,7 +978,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
 
         plugin_ids = [adapter._site_plugin_id(source) for source in sources if adapter._source_type(source) == "site_plugin"]
         self.assertEqual(plugin_ids.count("bt1207"), 1)
-        self.assertEqual(plugin_ids.count("qmp4"), 1)
+        self.assertEqual(plugin_ids.count("qmp4"), 0)
 
     def test_builtin_sources_apply_saved_overrides(self) -> None:
         adapter = RssTorznabAdapter()

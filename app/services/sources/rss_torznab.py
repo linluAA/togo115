@@ -80,18 +80,6 @@ class RssTorznabAdapter(
             "_builtin": True,
         },
         {
-            "id": "builtin_qmp4",
-            "name": "QMP4 / 七味",
-            "type": "site_plugin",
-            "plugin": "qmp4",
-            "url": "https://www.qmp4.com/",
-            "enabled": True,
-            "use_proxy": False,
-            "priority": -50,
-            "refresh_interval": 30,
-            "_builtin": True,
-        },
-        {
             "id": "builtin_haisou",
             "name": "海搜 Haisou",
             "type": "site_plugin",
