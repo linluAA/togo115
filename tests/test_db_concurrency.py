@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.config import settings
 from app import db as db_module
-from app.db import add_log, db, flush_log_buffer, init_db
+from app.db import close_connection_pool, add_log, db, flush_log_buffer, init_db
 from app.services.jobs import create_job, latest_job, list_jobs, mark_job_done, mark_job_failed, mark_job_running
 
 
@@ -23,6 +23,7 @@ class DatabaseConcurrencyTest(unittest.TestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def test_concurrent_log_writes_are_serialized(self) -> None:

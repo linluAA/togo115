@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from app.config import settings
-from app.db import init_db
+from app.db import close_connection_pool, init_db
 from app.services.adapters.telegram.scan.message_index import index_telegram_messages, search_telegram_message_index
 
 
@@ -31,6 +31,7 @@ class TelegramMessageIndexTest(unittest.TestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def test_index_search_uses_nearby_context_for_link_message(self) -> None:

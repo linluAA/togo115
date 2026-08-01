@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 
 from app.config import settings
-from app.db import init_db
+from app.db import close_connection_pool, init_db
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget
 from app.services.integrations import RssTorznabAdapter, SearchResult, TelegramClientAdapter, TmdbAdapter, context_for_115_link, extract_download_links, telegram_message_text
 from app.services.adapters.telegram.history.recent import clear_recent_watermarks
@@ -29,6 +29,7 @@ class RssTorznabTest(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     async def test_tmdb_trending_items_fetches_multiple_pages_up_to_limit(self) -> None:

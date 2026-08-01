@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.config import settings
-from app.db import init_db
+from app.db import close_connection_pool, init_db
 from app.services.adapters.telegram.scan import message_index_query as index_query
 from app.services.resource_queries import list_recent_resources, invalidate_recent_resources_cache, merge_resource_rows
 from app.services.subscription.search.all import _prefer_incremental_telegram
@@ -25,6 +25,7 @@ class PerfNextTest(unittest.TestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def test_prefilter_terms_prefer_longer_stems(self) -> None:

@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.config import settings
-from app.db import db, init_db, json_dumps, utc_now
+from app.db import close_connection_pool, db, init_db, json_dumps, utc_now
 from app.schemas import SubscriptionCreate
 from app.services.subscription.crud import service as subscription_crud
 from app.services.subscription.delivery import service as subscription_delivery
@@ -23,6 +23,7 @@ class SplitSubscriptionModuleTest(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     async def test_crud_create_keeps_subscription_schedule_hook_patchable(self) -> None:

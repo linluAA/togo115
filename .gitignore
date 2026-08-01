@@ -16,3 +16,4 @@ data/*.sqlite3
 .tools/*.err.log
 .tools/*.out.log
 tools/
+.coverage

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.config import settings
-from app.db import db, flush_log_buffer, init_db, utc_now
+from app.db import close_connection_pool, db, flush_log_buffer, init_db, utc_now
 from app.services.integrations import SearchResult, TelegramClientAdapter
 from app.services.subscription.library import snapshot as snapshot_module
 import app.services.subscription.runtime as runtime_module
@@ -32,6 +32,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         reset_process_115_cache()
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def _subscription(self) -> int:

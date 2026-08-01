@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.config import settings
-from app.db import db, init_db, utc_now
+from app.db import close_connection_pool, db, init_db, utc_now
 from app.services.subscription.library.match import result_matches_missing_episodes
 from app.services.subscription.search import tasks as search_tasks
 from app.services.subscription.search.service import search_and_attach_resources
@@ -26,6 +26,7 @@ class FirstSearchChainTest(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def _insert_sub(self, title: str = "西游记") -> int:

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings
-from app.db import db, init_db
+from app.db import close_connection_pool, db, init_db
 from app.services.adapters.pan115 import SHARE_AVAILABLE, SHARE_UNAVAILABLE, SHARE_UNKNOWN
 from app.services.subscription.delivery.recheck import list_due_recheck_resources, recheck_pending_115_resources
 
@@ -30,6 +30,7 @@ class SubscriptionRecheckTest(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def _insert_recheck_resource(self, *, retry_count: int = 0, seconds_ago: int = 180) -> int:

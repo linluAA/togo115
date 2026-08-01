@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from app.config import settings
-from app.db import db, init_db, json_dumps, json_loads, utc_now
+from app.db import close_connection_pool, db, init_db, json_dumps, json_loads, utc_now
 from app.services.settings_store import export_backup, import_backup, list_settings, save_setting
 
 
@@ -21,6 +21,7 @@ class SettingsStoreTest(unittest.TestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def test_save_and_list_settings_round_trip_json_value(self) -> None:

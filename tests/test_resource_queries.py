@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from app.config import settings
-from app.db import db, init_db, utc_now
+from app.db import close_connection_pool, db, init_db, utc_now
 from app.services.resource_queries import clear_resources, delete_resources, list_recent_resources
 
 
@@ -21,6 +21,7 @@ class ResourceQueriesTest(unittest.TestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def _resource_ids(self) -> list[int]:

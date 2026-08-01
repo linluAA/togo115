@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.config import settings
-from app.db import init_db
+from app.db import close_connection_pool, init_db
 from app.services.sources.haisou.client import HaisouApiError, HaisouClient
 from app.services.sources.haisou.budget import reset_haisou_budget_for_tests
 from app.services.sources.haisou.config import haisou_enabled, haisou_settings, haisou_source_entry
@@ -30,6 +30,7 @@ class HaisouSourceTest(unittest.IsolatedAsyncioTestCase):
         reset_haisou_budget_for_tests()
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def test_mapper_keeps_only_115_and_appends_password(self) -> None:

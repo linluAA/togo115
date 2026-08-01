@@ -23,6 +23,7 @@ class MonitorService:
         self._last_index_prewarm = 0.0
         self._last_subscription_rescan = 0.0
         self._last_failed_retry = 0.0
+        self._last_db_maintenance = 0.0
         self._bot = TelegramBotAdapter()
 
     def start(self) -> None:
@@ -70,6 +71,9 @@ class MonitorService:
                 if now - self._last_emby_sync > 600:
                     schedule_emby_subscription_sync()
                     self._last_emby_sync = now
+                if now - self._last_db_maintenance > 86400:
+                    await self._maintain_database()
+                    self._last_db_maintenance = now
                 self._maybe_schedule_subscription_rescan(now)
             except Exception as exc:
                 add_log(
@@ -79,6 +83,40 @@ class MonitorService:
                     {"error": str(exc)},
                 )
             await asyncio.sleep(settings.monitor_interval_seconds)
+
+    async def _maintain_database(self) -> None:
+        """Daily WAL checkpoint; VACUUM only once the DB grows past a threshold.
+
+        VACUUM needs an exclusive lock, so it runs off the event loop and is
+        skipped entirely for small databases (low value, lock contention).
+        """
+        from app.db import db
+        from app.config import settings
+
+        try:
+            db_size = settings.database_path.stat().st_size if settings.database_path.exists() else 0
+            with db() as conn:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            if db_size > 50 * 1024 * 1024:
+
+                def vacuum() -> None:
+                    with db() as conn:
+                        conn.execute("VACUUM")
+
+                await asyncio.to_thread(vacuum)
+            add_log(
+                "debug",
+                "monitor",
+                "\u6570\u636e\u5e93\u7ef4\u62a4\u5b8c\u6210",
+                {"size_mb": round(db_size / 1048576, 1)},
+            )
+        except Exception as exc:
+            add_log(
+                "warning",
+                "monitor",
+                "\u6570\u636e\u5e93\u7ef4\u62a4\u5931\u8d25",
+                {"error": str(exc), "error_type": type(exc).__name__},
+            )
 
     def _maybe_schedule_subscription_rescan(self, now: float | None = None) -> dict | None:
         interval = int(getattr(settings, "subscription_rescan_interval_seconds", 0) or 0)

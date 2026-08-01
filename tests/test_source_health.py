@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from app.config import settings
-from app.db import init_db
+from app.db import close_connection_pool, init_db
 from app.services.source_stats import _source_stats_key, list_source_stats, record_source_fetch, source_health_status
 
 
@@ -21,6 +21,7 @@ class SourceHealthTest(unittest.TestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def test_source_degrades_after_recent_failure_margin(self) -> None:

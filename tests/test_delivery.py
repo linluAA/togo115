@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.config import settings
-from app.db import db, init_db, json_dumps, utc_now
+from app.db import close_connection_pool, db, init_db, json_dumps, utc_now
 from app.services.integrations import Pan115Adapter
 from app.services.subscription.delivery.service import deliver_resource
 
@@ -57,6 +57,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
+        close_connection_pool()
         self.temp_dir.cleanup()
 
     def _resource(self, url: str, delivery_mode: str = "115") -> int:

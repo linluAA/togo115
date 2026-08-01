@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 import qrcode
 
 from app.auth import current_user
-from app.db import init_db
+from app.db import close_connection_pool, init_db
 from app.routers import auth, integrations, media, settings, subscriptions, system
 from app.services.monitor import monitor_service
 
@@ -52,6 +52,7 @@ async def startup() -> None:
 @app.on_event("shutdown")
 async def shutdown() -> None:
     await monitor_service.stop()
+    close_connection_pool()
 
 
 @app.get("/")
@@ -68,7 +69,22 @@ async def index() -> HTMLResponse:
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"ok": True}
+    """Liveness plus lightweight multi-worker observability counters."""
+    from app.db import db
+    from app.services.jobs import worker_instance_id
+
+    try:
+        with db() as conn:
+            queued = conn.execute("SELECT COUNT(*) AS c FROM background_jobs WHERE status = 'queued'").fetchone()["c"]
+            running = conn.execute("SELECT COUNT(*) AS c FROM background_jobs WHERE status = 'running'").fetchone()["c"]
+    except Exception:
+        queued = -1
+        running = -1
+    return {
+        "ok": True,
+        "worker": worker_instance_id(),
+        "jobs": {"queued": int(queued or 0), "running": int(running or 0)},
+    }
 
 
 @app.get("/api/qr")
