@@ -52,10 +52,10 @@
     gap: 4px;
     padding: 6px;
     border: 1px solid var(--line);
-    border-radius: 18px;
-    background: rgba(8, 12, 14, .92);
+    border-radius: var(--radius);
+    background: rgba(24, 22, 19, .92);
     box-shadow: var(--shadow);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(18px);
   }
 
   .mobile-bottom-nav button {
@@ -71,27 +71,15 @@
     font-size: 11px;
   }
 
-  .mobile-bottom-nav button:hover {
-    transform: none;
-    box-shadow: none;
-  }
-
   .mobile-bottom-nav button.active {
-    color: var(--brand-soft);
-    background: rgba(242, 181, 61, .12);
+    color: var(--ink);
+    background: rgba(45, 212, 191, .13);
   }
 
   .mobile-bottom-nav .nav-icon {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     font-size: 10px;
-    border-radius: 9px;
-  }
-
-  .mobile-bottom-nav button.active .nav-icon {
-    color: #1a1205;
-    border-color: transparent;
-    background: var(--gold-grad);
   }
 
   .user-menu-panel {
@@ -136,18 +124,6 @@
     padding: 16px;
   }
 
-  .tmdb-hero {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
-    min-height: 0;
-    padding: 26px 20px;
-    border-radius: 18px;
-  }
-
-  .tmdb-hero h1 {
-    font-size: clamp(34px, 9vw, 46px);
-  }
-
   .hero-metrics {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -158,7 +134,7 @@
   .hero-metrics span {
     min-width: 0;
     justify-items: center;
-    padding: 10px 6px;
+    padding: 9px 6px;
     border-radius: 14px;
     text-align: center;
     font-size: 11px;
@@ -168,28 +144,9 @@
     font-size: 22px;
   }
 
-  .tmdb-hero-panel {
-    width: 100%;
-    border-radius: 16px;
-  }
-
   .tmdb-search {
     grid-template-columns: 1fr;
     width: 100%;
-  }
-
-  .tmdb-search input,
-  .tmdb-search button {
-    min-height: 46px;
-  }
-
-  .tmdb-board {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .tmdb-rank-panel {
-    position: static;
-    order: -1;
   }
 
   .media-grid {
@@ -224,10 +181,10 @@
   .emby-overview-panel {
     min-height: 0;
     padding: 16px;
-    border-radius: 18px;
+    border-radius: var(--radius);
     background:
-      linear-gradient(135deg, rgba(242, 181, 61, .08), rgba(242, 181, 61, .03)),
-      rgba(10, 14, 16, .72);
+      linear-gradient(135deg, rgba(45, 212, 191, .10), rgba(244, 182, 63, .05)),
+      rgba(18, 26, 29, .72);
   }
 
   .emby-overview-panel .eyebrow {
@@ -297,7 +254,7 @@
     position: relative;
     flex: 0 0 min(76vw, 280px);
     scroll-snap-align: start;
-    border-radius: 14px;
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, .045);
   }
 
@@ -315,29 +272,137 @@
     font-size: 13px;
   }
 
-  .emby-library-card .emby-library-meta p {
-    margin-top: 4px;
+  .emby-history-list {
+    gap: 8px;
+  }
+
+  .emby-history-item {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 64px;
+    padding: 8px;
+  }
+
+  .emby-history-item img,
+  .emby-history-thumb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .emby-history-item h3 {
+    font-size: 13px;
+  }
+
+  .emby-history-item p {
+    margin-top: 3px;
     font-size: 11px;
   }
 
-  .subscription-panel {
-    gap: 14px;
+  .emby-user-section .emby-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .emby-user-section .emby-card {
+    min-height: 48px;
+  }
+
+  .emby-user-section .emby-card > div:not(.emby-placeholder) {
+    padding: 10px;
+  }
+
+  .subscription-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .subscription-card {
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 126px;
+    padding: 10px;
+  }
+
+  .subscription-poster img {
+    min-height: 118px;
+  }
+
+  .subscription-info {
+    gap: 6px;
+  }
+
+  .subscription-title-row {
+    align-items: center;
+  }
+
+  .subscription-info h3 {
+    font-size: 15px;
+  }
+
+  .subscription-status-chip,
+  .subscription-badge,
+  .subscription-keywords span,
+  .subscription-rules span {
+    min-height: 22px;
+    padding: 3px 7px;
+    font-size: 11px;
+  }
+
+  .subscription-meta-row > span {
+    flex-basis: 100%;
+    font-size: 12px;
+  }
+
+  .subscription-card-actions {
+    gap: 6px;
+  }
+
+  .keyword-chip {
+    min-height: 26px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .subscription-health {
+    min-height: 34px;
+    padding: 6px 8px;
+  }
+
+  .subscription-health strong,
+  .subscription-health span {
+    font-size: 11px;
+  }
+
+  .filter-group select,
+  .control-group button,
+  .action-group button {
+    flex: 0 0 auto;
+  }
+
+  .subscription-control-grid .control-cell,
+  .subscription-controls .compact-tool {
+    flex: 0 0 auto;
   }
 
   .subscription-toolbar {
-    border-radius: 18px;
-    padding: 16px;
+    gap: 12px;
   }
 
   .subscription-toolbar h1 {
-    font-size: 34px;
+    font-size: 32px;
+  }
+
+  .subscription-toolbar p {
+    font-size: 12px;
   }
 
   .subscription-controls {
     width: 100%;
+    max-width: 100%;
     margin-left: 0;
+    align-items: stretch;
     padding: 8px;
-    border-radius: 14px;
+    border-color: rgba(255, 255, 255, .08);
   }
 
   .subscription-control-grid {
@@ -346,6 +411,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
+
+  
 
   .subscription-control-grid select.control-cell {
     min-width: 108px;
@@ -362,10 +429,6 @@
 
   .subscription-controls .danger.compact-tool {
     min-width: auto;
-  }
-
-  .subscription-grid {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .resource-list {
@@ -480,19 +543,19 @@
     border-width: 1px 0;
     border-radius: 0;
     scroll-padding-inline: 14px;
-    background: rgba(10, 14, 16, .92);
+    background: rgba(17, 16, 14, .92);
   }
 
   .settings-tabs button {
     min-height: 40px;
     padding: 8px 13px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     font-size: 13px;
     white-space: nowrap;
   }
 
   .settings-tabs button.active {
-    background: var(--gold-grad);
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
   }
 
   .settings-workbench {
@@ -604,5 +667,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .settings-tabs {
+    background: color-mix(in srgb, var(--surface-2) 92%, transparent);
   }
 }

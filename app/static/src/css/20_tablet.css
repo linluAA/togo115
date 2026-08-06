@@ -12,10 +12,4 @@
   .subscription-controls {
     margin-left: auto;
   }
-
-  .tmdb-hero {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
-    gap: 22px;
-    padding: 30px;
-  }
 }
