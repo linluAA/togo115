@@ -75,7 +75,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #060a0c;
+  background: var(--surface-3);
   box-shadow: var(--shadow-soft);
 }
 
@@ -84,12 +84,13 @@
   overflow: auto;
   padding: 10px;
   font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .log-line {
   display: block;
-  border-bottom: 1px solid rgba(255, 255, 255, .06);
+  border-bottom: 1px solid var(--line);
 }
 
 .log-line summary {
@@ -109,7 +110,7 @@
 }
 
 .log-line[open] summary {
-  background: rgba(255, 255, 255, .03);
+  background: rgba(255, 255, 255, .04);
 }
 
 .log-payload {
@@ -118,17 +119,17 @@
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #d8e2dc;
-  background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 12px;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   padding: 10px 12px;
 }
 
 .log-line .line-no,
 .log-line .time,
 .log-line .scope {
-  color: #776f64;
+  color: var(--muted);
 }
 
 .log-line .level {
