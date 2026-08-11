@@ -10,9 +10,8 @@ from app.services.adapters.pan115_share_status import (
 )
 from app.services.adapters.pan115_state import add_log
 from app.services.sources.haisou.budget import (
-    allow_haisou_validate,
+    acquire_haisou_validate_slot,
     get_cached_haisou_validate,
-    note_haisou_validate,
     set_cached_haisou_validate,
     validate_cache_key,
 )
@@ -72,7 +71,7 @@ async def try_haisou_share_fallback(
     cached = get_cached_haisou_validate(cache_key)
     if isinstance(cached, ShareAvailability):
         return cached
-    if not allow_haisou_validate():
+    if not acquire_haisou_validate_slot():
         add_log(
             "warning",
             "115",
@@ -82,7 +81,6 @@ async def try_haisou_share_fallback(
         return None
 
     try:
-        note_haisou_validate()
         result = await HaisouClient().validate(clean_link, pwd=receive_code)
     except HaisouApiError as exc:
         add_log(

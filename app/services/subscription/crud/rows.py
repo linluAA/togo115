@@ -9,8 +9,23 @@ from app.services.subscription.match.matching import normalize_quality_rules, su
 SUBSCRIPTION_LIST_CACHE_TTL = 12.0
 _subscription_list_cache: dict[bool, tuple[float, list[dict]]] = {}
 
+# Minimise repeated JSON parsing on the same DB row in hot paths (search loop).
+_normalized_cache: dict[int, tuple[float, dict]] = {}
+_NORMALIZED_CACHE_TTL = 30.0
+_NORMALIZED_CACHE_MAX = 256
+
 
 def normalize_subscription(row) -> dict:
+    row_id = int(getattr(row, "id", 0) or 0)
+    if row_id:
+        now = time.monotonic()
+        cached = _normalized_cache.get(row_id)
+        if cached:
+            expires_at, item = cached
+            if expires_at > now:
+                return dict(item)
+            _normalized_cache.pop(row_id, None)
+
     item = row_to_dict(row) or {}
     item["keywords"] = json_loads(item.get("keywords"), [])
     item["quality_rules"] = normalize_quality_rules(json_loads(item.get("quality_rules"), {}))
@@ -19,6 +34,12 @@ def normalize_subscription(row) -> dict:
     item["emby_episode_keys"] = json_loads(item.get("emby_episode_keys"), [])
     if item.get("release_year") is None:
         item["release_year"] = subscription_release_year(item)
+
+    if row_id:
+        now = time.monotonic()
+        if len(_normalized_cache) >= _NORMALIZED_CACHE_MAX:
+            _normalized_cache.pop(next(iter(_normalized_cache)), None)
+        _normalized_cache[row_id] = (now + _NORMALIZED_CACHE_TTL, dict(item))
     return item
 
 

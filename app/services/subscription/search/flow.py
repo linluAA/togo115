@@ -118,7 +118,7 @@ def _telegram_should_skip_full_after_fast(summary: dict[str, Any], subscription:
     available = int(summary.get("available_matched") or 0)
     duplicates = int(summary.get("duplicates") or 0)
     raw_matched = int(summary.get("raw_matched") or 0)
-    pure_duplicates = (raw_matched > 0 and duplicates >= raw_matched) or (
+    pure_duplicates = (raw_matched > 0 and available > 0 and duplicates >= raw_matched) or (
         available > 0 and duplicates >= available and int(summary.get("created") or 0) == 0
     )
     if not pure_duplicates:
@@ -137,7 +137,18 @@ def _subscription_has_missing_episodes(subscription: dict | None) -> bool:
         from app.services.subscription.episode.parser import missing_episode_keys
 
         return bool(missing_episode_keys(subscription))
-    except Exception:
+    except Exception as exc:
+        add_log(
+            "warning",
+            "subscription",
+            "缺失剧集检测异常，默认继续搜索",
+            {
+                "id": subscription.get("id"),
+                "title": str(subscription.get("title", ""))[:80],
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            },
+        )
         # Fail open: prefer another search pass over silently missing new packs.
         return True
 
@@ -202,7 +213,15 @@ def _telegram_should_skip_fallback(summary: dict[str, Any], subscription: dict |
 
 async def _search_fallback_when_needed(subscription: dict, deliver_func=None) -> list[dict]:
     search_title = subscription_search_title(subscription)
-    fallback_groups = await search_fallback_sources(None, subscription, search_title)
+    fallback_groups, fallback_status = await search_fallback_sources(None, subscription, search_title)
+    if fallback_status == "timeout":
+        add_log("warning", "subscription", "订阅源/磁力搜索超时，跳过此次兜底",
+            {"id": subscription["id"], "title": subscription.get("title")})
+        return []
+    if fallback_status == "error":
+        add_log("warning", "subscription", "订阅源/磁力搜索异常，跳过此次兜底",
+            {"id": subscription["id"], "title": subscription.get("title")})
+        return []
     fallback_total, fallback_matches = match_fallback_groups(None, subscription, fallback_groups)
     if deliver_func is None:
         fallback_created = attach_first_fallback_result(None, subscription, fallback_matches)

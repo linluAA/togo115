@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1,viewport-fit=cover"/>
+<title>ToGo115 · Netflix 经典风格原型</title>
+<style>
+  :root{
+    --bg:#000;--bg2:#0c0c0f;--surface:#16161c;--line:rgba(255,255,255,.08);
+    --text:#fff;--muted:#a3a3ad;--faint:#6e6e78;
+    --red:#e50914;--red2:#ff2a36;
+    --font:"Inter","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}
+  body{overflow-x:hidden}
+  ::selection{background:var(--red);color:#fff}
+  a{color:inherit;text-decoration:none}
+
+  /* nav */
+  .nav{position:fixed;inset:0 0 auto 0;z-index:60;display:flex;align-items:center;gap:30px;padding:13px 44px;
+    background:linear-gradient(180deg,rgba(0,0,0,.92),rgba(0,0,0,0));transition:.3s}
+  .nav.solid{background:rgba(0,0,0,.96);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:19px;letter-spacing:.5px}
+  .brand .d{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 12px var(--red)}
+  .links{display:flex;gap:22px;font-size:14px;font-weight:500;color:var(--muted)}
+  .links a{transition:color .2s;cursor:pointer}
+  .links a:hover,.links a.active{color:#fff}
+  .nr{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);border:1px solid var(--line);
+    background:rgba(255,255,255,.04);padding:6px 12px;border-radius:999px}
+  .status .p{width:7px;height:7px;border-radius:50%;background:#3ddc84;box-shadow:0 0 8px #3ddc84}
+  .ib{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.05);
+    border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .ib:hover{color:#fff;background:rgba(255,255,255,.1)}
+  .av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3a3a45,#1a1a20);
+    border:1px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:13px}
+
+  .view{display:none;padding:104px 44px 80px}
+  .view.on{display:block}
+
+  /* hero */
+  .hero{position:relative;height:74vh;min-height:520px;display:flex;align-items:flex-end;padding:0 44px 60px;overflow:hidden;border-radius:14px}
+  .hero .bg{position:absolute;inset:0;background-size:cover;background-position:center 20%;transform:scale(1.04)}
+  .hero .bg::after{content:"";position:absolute;inset:0;background:
+    linear-gradient(90deg,rgba(0,0,0,.95) 0%,rgba(0,0,0,.6) 40%,rgba(0,0,0,.1) 78%),
+    linear-gradient(0deg,#000,rgba(0,0,0,0) 45%)}
+  .hero .in{position:relative;z-index:2;max-width:600px}
+  .tag{display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;
+    font-weight:700;background:var(--red);color:#fff;padding:5px 12px;border-radius:4px;margin-bottom:16px}
+  .hero h1{font-size:clamp(36px,5vw,60px);line-height:1.02;font-weight:800;letter-spacing:-1px;margin-bottom:14px;text-shadow:0 4px 30px rgba(0,0,0,.6)}
+  .hero .meta{display:flex;gap:12px;align-items:center;color:#d6d6dc;font-size:14px;margin-bottom:14px;flex-wrap:wrap}
+  .hero .meta .bd{border:1px solid var(--line);padding:2px 8px;border-radius:4px;font-size:12px}
+  .hero .sep{width:4px;height:4px;border-radius:50%;background:var(--faint)}
+  .hero p{color:#c8c8d0;font-size:15px;line-height:1.6;max-width:530px;margin-bottom:24px}
+  .acts{display:flex;gap:12px}
+  .btn{display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:700;border:none;cursor:pointer;border-radius:6px;padding:12px 24px}
+  .btn-p{background:#fff;color:#000}
+  .btn-p:hover{filter:brightness(.88)}
+  .btn-i{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.28)}
+  .btn-i:hover{background:rgba(255,255,255,.26)}
+  .hero .pg{margin-top:22px;max-width:300px}
+  .hero .pg .bar{height:4px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
+  .hero .pg .bar i{display:block;height:100%;width:64%;background:var(--red)}
+  .hero .pg span{display:block;font-size:12px;color:var(--muted);margin-top:8px}
+
+  /* rows */
+  .rows{margin-top:42px}
+  .row{margin-bottom:40px}
+  .rh{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .rh h2{font-size:21px;font-weight:700}
+  .rh .more{margin-left:auto;font-size:13px;color:var(--muted);cursor:pointer}
+  .rh .more:hover{color:#fff}
+  .sc{position:relative}
+  .track{display:flex;gap:14px;overflow-x:auto;scroll-behavior:smooth;padding:8px 2px 14px;scrollbar-width:none}
+  .track::-webkit-scrollbar{display:none}
+  .arrow{position:absolute;top:0;bottom:14px;width:46px;display:grid;place-items:center;background:rgba(0,0,0,.7);
+    color:#fff;font-size:22px;cursor:pointer;z-index:5;opacity:0;transition:.2s}
+  .arrow.l{left:0;border-radius:0 8px 8px 0}
+  .arrow.r{right:0;border-radius:8px 0 0 8px}
+  .sc:hover .arrow{opacity:1}
+  .card{flex:0 0 auto;width:170px;cursor:pointer}
+  .card .img{position:relative;width:100%;aspect-ratio:2/3;border-radius:8px;overflow:hidden;background:var(--surface);
+    box-shadow:0 14px 30px rgba(0,0,0,.5);transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+  .card .img img{width:100%;height:100%;object-fit:cover;display:block}
+  .card:hover .img{transform:scale(1.07)}
+  .card .img::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.85),rgba(0,0,0,0) 55%);opacity:0;transition:.25s}
+  .card:hover .img::after{opacity:1}
+  .card .cap{position:absolute;left:0;right:0;bottom:0;padding:12px;opacity:0;transform:translateY(6px);transition:.25s;z-index:2}
+  .card:hover .cap{opacity:1;transform:none}
+  .card .cap .t{font-size:13px;font-weight:700;line-height:1.25;margin-bottom:4px}
+  .card .cap .s{font-size:11px;color:#ccc}
+  .card .name{margin-top:9px;font-size:13px;font-weight:600;color:#ececed;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .sub{font-size:11px;color:var(--faint);margin-top:2px}
+  .card .pg{height:3px;border-radius:99px;background:rgba(255,255,255,.16);margin-top:7px;overflow:hidden}
+  .card .pg i{display:block;height:100%;background:var(--red)}
+  .live{position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.5px;background:var(--red);color:#fff;padding:3px 7px;border-radius:4px;z-index:3}
+  .done{position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;background:rgba(61,220,132,.92);color:#04130a;padding:3px 7px;border-radius:4px;z-index:3}
+
+  /* page head */
+  .ph{display:flex;align-items:center;gap:14px;margin-bottom:24px;flex-wrap:wrap}
+  .ph h1{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:13px;font-weight:600;color:var(--muted);border:1px solid var(--line);background:rgba(255,255,255,.03);
+    padding:7px 14px;border-radius:999px;cursor:pointer;transition:.2s}
+  .chip:hover{color:#fff}
+  .chip.on{background:var(--red);color:#fff;border-color:var(--red)}
+  .search{flex:1;min-width:200px;max-width:320px;margin-left:auto;display:flex;align-items:center;gap:8px;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:999px;padding:8px 14px}
+  .search input{flex:1;background:none;border:none;outline:none;color:#fff;font-size:14px}
+  .search input::placeholder{color:var(--faint)}
+
+  /* grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:18px}
+  .gcard{cursor:pointer}
+  .gcard .img{position:relative;aspect-ratio:2/3;border-radius:8px;overflow:hidden;background:var(--surface);box-shadow:0 12px 26px rgba(0,0,0,.5);transition:transform .25s}
+  .gcard:hover .img{transform:scale(1.04)}
+  .gcard .img img{width:100%;height:100%;object-fit:cover}
+  .gcard .name{margin-top:9px;font-size:14px;font-weight:600;color:#ececed}
+  .gcard .sub{font-size:12px;color:var(--faint);margin-top:2px}
+  .badge{position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;padding:3px 7px;border-radius:4px;z-index:3}
+  .b-live{background:var(--red);color:#fff}
+  .b-done{background:rgba(61,220,132,.92);color:#04130a}
+  .b-4k{background:rgba(0,0,0,.7);color:#fff;border:1px solid var(--line)}
+
+  /* sub card (wide) */
+  .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+  .sub{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);transition:.25s;cursor:pointer}
+  .sub:hover{border-color:rgba(255,255,255,.22);transform:translateY(-3px)}
+  .sub .cov{height:120px;background-size:cover;background-position:center;position:relative}
+  .sub .cov::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(22,22,28,1),rgba(22,22,28,0) 70%)}
+  .sub .body{position:relative;padding:14px 16px 16px;margin-top:-26px}
+  .sub .nm{font-size:16px;font-weight:700}
+  .sub .ds{font-size:12px;color:var(--muted);margin-top:3px}
+  .sub .stat{display:flex;gap:14px;margin-top:13px;font-size:12px;color:var(--muted)}
+  .sub .stat b{color:#fff;font-size:15px;font-weight:700;display:block}
+  .sub .foot{display:flex;align-items:center;gap:8px;margin-top:13px;font-size:12px}
+  .pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .pill.on{background:rgba(61,220,132,.15);color:#5fe39b}
+  .pill.off{background:rgba(255,255,255,.07);color:var(--muted)}
+  .pill.mon{background:rgba(229,9,20,.16);color:#ff6b74}
+
+  /* activity timeline */
+  .tl{max-width:760px;margin-top:6px}
+  .ev{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .ev .ic{width:38px;height:38px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:16px;border:1px solid var(--line)}
+  .ic.ok{background:rgba(61,220,132,.12);color:#5fe39b}
+  .ic.mon{background:rgba(229,9,20,.14);color:#ff6b74}
+  .ic.info{background:rgba(255,255,255,.06);color:#cfcfd6}
+  .ev .c{flex:1}
+  .ev .c .t{font-size:14px;font-weight:600}
+  .ev .c .t b{color:#fff}
+  .ev .c .d{font-size:12px;color:var(--faint);margin-top:3px}
+  .ev .time{font-size:12px;color:var(--faint);white-space:nowrap}
+
+  .foot{margin-top:50px;padding-top:24px;border-top:1px solid var(--line);color:var(--faint);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  @media(max-width:760px){.nav,.view,.hero{padding-left:18px;padding-right:18px}.links{display:none}.grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}}
+</style>
+</head>
+<body>
+<nav class="nav" id="nav">
+  <div class="brand"><span class="d"></span>ToGo115</div>
+  <div class="links">
+    <a data-v="home" class="active">首页</a>
+    <a data-v="sub">订阅</a>
+    <a data-v="lib">资源库</a>
+    <a data-v="act">活动</a>
+  </div>
+  <div class="nr">
+    <div class="status"><span class="p"></span>115 · Emby · TG 已连接</div>
+    <div class="ib" title="搜索">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    </div>
+    <div class="av">Y</div>
+  </div>
+</nav>
+
+<!-- HOME -->
+<section class="view on" id="view-home">
+  <header class="hero">
+    <div class="bg" id="heroBg"></div>
+    <div class="in">
+      <span class="tag">★ 正在追更</span>
+      <h1>沙丘：第二部</h1>
+      <div class="meta"><span class="bd">4K HDR</span><span>2024</span><span class="sep"></span><span>科幻 / 剧情</span><span class="sep"></span><span>已转存 1.2 TB</span></div>
+      <p>保罗·厄崔迪联合契妮与弗雷曼人，向毁灭其家族的阴谋者展开复仇。本季由 3 个订阅源自动匹配并转存至 115 网盘。</p>
+      <div class="acts">
+        <button class="btn btn-p"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>继续转存</button>
+        <button class="btn btn-i">查看详情</button>
+      </div>
+      <div class="pg"><div class="bar"><i></i></div><span>本季已收录 8 / 12 集 · 剩余 4 集监控中</span></div>
+    </div>
+  </header>
+  <div class="rows" id="homeRows"></div>
+</section>
+
+<!-- SUBSCRIPTIONS -->
+<section class="view" id="view-sub">
+  <div class="ph">
+    <h1>订阅管理</h1>
+    <div class="chips" id="subChips">
+      <span class="chip on">全部</span><span class="chip">监控中</span><span class="chip">已暂停</span><span class="chip">自动匹配</span>
+    </div>
+  </div>
+  <div class="sgrid" id="subGrid"></div>
+</section>
+
+<!-- LIBRARY -->
+<section class="view" id="view-lib">
+  <div class="ph">
+    <h1>资源库</h1>
+    <div class="chips" id="libChips">
+      <span class="chip on">全部</span><span class="chip">电影</span><span class="chip">剧集</span><span class="chip">动漫</span><span class="chip">4K</span>
+    </div>
+    <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input placeholder="搜索资源…"/></div>
+  </div>
+  <div class="grid" id="libGrid"></div>
+</section>
+
+<!-- ACTIVITY -->
+<section class="view" id="view-act">
+  <div class="ph"><h1>活动日志</h1>
+    <div class="chips"><span class="chip on">全部</span><span class="chip">转存成功</span><span class="chip">监控中</span><span class="chip">失败</span></div>
+  </div>
+  <div class="tl" id="actList"></div>
+</section>
+
+<footer class="foot">
+  <div>ToGo115 · 115 网盘资源订阅系统 · Netflix 经典风格原型</div>
+  <div>纯前端预览 · 占位图来自 picsum.photos（需联网）· 未改动项目代码</div>
+</footer>
+
+<script>
+const P=s=>`https://picsum.photos/seed/${s}/`;
+
+// ---- home rows ----
+const rows=[
+ {h:"继续追更",items:[
+   {s:"dune2",n:"沙丘：第二部",x:"已收 8/12 集",p:64,live:false},
+   {s:"fallout",n:"辐射",x:"已收 5/8 集",p:62,live:false},
+   {s:"shogun",n:"幕府将军",x:"已收 10/10 集",p:100,live:false,done:true},
+   {s:"3body",n:"三体",x:"已收 12/30 集",p:40,live:true},
+   {s:"thebear",n:"熊家餐馆 S3",x:"已收 3/10 集",p:30,live:true},
+   {s:"monkey",n:"黑神话 OVA",x:"已收 1/4 集",p:25,live:true},
+   {s:"silocity",n:"银翼杀手 2099",x:"监控中",p:0,live:true},
+ ]},
+ {h:"最近新增资源",items:[
+   {s:"oppen",n:"奥本海默",x:"4K · 27.1 GB"},{s:"f1",n:"F1：狂飙飞车",x:"4K · 31.6 GB"},
+   {s:"kungfu",n:"功夫熊猫4",x:"1080p · 3.9 GB"},{s:"godz",n:"哥斯拉大战金刚2",x:"4K · 24.0 GB"},
+   {s:"wicked",n:"魔法坏女巫",x:"4K · 22.8 GB"},{s:"venom",n:"毒液：最后一舞",x:"1080p · 5.1 GB"},
+   {s:"past",n:"意大利制造",x:"1080p · 4.3 GB"},
+ ]},
+ {h:"我的订阅",items:[
+   {s:"sd",n:"沙丘 系列",x:"3 来源 · 自动"},{s:"mv",n:"漫威新片",x:"5 来源 · 自动"},
+   {s:"dc",n:"DC 宇宙",x:"2 来源 · 自动"},{s:"an",n:"新番动漫",x:"TG · 自动"},
+   {s:"dc2",n:"高分纪录片",x:"RSS · 自动"},{s:"hk",n:"港剧经典",x:"海搜 · 手动"},
+   {s:"cc",n:"演唱会 4K",x:"TG · 自动"},
+ ]},
+ {h:"热门影视",items:[
+   {s:"h1",n:"沙丘",x:"9.0 分"},{s:"h2",n:"奥本海默",x:"8.9 分"},{s:"h3",n:"坠落的审判",x:"8.5 分"},
+   {s:"h4",n:"完美的日子",x:"8.6 分"},{s:"h5",n:"利益区域",x:"8.4 分"},{s:"h6",n:"可怜的东西",x:"7.9 分"},
+   {s:"h7",n:"周处除三害",x:"8.2 分"},{s:"h8",n:"泳者之心",x:"8.1 分"},
+ ]},
+];
+const home=document.getElementById('homeRows');
+rows.forEach(r=>{
+  const sec=document.createElement('section');sec.className='row';
+  sec.innerHTML=`<div class="rh"><h2>${r.h}</h2><span class="more">查看全部 ›</span></div>`;
+  const sc=document.createElement('div');sc.className='sc';
+  const tr=document.createElement('div');tr.className='track';
+  r.items.forEach(it=>{
+    const c=document.createElement('div');c.className='card';
+    const badge=it.done?`<span class="done">已完结</span>`:it.live?`<span class="live">监控中</span>`:'';
+    c.innerHTML=`<div class="img">${badge}<img loading="lazy" src="${P(it.s)}340/510" alt="${it.n}">
+      <div class="cap"><div class="t">${it.n}</div><div class="s">${it.x}</div></div></div>
+      <div class="name">${it.n}</div>${it.p>0?`<div class="sub">${it.x}</div><div class="pg"><i style="width:${it.p}%"></i></div>`:`<div class="sub">${it.x}</div>`}`;
+    tr.appendChild(c);
+  });
+  const L=document.createElement('div');L.className='arrow l';L.textContent='‹';
+  const R=document.createElement('div');R.className='arrow r';R.textContent='›';
+  L.onclick=()=>tr.scrollBy({left:-tr.clientWidth*.8,behavior:'smooth'});
+  R.onclick=()=>tr.scrollBy({left:tr.clientWidth*.8,behavior:'smooth'});
+  sc.append(tr,L,R);sec.appendChild(sc);home.appendChild(sec);
+});
+document.getElementById('heroBg').style.backgroundImage=`url('${P('dunehero')}1600/900')`;
+
+// ---- subscriptions ----
+const subs=[
+  {s:"sd",n:"沙丘 系列",d:"电影 / 剧集 · 3 个来源",src:3,items:18,st:"mon",sl:"监控中"},
+  {s:"mv",n:"漫威新片",d:"电影 · 5 个来源",src:5,items:42,st:"on",sl:"启用"},
+  {s:"dc",n:"DC 宇宙",d:"电影 · 2 个来源",src:2,items:26,st:"on",sl:"启用"},
+  {s:"an",n:"新番动漫",d:"TG 频道 · 自动",src:4,items:113,st:"mon",sl:"监控中"},
+  {s:"dc2",n:"高分纪录片",d:"RSS · 自动",src:2,items:31,st:"on",sl:"启用"},
+  {s:"hk",n:"港剧经典",d:"海搜 · 手动",src:1,items:9,st:"off",sl:"已暂停"},
+  {s:"cc",n:"演唱会 4K",d:"TG · 自动",src:3,items:14,st:"on",sl:"启用"},
+  {s:"gv",n:"游戏录像",d:"RSS · 自动",src:2,items:7,st:"off",sl:"已暂停"},
+];
+const subGrid=document.getElementById('subGrid');
+subs.forEach(x=>{
+  const d=document.createElement('div');d.className='sub';
+  const pill=x.st==='mon'?`<span class="pill mon">${x.sl}</span>`:x.st==='on'?`<span class="pill on">${x.sl}</span>`:`<span class="pill off">${x.sl}</span>`;
+  d.innerHTML=`<div class="cov" style="background-image:url('${P(x.s)}500/220')"></div>
+    <div class="body"><div class="nm">${x.n}</div><div class="ds">${x.d}</div>
+    <div class="stat"><div><b>${x.src}</b>来源</div><div><b>${x.items}</b>资源</div></div>
+    <div class="foot">${pill}<span style="color:var(--muted);margin-left:auto;font-size:12px">管理 ›</span></div></div>`;
+  subGrid.appendChild(d);
+});
+
+// ---- library ----
+const libs=[
+  {s:"oppen",n:"奥本海默",x:"4K · 27.1 GB",b:"4k"},{s:"f1",n:"F1：狂飙飞车",x:"4K · 31.6 GB",b:"4k"},
+  {s:"kungfu",n:"功夫熊猫4",x:"1080p · 3.9 GB"},{s:"godz",n:"哥斯拉大战金刚2",x:"4K · 24.0 GB",b:"4k"},
+  {s:"wicked",n:"魔法坏女巫",x:"4K · 22.8 GB",b:"4k"},{s:"venom",n:"毒液：最后一舞",x:"1080p · 5.1 GB"},
+  {s:"past",n:"意大利制造",x:"1080p · 4.3 GB"},{s:"dune2",n:"沙丘：第二部",x:"4K · 38.0 GB",b:"4k"},
+  {s:"fallout",n:"辐射 S1",x:"1080p · 52 GB"},{s:"shogun",n:"幕府将军",x:"4K · 61 GB",b:"4k"},
+  {s:"3body",n:"三体",x:"1080p · 88 GB"},{s:"thebear",n:"熊家餐馆 S3",x:"1080p · 24 GB"},
+  {s:"monkey",n:"黑神话 OVA",x:"4K · 12 GB",b:"4k"},{s:"silocity",n:"银翼杀手 2099",x:"监控中",b:"live"},
+  {s:"h1",n:"沙丘",x:"4K · 29 GB",b:"4k"},{s:"h3",n:"坠落的审判",x:"1080p · 8 GB"},
+];
+const libGrid=document.getElementById('libGrid');
+libs.forEach(x=>{
+  const d=document.createElement('div');d.className='gcard';
+  const badge=x.b==='4k'?`<span class="badge b-4k">4K</span>`:x.b==='live'?`<span class="badge b-live">监控中</span>`:'';
+  d.innerHTML=`<div class="img">${badge}<img loading="lazy" src="${P(x.s)}300/450" alt="${x.n}"></div>
+    <div class="name">${x.n}</div><div class="sub">${x.x}</div>`;
+  libGrid.appendChild(d);
+});
+
+// ---- activity ----
+const acts=[
+  {ic:"ok",t:"<b>奥本海默</b> 转存成功",d:"来自订阅「漫威/高分电影」· 27.1 GB · 已同步 Emby",tm:"2 分钟前"},
+  {ic:"mon",t:"开始监控 <b>银翼杀手 2099</b>",d:"订阅「科幻新剧」· 等待 6 集中资源出现",tm:"12 分钟前"},
+  {ic:"ok",t:"<b>功夫熊猫4</b> 转存成功",d:"来自海搜匹配 · 3.9 GB",tm:"34 分钟前"},
+  {ic:"info",t:"Telegram 连接器已重连",d:"频道 @MovieRss 同步完成 · 142 条新消息",tm:"1 小时前"},
+  {ic:"ok",t:"<b>沙丘：第二部</b> 新增 2 集",d:"第 9-10 集已转存 · 本季进度 8/12",tm:"2 小时前"},
+  {ic:"mon",t:"<b>三体</b> 匹配到候选资源",d:"等待去重确认 · 来源 TG + 海搜",tm:"3 小时前"},
+  {ic:"info",t:"每日维护完成",d:"数据库压缩 · 清理 38 条无效记录",tm:"今日 04:00"},
+  {ic:"ok",t:"<b>哥斯拉大战金刚2</b> 转存成功",d:"来自订阅「怪兽宇宙」· 24.0 GB",tm:"昨天 21:14"},
+];
+const actList=document.getElementById('actList');
+acts.forEach(a=>{
+  const d=document.createElement('div');d.className='ev';
+  const icn=a.ic==='ok'?'✓':a.ic==='mon'?'●':'i';
+  d.innerHTML=`<div class="ic ${a.ic}">${icn}</div><div class="c"><div class="t">${a.t}</div><div class="d">${a.d}</div></div><div class="time">${a.tm}</div>`;
+  actList.appendChild(d);
+});
+
+// ---- nav ----
+const nav=document.getElementById('nav');
+addEventListener('scroll',()=>nav.classList.toggle('solid',scrollY>40));
+document.querySelectorAll('.links a').forEach(a=>a.onclick=()=>{
+  document.querySelectorAll('.links a').forEach(x=>x.classList.remove('active'));a.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById('view-'+a.dataset.v).classList.add('on');
+  scrollTo({top:0,behavior:'instant'});
+});
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
+  const grp=c.parentElement;grp.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');
+});
+</script>
+</body>
+</html>

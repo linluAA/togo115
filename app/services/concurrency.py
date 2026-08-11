@@ -60,11 +60,10 @@ def desired_telegram_dialog_concurrency() -> int:
 def search_semaphore() -> asyncio.Semaphore:
     """Return process/loop-local semaphore, refreshing limit when pressure changes.
 
-    asyncio.Semaphore cannot shrink in-flight holders, so when the desired limit
-    decreases we only create a tighter ceiling for new acquirers after all current
-    holders release the previous instance. When pressure eases we rebuild with a
-    higher limit on the next call after the previous object is idle enough, or
-    immediately when nobody holds it.
+    When the desired limit decreases we immediately shrink the semaphore's _value
+    so new acquirers see the tighter ceiling.  In-flight holders are unaffected
+    but the burst window is capped at the number of already-acquired permits
+    rather than the old limit.
     """
     global subscription_search_semaphore, subscription_search_semaphore_loop, subscription_search_semaphore_limit
     loop = asyncio.get_running_loop()
@@ -75,6 +74,17 @@ def search_semaphore() -> asyncio.Semaphore:
         or subscription_search_semaphore_limit != desired
     ):
         current = subscription_search_semaphore
+        # When pressure rises (desired < limit), shrink the existing semaphore
+        # immediately rather than waiting for all in-flight holders to drain.
+        if (
+            current is not None
+            and subscription_search_semaphore_loop is loop
+            and desired < subscription_search_semaphore_limit
+        ):
+            current._value = min(current._value, desired)
+            subscription_search_semaphore_limit = desired
+            return current
+        # When pressure eases (desired > limit), rebuild with a higher limit.
         if (
             current is not None
             and subscription_search_semaphore_loop is loop
@@ -99,6 +109,15 @@ def telegram_dialog_search_semaphore() -> asyncio.Semaphore:
         or telegram_dialog_semaphore_limit != desired
     ):
         current = telegram_dialog_semaphore
+        # Shrink immediately when pressure rises.
+        if (
+            current is not None
+            and telegram_dialog_semaphore_loop is loop
+            and desired < telegram_dialog_semaphore_limit
+        ):
+            current._value = min(current._value, desired)
+            telegram_dialog_semaphore_limit = desired
+            return current
         if (
             current is not None
             and telegram_dialog_semaphore_loop is loop
@@ -112,16 +131,31 @@ def telegram_dialog_search_semaphore() -> asyncio.Semaphore:
     return telegram_dialog_semaphore
 
 
+# Cap on lock dictionaries: once exceeded, stale entries are evicted.
+_MAX_LOCKS = 256
+
+
+def _evict_stale_locks(locks: dict, max_size: int = _MAX_LOCKS) -> None:
+    """Remove locks that are not held (no current waiters) when the dict is too large."""
+    if len(locks) <= max_size:
+        return
+    stale = [key for key, lock in locks.items() if not lock.locked()]
+    for key in stale:
+        locks.pop(key, None)
+
+
 def subscription_lock(subscription_id: int) -> asyncio.Lock:
     global subscription_locks, subscription_locks_loop
     loop = asyncio.get_running_loop()
     if subscription_locks_loop is not loop:
         subscription_locks = {}
         subscription_locks_loop = loop
-    lock = subscription_locks.get(int(subscription_id))
+    _evict_stale_locks(subscription_locks)
+    sid = int(subscription_id)
+    lock = subscription_locks.get(sid)
     if lock is None:
         lock = asyncio.Lock()
-        subscription_locks[int(subscription_id)] = lock
+        subscription_locks[sid] = lock
     return lock
 
 
@@ -132,6 +166,7 @@ def telegram_source_lock(source: str) -> asyncio.Lock:
     if telegram_source_locks_loop is not loop:
         telegram_source_locks = {}
         telegram_source_locks_loop = loop
+    _evict_stale_locks(telegram_source_locks)
     key = str(source or "").strip() or "_unknown_"
     lock = telegram_source_locks.get(key)
     if lock is None:

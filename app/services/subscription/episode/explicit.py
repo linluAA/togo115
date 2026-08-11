@@ -86,17 +86,25 @@ def _episode_counts_from_pack_text(text: str | None) -> set[int]:
 def episodes_from_text(text: str) -> set[tuple[int, int]]:
     text = _episode_parse_text(text)
     episodes: set[tuple[int, int]] = set()
-    episodes.update(_episodes_from_native_update_text(text))
+    # Fast path: scan for "update to" / "更新至" patterns first (most common for TV).
     episodes.update(_episodes_from_update_text(text))
     if episodes:
         return episodes
+    # Season+episode patterns (e.g. "S01E02", "第1季第2集").
     episodes.update(_episodes_from_cn_season_text(text))
-    episodes.update(_episodes_from_native_cn_season_text(text))
+    if episodes:
+        return episodes
+    # Dotted patterns (e.g. "1.02", "S01.02").
     episodes.update(_episodes_from_dotted_episode_text(text))
+    if episodes:
+        return episodes
+    # Token-based patterns (e.g. "EP02").
     episodes.update(_episodes_from_token_text(text))
     if not episodes:
+        # Plain ranges (e.g. "01-12") as last resort.
         episodes.update(_episodes_from_plain_ranges(text))
     if not episodes:
+        # Native Chinese episode-only patterns (e.g. "第2集").
         episodes.update(_episodes_from_native_cn_episode_text(text))
     return episodes
 
@@ -118,6 +126,7 @@ def _episodes_from_dotted_episode_text(text: str) -> set[tuple[int, int]]:
 
 def _episodes_from_cn_season_text(text: str) -> set[tuple[int, int]]:
     episodes: set[tuple[int, int]] = set()
+    # Latin patterns (e.g. "S01E02", "第1季第2集" in mixed text).
     for match in CN_SEASON_EPISODE_RE.finditer(text or ""):
         season = _number_token_to_int(match.group("season"))
         start = _number_token_to_int(match.group("episode"))
@@ -125,12 +134,9 @@ def _episodes_from_cn_season_text(text: str) -> set[tuple[int, int]]:
         end = _number_token_to_int(end_value) if end_value else start
         if season and start:
             episodes.update(_expand_episode_range(season, start, end))
-    return episodes
-
-
-
-def _episodes_from_native_cn_season_text(text: str) -> set[tuple[int, int]]:
-    episodes: set[tuple[int, int]] = set()
+    if episodes:
+        return episodes
+    # Native Chinese patterns (e.g. "第1季第2集").
     for match in CN_SEASON_EPISODE_NATIVE_RE.finditer(text or ""):
         season = _number_token_to_int(match.group("season"))
         start = _number_token_to_int(match.group("episode"))
@@ -167,7 +173,14 @@ def _episodes_from_plain_ranges(text: str) -> set[tuple[int, int]]:
 
 def _episodes_from_update_text(text: str) -> set[tuple[int, int]]:
     episodes: set[tuple[int, int]] = set()
+    # English patterns (e.g. "updated to episode 10").
     for match in UPDATE_TO_EPISODE_RE.finditer(text or ""):
+        token = match.groupdict().get("episode") or match.groupdict().get("episode_colon")
+        episode = _number_token_to_int(token)
+        if episode:
+            episodes.update(_expand_episode_range(1, 1, episode))
+    # Chinese patterns (e.g. "更新至第10集") — merged into single pass.
+    for match in CN_UPDATE_TO_NATIVE_RE.finditer(text or ""):
         token = match.groupdict().get("episode") or match.groupdict().get("episode_colon")
         episode = _number_token_to_int(token)
         if episode:
@@ -193,11 +206,4 @@ def _episodes_from_native_cn_episode_text(text: str) -> set[tuple[int, int]]:
     return episodes
 
 
-def _episodes_from_native_update_text(text: str) -> set[tuple[int, int]]:
-    episodes: set[tuple[int, int]] = set()
-    for match in CN_UPDATE_TO_NATIVE_RE.finditer(text or ""):
-        token = match.groupdict().get("episode") or match.groupdict().get("episode_colon")
-        episode = _number_token_to_int(token)
-        if episode:
-            episodes.update(_expand_episode_range(1, 1, episode))
-    return episodes
+

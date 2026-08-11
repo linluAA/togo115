@@ -83,12 +83,10 @@ def _add_web_preview_text(message: Any, add) -> None:
 
 
 def _add_serialized_message_text(message: Any, add, parts: list[str], seen: set[str]) -> None:
-    to_dict = _safe_attr(message, "to_dict")
-    if callable(to_dict):
-        try:
-            _collect_dict_texts(to_dict(), parts, seen)
-        except Exception:
-            pass
+    # Avoid expensive message.to_dict() full serialization.
+    # The text from raw_text, caption, entities, and web_preview above
+    # already covers the vast majority of content. Only fall back to
+    # lightweight JSON/stringify for rare edge cases.
     for method_name in ("to_json", "stringify"):
         method = _safe_attr(message, method_name)
         if callable(method):

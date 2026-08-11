@@ -116,7 +116,7 @@ def _similar_title_against_key(
 ) -> str | None:
     if not result_title_key or not existing_title_key:
         return None
-    similarity = SequenceMatcher(None, result_title_key, existing_title_key).ratio()
+    similarity = SequenceMatcher(None, result_title_key, existing_title_key).quick_ratio()
     if similarity < 0.94:
         return None
     if result_episodes or existing_episodes:

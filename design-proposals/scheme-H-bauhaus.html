@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>ToGo115 · 方案 H｜包豪斯混凝土</title>
+<style>
+/* ============================================================
+   方案 H · 包豪斯粗野主义（Bauhaus Concrete）
+   几何原色、黑白灰混凝土、硬朗直角、模块化网格
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#e8e6df; --concrete:#d6d3ca; --surface:#efede6; --white:#f7f6f1;
+  --ink:#171614; --ink-2:#4a4842; --muted:#8b897f;
+  --red:#d0342c; --yellow:#f2c14e; --blue:#1f5fb4; --black:#171614;
+  --sans:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --serif:Georgia,"Times New Roman",serif;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:var(--red);color:#fff}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:var(--concrete)}
+::-webkit-scrollbar-thumb{background:var(--black)}
+/* ===== 顶部几何条 ===== */
+.bauhaus{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:3px solid var(--black)}
+.bauhaus .strip{display:flex;height:8px}
+.bauhaus .strip i{flex:1}
+.bauhaus .inner{max-width:1200px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:20px;min-height:64px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand .marks{display:flex;gap:5px}
+.brand .marks .sq{width:22px;height:22px;background:var(--red)}
+.brand .marks .ci{width:22px;height:22px;border-radius:50%;background:var(--yellow)}
+.brand .marks .tr{width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:22px solid var(--blue)}
+.brand .nm{font-weight:800;font-size:18px;letter-spacing:.06em;text-transform:uppercase}
+.brand .nm span{color:var(--red)}
+.nav{display:flex;gap:0}
+.nav a{
+  padding:21px 16px;font-size:13px;font-weight:700;color:var(--ink-2);letter-spacing:.08em;
+  border-bottom:3px solid transparent;text-transform:uppercase;display:flex;align-items:center;gap:7px;
+}
+.nav a .no{font-size:9px;font-family:var(--serif);color:var(--muted)}
+.nav a:hover{color:var(--ink)}
+.nav a.on{color:var(--ink);border-bottom-color:var(--red)}
+.nav a.on .no{color:var(--red)}
+.bauhaus .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.tag{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:800;letter-spacing:.14em;border:2px solid var(--black);padding:7px 12px}
+.tag .sq{width:9px;height:9px;background:var(--red)}
+.av{width:36px;height:36px;background:var(--black);color:#fff;display:grid;place-items:center;font-weight:800;font-size:12px}
+/* ===== 主体 ===== */
+.stage{max-width:1200px;margin:0 auto;padding:34px 24px 90px}
+/* 主视觉：蒙德里安式拼块 */
+.hero{display:grid;grid-template-columns:1.2fr .8fr;grid-template-rows:auto;gap:10px;margin-bottom:52px}
+@media(max-width:860px){.hero{grid-template-columns:1fr}}
+.hero .main{border:3px solid var(--black);background:var(--white);padding:40px 36px;position:relative}
+.hero .main::before{content:"";position:absolute;top:0;right:0;width:60px;height:60px;background:var(--blue);border-left:3px solid var(--black);border-bottom:3px solid var(--black)}
+.hero .main .kicker{font-size:10px;letter-spacing:.28em;font-weight:800;color:var(--red);text-transform:uppercase;margin-bottom:20px}
+.hero .main h1{font-size:clamp(34px,5vw,58px);font-weight:800;letter-spacing:-.02em;line-height:1.02}
+.hero .main h1 .thin{font-weight:400;color:var(--ink-2)}
+.hero .main .rule{width:56px;height:8px;background:var(--yellow);margin:22px 0}
+.hero .main p{font-size:14px;color:var(--ink-2);line-height:1.9;max-width:520px}
+.hero .side{border:3px solid var(--black);background:var(--surface);display:flex;flex-direction:column}
+.hero .side .poster{flex:1;background-size:cover;background-position:center;border-bottom:3px solid var(--black);position:relative}
+.hero .side .poster .badge{position:absolute;top:14px;right:14px;background:var(--yellow);border:3px solid var(--black);padding:8px 14px;font-weight:800;font-size:11px;text-transform:uppercase}
+.hero .side .cap{padding:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hero .side .cap b{font-size:13px}
+.hero .side .cap .go{background:var(--black);color:#fff;font-size:11px;font-weight:800;padding:10px 18px;text-transform:uppercase;cursor:pointer;letter-spacing:.08em}
+.hero .side .cap .go:hover{background:var(--red)}
+/* 指标：几何块 */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:54px}
+@media(max-width:760px){.stats{grid-template-columns:1fr 1fr}}
+.stat{border:3px solid var(--black);background:var(--white);padding:20px;position:relative}
+.stat:nth-child(1){background:var(--red);color:#fff}
+.stat:nth-child(3){background:var(--black);color:#fff}
+.stat .v{font-size:32px;font-weight:800;line-height:1}
+.stat .v sup{font-size:14px}
+.stat span{display:block;font-size:9px;letter-spacing:.2em;text-transform:uppercase;margin-top:10px;font-weight:700;opacity:.85}
+.stat .bar{position:absolute;top:10px;right:10px;width:14px;height:14px;border:2px solid currentColor}
+/* 区块 */
+.sec{margin-bottom:56px}
+.sec .hd{display:flex;align-items:center;gap:16px;margin-bottom:24px}
+.sec .hd .geo{width:14px;height:14px;background:var(--red);border:2px solid var(--black)}
+.sec .hd h2{font-size:24px;font-weight:800;letter-spacing:-.01em}
+.sec .hd .en{margin-left:14px;font-family:var(--serif);font-style:italic;color:var(--muted);font-size:14px}
+.sec .hd .more{margin-left:auto;font-size:12px;font-weight:800;border:2px solid var(--black);padding:7px 14px;cursor:pointer;letter-spacing:.06em}
+.sec .hd .more:hover{background:var(--black);color:#fff}
+/* 海报网格 */
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:24px 18px}
+@media(min-width:1180px){.board{grid-template-columns:repeat(6,1fr)}}
+.item{position:relative;cursor:pointer}
+.item .ph{aspect-ratio:2/3;background-size:cover;background-position:center;border:3px solid var(--black);background-color:var(--concrete);position:relative}
+.item .ph .num{
+  position:absolute;top:-12px;left:-10px;width:30px;height:30px;background:var(--yellow);border:3px solid var(--black);
+  font-weight:800;font-size:13px;display:grid;place-items:center;z-index:2;
+}
+.item:nth-child(odd) .ph .num{background:var(--red);color:#fff}
+.item:nth-child(3n) .ph .num{background:var(--blue);color:#fff}
+.item:hover .ph{transform:translate(-3px,-3px)}
+.item:hover .ph::after{content:"";position:absolute;inset:0;border:3px solid var(--black);transform:translate(3px,3px);z-index:-1}
+.item .t{font-size:12.5px;font-weight:700;margin-top:11px;line-height:1.3}
+.item .d{font-size:10px;color:var(--muted);margin-top:3px;font-weight:600}
+.item .d .on{color:var(--blue);font-weight:800}
+.item .d .off{opacity:.55}
+.item .act{margin-top:8px;display:inline-block;font-size:11px;font-weight:800;background:var(--black);color:#fff;padding:5px 10px;opacity:0;transform:translateY(3px);transition:.15s}
+.item:hover .act{opacity:1;transform:none}
+.item .act:hover{background:var(--red)}
+/* 订阅卡 */
+.subs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+.sub{border:3px solid var(--black);background:var(--white);position:relative;transition:.15s}
+.sub:hover{transform:translateY(-3px);box-shadow:8px 8px 0 rgba(23,22,20,.15)}
+.sub .top{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:3px solid var(--black);background:var(--surface)}
+.sub .top .mini{width:46px;height:60px;background-size:cover;background-position:center;border:2px solid var(--black);flex:0 0 auto}
+.sub .top .tt{font-size:15px;font-weight:800;line-height:1.2}
+.sub .top .tt small{display:block;font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.1em;margin-top:3px}
+.sub .top .chip{margin-left:auto;font-size:9px;font-weight:800;border:2px solid var(--black);padding:4px 9px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.sub .top .chip.doing{background:var(--blue);color:#fff}
+.sub .top .chip.done{background:var(--red);color:#fff}
+.sub .top .chip.paused{background:var(--concrete);color:var(--ink-2)}
+.sub .mid{padding:14px}
+.sub .prog{height:12px;border:2px solid var(--black);background:var(--concrete);margin-bottom:10px}
+.sub .prog i{display:block;height:100%;background:var(--black)}
+.sub .prog i.hot{background:var(--red)}
+.sub .meta{display:flex;flex-wrap:wrap;gap:6px;font-size:10px;font-weight:700;color:var(--ink-2)}
+.sub .meta .src{border:1.5px solid var(--black);padding:2px 7px}
+.sub .ops{display:flex;border-top:3px solid var(--black);background:var(--surface)}
+.sub .ops button{flex:1;padding:11px;font-size:12px;font-weight:800;letter-spacing:.06em;border-right:2px solid var(--black);transition:.12s}
+.sub .ops button:last-child{border-right:none}
+.sub .ops button:hover{background:var(--black);color:#fff}
+.sub .ops button.danger:hover{background:var(--red);color:#fff}
+/* 日志：竖直时间轴 */
+.timeline{border:3px solid var(--black);background:var(--white)}
+.timeline .row{display:grid;grid-template-columns:110px 130px 1fr;gap:16px;align-items:baseline;padding:15px 18px;border-bottom:2px solid var(--black)}
+.timeline .row:last-child{border-bottom:none}
+.timeline .row:nth-child(odd){background:var(--surface)}
+.timeline .row .time{font-family:var(--serif);font-size:13px;font-weight:700;color:var(--ink-2)}
+.timeline .row .src{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.timeline .row .src i{display:inline-block;width:8px;height:8px;background:var(--red);margin-right:7px}
+.timeline .row .msg{font-size:13px;color:var(--ink-2);line-height:1.6}
+.timeline .row .msg b{color:var(--ink)}
+.timeline .row .msg em{font-style:normal;font-weight:800;color:var(--red)}
+.timeline .row .bad{background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;margin-left:6px;letter-spacing:.06em}
+/* 页脚 */
+.foot{border-top:3px solid var(--black);background:var(--black);color:#fff;padding:38px 24px 44px}
+.foot .in{max-width:1200px;margin:0 auto;display:flex;align-items:flex-end;gap:30px;flex-wrap:wrap}
+.foot .marks{display:flex;gap:6px}
+.foot .marks .sq{width:26px;height:26px;background:var(--red)}
+.foot .marks .ci{width:26px;height:26px;border-radius:50%;background:var(--yellow)}
+.foot .marks .tr{width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:26px solid var(--blue)}
+.foot .brand{font-weight:800;font-size:22px;letter-spacing:.06em}
+.foot .brand span{color:var(--yellow)}
+.foot p{font-size:11px;color:#b9b7b0;margin-left:auto;letter-spacing:.04em;line-height:1.9;text-align:right}
+</style>
+</head>
+<body>
+
+<!-- 几何条顶 -->
+<header class="bauhaus">
+  <div class="strip">
+    <i style="background:var(--red)"></i><i style="background:var(--yellow)"></i><i style="background:var(--blue)"></i><i style="background:var(--black)"></i><i style="background:var(--red)"></i><i style="background:var(--yellow)"></i><i style="background:var(--blue)"></i><i style="background:var(--black)"></i>
+  </div>
+  <div class="inner">
+    <div class="brand">
+      <span class="marks"><span class="sq"></span><span class="ci"></span><span class="tr"></span></span>
+      <span class="nm">TOGO<span>115</span></span>
+    </div>
+    <nav class="nav">
+      <a class="on" onclick="go(this)"><span class="no">01</span>片单</a>
+      <a onclick="go(this)"><span class="no">02</span>媒体库</a>
+      <a onclick="go(this)"><span class="no">03</span>订阅</a>
+      <a onclick="go(this)"><span class="no">04</span>日志</a>
+      <a onclick="go(this)"><span class="no">05</span>设置</a>
+    </nav>
+    <div class="right"><span class="tag"><span class="sq"></span>运行中</span><span class="av">A</span></div>
+  </div>
+</header>
+
+<div class="stage">
+
+  <!-- 主视觉 -->
+  <section class="hero">
+    <div class="main">
+      <div class="kicker">FORM &amp; FUNCTION · 今日</div>
+      <h1>《沙丘：厄拉科斯之战》<br/><span class="thin">2160P · 双版本已上架</span></h1>
+      <div class="rule"></div>
+      <p>凌晨 02:41 在 Telegram 频道 @cangmao_hd 命中，系统自动完成链接抽取、115 转存与 Emby 入库，全链路 38 秒。</p>
+    </div>
+    <div class="side">
+      <div class="poster" style="background-image:linear-gradient(180deg,rgba(23,22,20,.1),rgba(23,22,20,.45)),url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"><span class="badge">已上架</span></div>
+      <div class="cap"><b>DUNE PART III · 2026</b><span class="go" onclick="alert('演示原型：观看')">观看 →</span></div>
+    </div>
+  </section>
+
+  <!-- 指标 -->
+  <section class="stats">
+    <div class="stat"><div class="v">28</div><span>Active Subs</span><div class="bar"></div></div>
+    <div class="stat"><div class="v">96<sup>%</sup></div><span>Hit Rate</span><div class="bar"></div></div>
+    <div class="stat"><div class="v">38<sup>s</sup></div><span>Avg Time</span><div class="bar"></div></div>
+    <div class="stat"><div class="v">18</div><span>Added Today</span><div class="bar"></div></div>
+  </section>
+
+  <!-- 热榜 -->
+  <section class="sec">
+    <div class="hd"><span class="geo"></span><h2>本周热榜</h2><span class="en">Trending</span><span class="more" onclick="alert('演示原型：更多')">全部 →</span></div>
+    <div class="board">
+      <div class="item" onclick="alert('演示原型：《双城之战》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"><span class="num">1</span></div><div class="t">双城之战 第二季</div><div class="d"><span class="on">● 已订阅</span></div><span class="act">＋ 追新</span></div>
+      <div class="item" onclick="alert('演示原型：《沙丘3》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"><span class="num">2</span></div><div class="t">沙丘：厄拉科斯之战</div><div class="d"><span class="on">● 已订阅</span></div><span class="act">＋ 追新</span></div>
+      <div class="item" onclick="alert('演示原型：《哥斯拉》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/mU35gT9aE7aTsZkJlrYTk5nLM8Y.jpg')"><span class="num">3</span></div><div class="t">哥斯拉：决战之巅</div><div class="d"><span class="off">未订阅</span></div><span class="act">＋ 追新</span></div>
+      <div class="item" onclick="alert('演示原型：《白莲花》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"><span class="num">4</span></div><div class="t">白莲花度假村 第三季</div><div class="d"><span class="on">● 已订阅</span></div><span class="act">＋ 追新</span></div>
+      <div class="item" onclick="alert('演示原型：《地球脉动》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"><span class="num">5</span></div><div class="t">地球脉动 第三季</div><div class="d"><span class="on">● 已订阅</span></div><span class="act">＋ 追新</span></div>
+      <div class="item" onclick="alert('演示原型：《异形》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/d1RHS8nDC8bvtCFvTf2uSNDYJxS.jpg')"><span class="num">6</span></div><div class="t">异形：地球</div><div class="d"><span class="off">未订阅</span></div><span class="act">＋ 追新</span></div>
+    </div>
+  </section>
+
+  <!-- 订阅 -->
+  <section class="sec">
+    <div class="hd"><span class="geo"></span><h2>正在追</h2><span class="en">Subscriptions</span><span class="more" onclick="alert('演示原型：新增')">＋ 新增</span></div>
+    <div class="subs">
+      <div class="sub">
+        <div class="top"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"></div><div class="tt">双城之战 第二季<small>ARCANE S2 · 剧集</small></div><span class="chip doing">连载中</span></div>
+        <div class="mid"><div class="prog"><i style="width:78%"></i></div><div class="meta"><span class="src">TG 历史</span><span class="src">RSS</span><span>已入库 E1–E6</span></div></div>
+        <div class="ops"><button onclick="alert('演示原型：重搜')">重搜</button><button onclick="alert('演示原型：候选')">候选</button><button class="danger">退订</button></div>
+      </div>
+      <div class="sub">
+        <div class="top"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"></div><div class="tt">沙丘：厄拉科斯之战<small>DUNE III · 电影</small></div><span class="chip doing">转存中</span></div>
+        <div class="mid"><div class="prog"><i style="width:40%" class="hot"></i></div><div class="meta"><span class="src">TG 频道</span><span>2160p · HDR</span></div></div>
+        <div class="ops"><button>重搜</button><button>候选</button><button class="danger">退订</button></div>
+      </div>
+      <div class="sub">
+        <div class="top"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"></div><div class="tt">地球脉动 第三季<small>PLANET EARTH III</small></div><span class="chip done">已完结</span></div>
+        <div class="mid"><div class="prog"><i style="width:100%"></i></div><div class="meta"><span class="src">磁力</span><span>全 8 集入库</span></div></div>
+        <div class="ops"><button>重搜</button><button>候选</button><button class="danger">退订</button></div>
+      </div>
+      <div class="sub">
+        <div class="top"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"></div><div class="tt">白莲花度假村 第三季<small>WHITE LOTUS S3</small></div><span class="chip doing">连载中</span></div>
+        <div class="mid"><div class="prog"><i style="width:52%"></i></div><div class="meta"><span class="src">TG 历史</span><span>已入库 E1–E4</span></div></div>
+        <div class="ops"><button>重搜</button><button>候选</button><button class="danger">退订</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 日志 -->
+  <section class="sec">
+    <div class="hd"><span class="geo"></span><h2>事件日志</h2><span class="en">Timeline</span><span class="more" onclick="alert('演示原型：完整日志')">全部 →</span></div>
+    <div class="timeline">
+      <div class="row"><span class="time">02:41:18</span><span class="src"><i></i>Telegram</span><span class="msg">命中 <b>《沙丘：厄拉科斯之战》</b> · 抽取 <em>115 链接</em> · @cangmao_hd</span></div>
+      <div class="row"><span class="time">02:41:25</span><span class="src"><i></i>Delivery</span><span class="msg">转存任务 → 目录 <em>/影视/2026</em></span></div>
+      <div class="row"><span class="time">02:41:58</span><span class="src"><i></i>Emby</span><span class="msg">入库成功 · <b>沙丘：厄拉科斯之战</b></span></div>
+      <div class="row"><span class="time">02:40:03</span><span class="src"><i></i>Haisou</span><span class="msg">海搜返回 3 条 115 分享 · 匹配 1 条</span></div>
+      <div class="row"><span class="time">01:55:02</span><span class="src"><i></i>RSS</span><span class="msg"><b>奥本海默 S2</b> 重搜 <span class="bad">0 命中</span> 30 分钟后重试</span></div>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot">
+  <div class="in">
+    <span class="marks"><span class="sq"></span><span class="ci"></span><span class="tr"></span></span>
+    <span class="brand">TOGO<span>115</span> · BAUHAUS</span>
+    <p>数据来自 Telegram / RSS / 海搜 / 站点插件 · 每 30 分钟自动全量重搜<br/>本页为 UI 演示原型，不含真实数据</p>
+  </div>
+</footer>
+
+<script>
+function go(el){
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on'));
+  el.classList.add('on');
+  if(el.textContent.includes('片单'))window.scrollTo({top:0,behavior:'smooth'});
+  else window.scrollTo({top:document.querySelector('.stage').offsetTop,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

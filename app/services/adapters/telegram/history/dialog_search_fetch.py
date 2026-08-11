@@ -34,13 +34,15 @@ class TelegramDialogSearchFetchMixin:
             except Exception as exc:
                 telegram_request_gate.note_error(exc)
                 add_log("debug", "telegram", "Telegram get_messages 历史查询失败，回退 iter_messages", {"query": query, "limit": limit, "error": str(exc), "error_type": type(exc).__name__})
+        # iter_messages fallback: use a shorter timeout (2s instead of 3s) so the
+        # total get_messages + iter_messages chain stays within the 4s query budget.
         try:
-            messages = await asyncio.wait_for(self._iter_search_messages(client, entity, query, limit), timeout=3)
+            messages = await asyncio.wait_for(self._iter_search_messages(client, entity, query, limit), timeout=2)
             if messages:
                 add_log("debug", "telegram", "Telegram iter_messages 历史查询成功", {"query": query, "limit": limit, "count": len(messages)})
             return messages
         except asyncio.TimeoutError:
-            add_log("warning", "telegram", "Telegram iter_messages 历史查询超时", {"query": query, "limit": limit, "timeout": 3})
+            add_log("warning", "telegram", "Telegram iter_messages 历史查询超时", {"query": query, "limit": limit, "timeout": 2})
         except Exception as exc:
             telegram_request_gate.note_error(exc)
             add_log("warning", "telegram", "Telegram iter_messages 历史查询失败", {"query": query, "limit": limit, "error": str(exc), "error_type": type(exc).__name__})
@@ -48,7 +50,9 @@ class TelegramDialogSearchFetchMixin:
 
     async def _iter_search_messages(self, client: TelegramClient, entity: Any, query: str, limit: int) -> list[Any]:
         messages: list[Any] = []
-        async for message in client.iter_messages(entity, search=query, limit=limit, wait_time=0):
+        # Use a small wait_time to avoid triggering Telegram FloodWait on
+        # rapid pagination; the 50ms delay is negligible vs network latency.
+        async for message in client.iter_messages(entity, search=query, limit=limit, wait_time=0.05):
             messages.append(message)
         return messages
 

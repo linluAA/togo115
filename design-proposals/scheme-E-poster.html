@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>ToGo115 · 方案 E｜复古胶印海报</title>
+<style>
+/* ============================================================
+   方案 E · 复古胶印海报（Retro Risograph Poster）
+   70年代专色胶印：套色错位、粗轮廓线、纸张颗粒、海报字体
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --paper:#f4ecd9; --paper-2:#e9dfc6; --ink:#1a1a2e; --ink-2:#3a3a52;
+  --red:#d7263d; --orange:#f18f01; --blue:#2b59c3; --teal:#0ea47a; --cream:#fff6e5;
+  --line:#1a1a2e;
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+html,body{background:var(--paper)}
+body{
+  color:var(--ink); -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(rgba(26,26,46,.07) .6px,transparent .6px);
+  background-size:4px 4px;
+}
+::selection{background:var(--blue);color:#fff}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:var(--paper-2)}
+::-webkit-scrollbar-thumb{background:var(--ink);border:3px solid var(--paper-2)}
+/* 套印错位效果 */
+.mis{position:relative;display:inline-block}
+.mis::before,.mis::after{content:attr(data-t);position:absolute;top:0;left:0;width:100%;z-index:-1;mix-blend-mode:multiply}
+.mis::before{color:var(--blue);transform:translate(-2px,0)}
+.mis::after{color:var(--red);transform:translate(2px,0)}
+/* ===== 顶部海报条 ===== */
+.head{position:sticky;top:0;z-index:100;background:var(--red);color:#fff;border-bottom:4px solid var(--ink)}
+.head .in{max-width:1180px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:20px;min-height:66px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand .b1{font-weight:900;font-size:24px;letter-spacing:-.02em;transform:rotate(-1.5deg)}
+.brand .b2{font-weight:900;font-size:13px;letter-spacing:.08em;background:var(--cream);color:var(--red);padding:4px 10px;border:2px solid var(--ink);transform:rotate(1deg)}
+.brand .b3{font-size:10px;letter-spacing:.3em;color:#ffd9dd;font-weight:700}
+.mnav{display:flex;gap:2px}
+.mnav a{padding:20px 13px;font-size:13px;font-weight:800;letter-spacing:.05em;color:#ffd9dd;border-bottom:4px solid transparent;display:flex;align-items:center;gap:6px}
+.mnav a:hover{color:#fff}
+.mnav a.on{color:#fff;border-bottom-color:#fff}
+.mnav a .no{font-size:9px;font-weight:700;background:rgba(255,255,255,.22);padding:2px 6px;border-radius:2px}
+.head .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.status{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.08em;background:var(--cream);color:var(--ink);padding:8px 14px;border:2px solid var(--ink);box-shadow:3px 3px 0 rgba(0,0,0,.25)}
+.status .led{width:9px;height:9px;border-radius:50%;background:var(--teal);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(14,164,122,.6)}70%{box-shadow:0 0 0 7px rgba(14,164,122,0)}100%{box-shadow:0 0 0 0 rgba(14,164,122,0)}}
+.head .av{width:36px;height:36px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:800;border:2px solid #fff}
+/* ===== 主视觉 ===== */
+.stage{max-width:1180px;margin:0 auto;padding:34px 24px 90px}
+.hero{
+  position:relative;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:0;
+  border:4px solid var(--ink);box-shadow:10px 10px 0 rgba(26,26,46,.18);margin-bottom:56px;overflow:hidden;background:var(--cream);
+}
+@media(max-width:860px){.hero{grid-template-columns:1fr}}
+.hero .art{position:relative;padding:44px 40px;display:flex;flex-direction:column;justify-content:center;background:radial-gradient(circle at 82% 18%,rgba(240,143,1,.9) 0 26%,transparent 26.5%),linear-gradient(120deg,rgba(43,89,195,.12),transparent 45%),var(--cream)}
+.hero .art .kicker{display:inline-block;background:var(--blue);color:#fff;font-size:11px;font-weight:800;letter-spacing:.2em;padding:6px 12px;margin-bottom:20px;transform:rotate(-1deg)}
+.hero .art h1{font-weight:900;font-size:clamp(34px,5.5vw,60px);line-height:.98;letter-spacing:-.02em;color:var(--ink)}
+.hero .art h1 .duo{color:var(--red)}
+.hero .art .sub{font-size:13px;font-weight:700;color:var(--ink-2);margin-top:16px;line-height:1.8;max-width:480px}
+.hero .art .facts{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.hero .art .facts span{border:2px solid var(--ink);background:#fff;padding:7px 13px;font-size:12px;font-weight:800;box-shadow:3px 3px 0 rgba(26,26,46,.22)}
+.hero .art .facts span b{color:var(--red);margin-right:5px}
+.hero .poster-wrap{position:relative;display:flex;align-items:center;justify-content:center;padding:36px;background:var(--blue)}
+.hero .poster-wrap::before{content:"";position:absolute;inset:14px;border:3px dashed rgba(255,255,255,.4)}
+.hero .poster{position:relative;width:200px;aspect-ratio:2/3;border:4px solid var(--ink);box-shadow:8px 8px 0 rgba(0,0,0,.3);background-size:cover;background-position:center;z-index:2}
+.hero .poster .badge{position:absolute;top:-14px;right:-14px;width:52px;height:52px;border-radius:50%;background:var(--red);color:#fff;border:3px solid var(--ink);display:grid;place-items:center;text-align:center;font-size:9px;font-weight:900;transform:rotate(10deg);line-height:1.1}
+.hero .poster .badge small{display:block;font-size:7px;opacity:.85}
+.hero .sticker{position:absolute;bottom:6px;left:-16px;z-index:3;background:var(--orange);color:#fff;border:3px solid var(--ink);padding:6px 12px;font-size:12px;font-weight:900;transform:rotate(-4deg);box-shadow:4px 4px 0 rgba(0,0,0,.25)}
+/* ===== 区块 ===== */
+.sec{margin-bottom:60px}
+.sec .hd{display:flex;align-items:baseline;gap:14px;margin-bottom:26px;position:relative}
+.sec .hd .num{font-weight:900;font-size:15px;background:var(--ink);color:var(--cream);padding:8px 12px;transform:rotate(-2deg)}
+.sec .hd h2{font-weight:900;font-size:26px;letter-spacing:-.01em}
+.sec .hd .band{font-size:11px;font-weight:800;letter-spacing:.22em;color:var(--ink-2);text-transform:uppercase}
+.sec .hd .more{margin-left:auto;font-weight:800;font-size:12px;border-bottom:3px solid var(--ink);cursor:pointer;padding-bottom:2px}
+.sec .hd .more:hover{color:var(--red);border-color:var(--red)}
+.sec .hd::after{content:"";position:absolute;left:0;right:0;bottom:-10px;height:3px;background:var(--ink)}
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:30px 20px}
+@media(min-width:1180px){.board{grid-template-columns:repeat(6,1fr)}}
+.item{position:relative;cursor:pointer}
+.item .ph{aspect-ratio:2/3;background-size:cover;background-position:center;border:3px solid var(--ink);position:relative}
+.item .ph .idx{position:absolute;top:-11px;left:-9px;width:30px;height:30px;background:var(--red);color:#fff;border:3px solid var(--ink);font-weight:900;font-size:13px;display:grid;place-items:center;z-index:2;box-shadow:2px 2px 0 rgba(0,0,0,.25)}
+.item .ph .stamp{position:absolute;top:8px;right:-8px;z-index:2;background:var(--orange);color:#fff;font-size:9px;font-weight:900;padding:3px 8px;border:2px solid var(--ink);transform:rotate(6deg);letter-spacing:.05em}
+.item:hover .ph{transform:translate(-3px,-3px);box-shadow:6px 6px 0 var(--blue)}
+.item .t{font-weight:800;font-size:13px;margin-top:11px;line-height:1.3}
+.item .d{font-size:11px;font-weight:700;color:var(--ink-2);margin-top:3px}
+.item .d .on{color:var(--teal);font-weight:800}
+.item .d .off{color:var(--ink-2);opacity:.6;text-decoration:line-through}
+/* 订阅卡片 */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:22px}
+.card{border:3px solid var(--ink);background:#fff;box-shadow:6px 6px 0 rgba(26,26,46,.16);position:relative;transition:.18s;overflow:hidden}
+.card:nth-child(3n+1){transform:rotate(-.6deg)}
+.card:nth-child(3n+2){transform:rotate(.6deg)}
+.card:nth-child(3n){transform:rotate(-.3deg)}
+.card:hover{transform:rotate(0) translateY(-3px);box-shadow:10px 10px 0 var(--red)}
+.card .topbar{border-bottom:3px solid var(--ink);padding:12px 14px;display:flex;align-items:center;gap:12px;background:var(--cream)}
+.card .topbar .mini{width:44px;height:58px;border:2px solid var(--ink);background-size:cover;background-position:center;flex:0 0 auto}
+.card .topbar .tt{font-weight:900;font-size:15px;line-height:1.2}
+.card .topbar .tt small{display:block;font-size:9px;color:var(--ink-2);letter-spacing:.1em;font-weight:700;margin-top:3px}
+.card .topbar .chip{margin-left:auto;font-size:9px;font-weight:900;padding:4px 9px;border:2px solid var(--ink);letter-spacing:.06em;white-space:nowrap}
+.card .topbar .chip.doing{background:var(--teal);color:#fff}
+.card .topbar .chip.done{background:var(--blue);color:#fff}
+.card .topbar .chip.paused{background:var(--paper-2);color:var(--ink-2)}
+.card .body{padding:14px}
+.card .prog{height:10px;border:2px solid var(--ink);background:#eee5d0;margin-bottom:10px}
+.card .prog i{display:block;height:100%;background:repeating-linear-gradient(90deg,var(--red) 0 8px,#fff 8px 12px)}
+.card .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:10px;font-weight:700;color:var(--ink-2)}
+.card .meta .src{border:1.5px solid var(--ink);padding:2px 7px;background:var(--paper);letter-spacing:.06em}
+.card .btns{display:flex;gap:8px;margin-top:12px;border-top:3px solid var(--ink);padding:12px 14px;background:var(--cream)}
+.card .btns button{flex:1;padding:9px;font-weight:900;font-size:12px;border:2.5px solid var(--ink);background:#fff;box-shadow:3px 3px 0 rgba(26,26,46,.18);transition:.12s}
+.card .btns button:hover{background:var(--orange);color:#fff;transform:translate(1px,1px);box-shadow:1px 1px 0 rgba(26,26,46,.18)}
+.card .btns button.danger:hover{background:var(--red);color:#fff}
+.card.add .add-center{min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-weight:900;color:var(--ink-2);font-size:14px}
+.card.add .add-center .big{width:54px;height:54px;border:3px dashed var(--ink);display:grid;place-items:center;font-size:26px;color:var(--red)}
+/* 日志区 */
+.logs{border:3px solid var(--ink);background:#fff;box-shadow:6px 6px 0 rgba(26,26,46,.16)}
+.logs .row{display:grid;grid-template-columns:96px 150px 1fr;gap:14px;align-items:baseline;padding:13px 16px;border-bottom:2px solid #e3d9c0;font-size:12.5px}
+.logs .row:last-child{border-bottom:none}
+.logs .row:nth-child(odd){background:#faf6ea}
+.logs .row:hover{background:var(--cream)}
+.logs .row .time{font-weight:800;color:var(--ink-2);font-size:11.5px}
+.logs .row .src{font-size:10px;font-weight:900;letter-spacing:.1em}
+.logs .row .src.tg{color:var(--blue)}
+.logs .row .src.dl{color:var(--teal)}
+.logs .row .src.em{color:var(--orange)}
+.logs .row .msg{font-weight:600;color:var(--ink-2)}
+.logs .row .msg b{color:var(--ink);font-weight:800}
+.logs .row .msg em{font-style:normal;font-weight:900;color:var(--red)}
+.logs .row .bad{background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 7px;letter-spacing:.06em;margin-left:6px}
+/* 页脚 */
+.foot{border-top:4px solid var(--ink);background:var(--ink);color:var(--cream);padding:40px 24px 46px;text-align:center}
+.foot .big{font-weight:900;font-size:30px;letter-spacing:-.02em}
+.foot .big span{color:var(--red)}
+.foot p{font-size:11px;color:#b9b3a4;margin-top:10px;letter-spacing:.05em}
+</style>
+</head>
+<body>
+
+<!-- 顶部海报条 -->
+<header class="head">
+  <div class="in">
+    <div class="brand"><span class="b1">TOGO</span><span class="b2">115</span><span class="b3">· 追新海报</span></div>
+    <nav class="mnav">
+      <a class="on" onclick="go(this)"><span class="no">01</span>片单</a>
+      <a onclick="go(this)"><span class="no">02</span>媒体库</a>
+      <a onclick="go(this)"><span class="no">03</span>订阅</a>
+      <a onclick="go(this)"><span class="no">04</span>日志</a>
+      <a onclick="go(this)"><span class="no">05</span>设置</a>
+    </nav>
+    <div class="right"><span class="status"><span class="led"></span>追新在线</span><span class="av">A</span></div>
+  </div>
+</header>
+
+<div class="stage">
+
+  <!-- 主海报 -->
+  <section class="hero">
+    <div class="art">
+      <span class="kicker">今日头版 · 追到最热</span>
+      <h1 class="mis" data-t="《沙丘：厄拉科斯之战》">《沙丘：厄拉科斯之战》<br/><span class="duo">2160P · 双版本已上架</span></h1>
+      <p class="sub">凌晨 02:41 于 Telegram 频道 @cangmao_hd 命中，自动完成链接抽取、转存与 Emby 入库，全链路 38 秒。</p>
+      <div class="facts"><span><b>02:41</b>命中</span><span><b>38s</b>链路</span><span><b>28</b>订阅</span><span><b>96%</b>命中率</span></div>
+    </div>
+    <div class="poster-wrap">
+      <div class="poster" style="background-image:linear-gradient(180deg,rgba(26,26,46,.1),rgba(26,26,46,.5)),url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"><span class="badge">本周<br/>头版</span></div>
+      <span class="sticker">已转存 115 ✓</span>
+    </div>
+  </section>
+
+  <!-- 热榜 -->
+  <section class="sec">
+    <div class="hd"><span class="num">01</span><h2>本周热榜</h2><span class="band">TMDB · TRENDING</span><span class="more" onclick="alert('演示原型：更多榜单')">全部 →</span></div>
+    <div class="board">
+      <div class="item" onclick="alert('演示原型：《双城之战》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"><span class="idx">1</span><span class="stamp">追新中</span></div><div class="t">双城之战 第二季</div><div class="d"><span class="on">● 已订阅</span></div></div>
+      <div class="item" onclick="alert('演示原型：《沙丘3》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"><span class="idx">2</span><span class="stamp">转存中</span></div><div class="t">沙丘：厄拉科斯之战</div><div class="d"><span class="on">● 已订阅</span></div></div>
+      <div class="item" onclick="alert('演示原型：《哥斯拉》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/mU35gT9aE7aTsZkJlrYTk5nLM8Y.jpg')"><span class="idx">3</span></div><div class="t">哥斯拉：决战之巅</div><div class="d"><span class="off">未订阅</span></div></div>
+      <div class="item" onclick="alert('演示原型：《白莲花》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"><span class="idx">4</span><span class="stamp">连载中</span></div><div class="t">白莲花度假村 第三季</div><div class="d"><span class="on">● 已订阅</span></div></div>
+      <div class="item" onclick="alert('演示原型：《地球脉动》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"><span class="idx">5</span><span class="stamp">已完结</span></div><div class="t">地球脉动 第三季</div><div class="d"><span class="on">● 已订阅</span></div></div>
+      <div class="item" onclick="alert('演示原型：《异形》')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/d1RHS8nDC8bvtCFvTf2uSNDYJxS.jpg')"><span class="idx">6</span></div><div class="t">异形：地球</div><div class="d"><span class="off">未订阅</span></div></div>
+    </div>
+  </section>
+
+  <!-- 订阅 -->
+  <section class="sec">
+    <div class="hd"><span class="num">02</span><h2>我的订阅</h2><span class="band">MY PULP</span><span class="more" onclick="alert('演示原型：新增订阅')">＋ 新增</span></div>
+    <div class="cards">
+      <div class="card">
+        <div class="topbar"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"></div><div class="tt">双城之战 第二季<small>ARCANE S2 · 剧集</small></div><span class="chip doing">连载中</span></div>
+        <div class="body"><div class="prog"><i style="width:78%"></i></div><div class="meta"><span class="src">TG</span><span class="src">RSS</span><span>已入库 E1–E6</span></div></div>
+        <div class="btns"><button onclick="alert('演示原型：重搜')">重搜</button><button onclick="alert('演示原型：候选')">候选</button><button class="danger">退订</button></div>
+      </div>
+      <div class="card">
+        <div class="topbar"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"></div><div class="tt">沙丘：厄拉科斯之战<small>DUNE III · 电影</small></div><span class="chip doing">转存中</span></div>
+        <div class="body"><div class="prog"><i style="width:40%"></i></div><div class="meta"><span class="src">TG</span><span>2160p · HDR</span></div></div>
+        <div class="btns"><button>重搜</button><button>候选</button><button class="danger">退订</button></div>
+      </div>
+      <div class="card">
+        <div class="topbar"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"></div><div class="tt">地球脉动 第三季<small>PLANET EARTH III</small></div><span class="chip done">已完结</span></div>
+        <div class="body"><div class="prog"><i style="width:100%"></i></div><div class="meta"><span class="src">磁力</span><span>全 8 集入库</span></div></div>
+        <div class="btns"><button>重搜</button><button>候选</button><button class="danger">退订</button></div>
+      </div>
+      <div class="card">
+        <div class="topbar"><div class="mini" style="background-image:url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"></div><div class="tt">白莲花度假村 第三季<small>WHITE LOTUS S3</small></div><span class="chip doing">连载中</span></div>
+        <div class="body"><div class="prog"><i style="width:52%"></i></div><div class="meta"><span class="src">TG</span><span>已入库 E1–E4</span></div></div>
+        <div class="btns"><button>重搜</button><button>候选</button><button class="danger">退订</button></div>
+      </div>
+      <div class="card add">
+        <div class="topbar"><div class="mini" style="background:linear-gradient(135deg,var(--blue),var(--teal))"></div><div class="tt">新增订阅<small>ADD SUBSCRIPTION</small></div></div>
+        <div class="add-center"><span class="big">＋</span><span>从 TMDB 热榜一键追新</span></div>
+        <div class="btns"><button onclick="alert('演示原型：添加订阅')">开始添加</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 日志 -->
+  <section class="sec">
+    <div class="hd"><span class="num">03</span><h2>事件档案</h2><span class="band">EVENT LOG</span><span class="more" onclick="alert('演示原型：完整日志')">全部 →</span></div>
+    <div class="logs">
+      <div class="row"><span class="time">02:41:18</span><span class="src tg">TELEGRAM</span><span class="msg">命中 <b>《沙丘：厄拉科斯之战》</b> · 抽取 <em>115 链接</em> · @cangmao_hd</span></div>
+      <div class="row"><span class="time">02:41:25</span><span class="src dl">DELIVERY</span><span class="msg">转存任务 → 目录 <em>/影视/2026</em></span></div>
+      <div class="row"><span class="time">02:41:58</span><span class="src em">EMBY</span><span class="msg">入库成功 · <b>沙丘：厄拉科斯之战</b></span></div>
+      <div class="row"><span class="time">02:40:03</span><span class="src tg">HAISOU</span><span class="msg">海搜返回 3 条 115 分享 · 匹配 1 条</span></div>
+      <div class="row"><span class="time">01:55:02</span><span class="src dl">RSS</span><span class="msg"><b>奥本海默 S2</b> 重搜 <span class="bad">0 HIT</span> 30 分钟后重试</span></div>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot">
+  <div class="big">TOGO<span>115</span> 追新海报</div>
+  <p>数据来自 Telegram / RSS / 海搜 / 站点插件 · 每 30 分钟自动全量重搜 · 本页为 UI 演示原型，不含真实数据</p>
+</footer>
+
+<script>
+function go(el){
+  document.querySelectorAll('.mnav a').forEach(a=>a.classList.remove('on'));
+  el.classList.add('on');
+  if(el.textContent.includes('片单'))window.scrollTo({top:0,behavior:'smooth'});
+  else window.scrollTo({top:el.closest('.stage').offsetTop,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

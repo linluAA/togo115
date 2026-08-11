@@ -21,9 +21,13 @@ DOWNLOAD_TEXT_TRANSLATION = str.maketrans(
     }
 )
 INVISIBLE_URL_CHARS_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\ufeff]")
-MAGNET_URL_RE = re.compile(r"magnet:\?[^\"'<>]+", re.I)
+# Match full magnet URI up to whitespace, closing bracket, or quote.
+# This prevents truncation of embedded tracker (&tr=...) parameters.
+MAGNET_URL_RE = re.compile(r"magnet:\?(?:[^\s\"'<>)]+)", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
 BTIH_HASH_RE = re.compile(r"(?:种子哈希|信息哈希|info\s*hash|btih|hash)\s*[：:]\s*([A-Fa-f0-9]{32,40})", re.I)
+# Match bare BTIH hash (without label prefix) for standalone hash extraction.
+BARE_BTIH_HASH_RE = re.compile(r"(?<![A-Za-z0-9])([A-Fa-f0-9]{40})(?![A-Za-z0-9])")
 PAN115_RECEIVE_CODE_RE = re.compile(
     r"(?:提取码|访问码|接收码|密码|口令|receive[_\s-]*code|password|pwd|pass|code)\s*[：:=]?\s*([A-Za-z0-9]{2,8})",
     re.I,
@@ -32,9 +36,20 @@ PAN115_RECEIVE_CODE_RE = re.compile(
 def _clean_download_link(link: str) -> str:
     value = str(link or "").strip()
     if value.casefold().startswith("magnet:?"):
-        value = re.split(r"\s+(?=(?:https?://|magnet:\?|(?:www\.)?115(?:cdn)?\s*\.\s*com\s*/\s*s\s*/))", value, 1, re.I)[0]
+        # Extract full magnet URI using the same regex as extract_download_links,
+        # ensuring tracker parameters (&tr=...) are not lost.
+        m = MAGNET_URL_RE.match(value)
+        if m:
+            value = m.group(0)
+        else:
+            value = re.split(r"\s+(?=(?:https?://|magnet:\?|(?:www\.)?115(?:cdn)?\s*\.\s*com\s*/\s*s\s*/))", value, 1, re.I)[0]
         value = re.split(r"(?:磁力下载|复制全部地址|复制链接|复制|迅雷下载|下载地址)", value, 1)[0]
-    cleaned = re.sub(r"\s+", "", value).rstrip("，。；,.;")
+        # Magnet URIs: preserve whitespace in dn= parameter values (e.g. "dn=My Movie").
+        # Only normalize internal whitespace to single spaces, don't remove entirely.
+        cleaned = re.sub(r"\s+", " ", value).strip()
+    else:
+        cleaned = re.sub(r"\s+", "", value)
+    cleaned = cleaned.rstrip("，。；,.;")
     while cleaned.endswith(")") and cleaned.count(")") > cleaned.count("("):
         cleaned = cleaned[:-1]
     if re.match(r"(?i)^(?:www\.)?115(?:cdn)?\.com/s/", cleaned):

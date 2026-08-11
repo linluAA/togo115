@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>ToGo115 · 方案 H｜数据驾驶舱风</title>
+<style>
+/* ============================================================
+   方案 H · 数据驾驶舱风（Data Dashboard）
+   专业监控大屏：深色面板 + KPI 卡片 + 图表 + 密集信息网格
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117; --bg-2:#11161f; --panel:#151b26; --panel-2:#1a2230; --line:rgba(255,255,255,.07);
+  --ink:#e6edf3; --ink-2:#9aa7b4; --muted:#6b7785;
+  --blue:#4d9fff; --green:#3fb68b; --amber:#f5a623; --red:#f0595b; --violet:#a371f7;
+  --sans:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:Consolas,monospace;
+}
+html{scroll-behavior:smooth}
+body{background:radial-gradient(1000px 600px at 85% -10%,rgba(77,159,255,.06),transparent 55%),var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:rgba(77,159,255,.3)}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:var(--bg-2)}
+::-webkit-scrollbar-thumb{background:rgba(77,159,255,.3);border-radius:99px}
+/* 卡片通用 */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel .head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+.panel .head h3{font-size:13px;font-weight:700;letter-spacing:.02em}
+.panel .head .id{font-size:9px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em}
+.panel .head .meta{margin-left:auto;font-size:9.5px;color:var(--muted);font-family:var(--mono)}
+.panel .head .meta .live{color:var(--green)}
+.panel .head .more{font-size:10.5px;color:var(--blue);cursor:pointer;font-family:var(--mono)}
+.panel .body{padding:16px}
+/* ===== 顶部 ===== */
+.top{position:sticky;top:0;z-index:100;background:rgba(13,17,23,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1280px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:26px;min-height:62px}
+.brand{display:flex;align-items:center;gap:11px}
+.brand .logo{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--blue),var(--violet));display:grid;place-items:center;font-weight:800;font-size:14px}
+.brand .nm{font-weight:800;font-size:16px;letter-spacing:.02em}
+.brand .nm small{display:block;font-size:8px;color:var(--muted);font-weight:500;letter-spacing:.2em;font-family:var(--mono)}
+.nav{display:flex;gap:2px}
+.nav a{padding:19px 13px;font-size:12.5px;font-weight:600;color:var(--ink-2);border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px;transition:.15s}
+.nav a:hover{color:var(--ink)}
+.nav a.on{color:var(--blue);border-bottom-color:var(--blue)}
+.nav a .ic{width:22px;height:22px;border-radius:6px;background:var(--panel-2);border:1px solid var(--line);display:grid;place-items:center;font-size:11px}
+.nav a.on .ic{background:rgba(77,159,255,.15);border-color:rgba(77,159,255,.3);color:var(--blue)}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.stat-chip{display:flex;flex-direction:column;gap:2px;padding:7px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2)}
+.stat-chip span{font-size:8.5px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em}
+.stat-chip b{font-size:15px;font-weight:700}
+.stat-chip b.g{color:var(--green)}
+.stat-chip b.a{color:var(--amber)}
+.av{width:34px;height:34px;border-radius:9px;background:var(--panel-2);border:1px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700}
+/* ===== 主体 ===== */
+.stage{max-width:1280px;margin:0 auto;padding:24px 24px 80px;display:grid;gap:18px}
+/* KPI 行 */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:900px){.kpi-row{grid-template-columns:1fr 1fr}}
+.kpi{padding:18px;display:flex;flex-direction:column;gap:4px}
+.kpi .lbl{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;display:flex;align-items:center;gap:7px}
+.kpi .lbl .dot{width:7px;height:7px;border-radius:50%}
+.kpi .val{font-size:30px;font-weight:800;letter-spacing:-.01em;font-family:var(--mono)}
+.kpi .delta{font-size:10px;font-family:var(--mono)}
+.kpi .delta.up{color:var(--green)}
+.kpi .delta.down{color:var(--red)}
+.kpi .spark{height:28px;margin-top:6px;display:flex;align-items:flex-end;gap:3px}
+.kpi .spark i{flex:1;background:var(--blue);border-radius:2px;opacity:.7}
+.kpi:nth-child(1) .lbl .dot{background:var(--blue)}
+.kpi:nth-child(2) .lbl .dot{background:var(--green)}
+.kpi:nth-child(3) .lbl .dot{background:var(--amber)}
+.kpi:nth-child(4) .lbl .dot{background:var(--violet)}
+/* 主网格：左右两栏 */
+.overview{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px}
+@media(max-width:1000px){.overview{grid-template-columns:1fr}}
+/* 命中趋势图（纯 CSS 条形/折线示意） */
+.chart-area{height:180px;display:flex;align-items:flex-end;gap:8px;padding:8px 0 0}
+.chart-area .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.chart-area .col .bar{width:100%;background:linear-gradient(180deg,var(--blue),rgba(77,159,255,.3));border-radius:4px 4px 0 0;position:relative;transition:.3s}
+.chart-area .col:hover .bar{background:linear-gradient(180deg,var(--violet),rgba(163,113,247,.3))}
+.chart-area .col .day{font-size:9px;color:var(--muted);font-family:var(--mono)}
+.chart-area .col .bar::after{content:attr(data-v);position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:8.5px;color:var(--ink-2);font-family:var(--mono);opacity:0;transition:.2s}
+.chart-area .col:hover .bar::after{opacity:1}
+/* 来源分布 */
+.sources{display:grid;gap:14px}
+.source .row1{display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px}
+.source .row1 b{font-family:var(--mono)}
+.source .row1 span{color:var(--muted)}
+.source .bar{height:7px;border-radius:99px;background:var(--bg-2);overflow:hidden}
+.source .bar i{display:block;height:100%;border-radius:99px}
+.source:nth-child(1) .bar i{background:var(--blue)}
+.source:nth-child(2) .bar i{background:var(--green)}
+.source:nth-child(3) .bar i{background:var(--amber)}
+.source:nth-child(4) .bar i{background:var(--violet)}
+/* 热榜表 */
+.trend{display:grid;gap:10px}
+.trend .row{display:grid;grid-template-columns:34px 46px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px;border-radius:9px;transition:.15s}
+.trend .row:hover{background:var(--panel-2)}
+.trend .row .rk{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--muted)}
+.trend .row .thumb{width:46px;height:60px;background-size:cover;background-position:center;border-radius:6px}
+.trend .row .tt{min-width:0}
+.trend .row .tt .n{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend .row .tt .s{font-size:9.5px;color:var(--muted);font-family:var(--mono)}
+.trend .row .sub{font-size:9.5px;color:var(--green);font-family:var(--mono);white-space:nowrap}
+.trend .row .sub.off{color:var(--muted)}
+/* 订阅表 */
+.table{width:100%;border-collapse:collapse}
+.table th{text-align:left;font-size:9.5px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;padding:10px 14px;border-bottom:1px solid var(--line);text-transform:uppercase}
+.table td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:middle}
+.table tr:hover td{background:var(--panel-2)}
+.table .name b{font-size:13px;display:block}
+.table .name small{font-size:9.5px;color:var(--muted);font-family:var(--mono)}
+.table .st{font-size:9.5px;font-weight:700;padding:4px 10px;border-radius:99px;letter-spacing:.04em}
+.table .st.doing{color:var(--blue);background:rgba(77,159,255,.12)}
+.table .st.done{color:var(--green);background:rgba(63,182,139,.12)}
+.table .st.paused{color:var(--muted);background:rgba(107,119,133,.12)}
+.table .st.danger{color:var(--red);background:rgba(240,89,91,.12)}
+.table .bar{width:80px;height:5px;background:var(--bg-2);border-radius:99px;display:inline-block;vertical-align:middle;margin-right:8px}
+.table .bar i{display:block;height:100%;border-radius:99px;background:var(--blue)}
+.table .bar i.hot{background:var(--amber)}
+.table .op{font-size:11px;color:var(--blue);cursor:pointer;margin-right:12px;font-family:var(--mono)}
+.table .op:hover{text-decoration:underline}
+/* 日志面板 */
+.logs{font-family:var(--mono);font-size:11.5px}
+.logs .ln{display:flex;gap:14px;align-items:baseline;padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.04)}
+.logs .ln:last-child{border-bottom:none}
+.logs .ln:hover{background:var(--panel-2);border-radius:6px}
+.logs .ln .ts{color:var(--muted);flex:0 0 82px}
+.logs .ln .mod{color:var(--blue);flex:0 0 70px}
+.logs .ln .msg{color:var(--ink-2)}
+.logs .ln .msg b{color:var(--ink)}
+.logs .ln .msg .ok{color:var(--green)}
+.logs .ln .msg .warn{color:var(--amber)}
+/* 页脚 */
+.foot{margin-top:10px;padding:14px 0 8px;text-align:center;font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.04em;line-height:2}
+</style>
+</head>
+<body>
+
+<!-- 顶部 -->
+<header class="top">
+  <div class="in">
+    <div class="brand"><div class="logo">115</div><div class="nm">ToGo115<small>MONITOR DASHBOARD</small></div></div>
+    <nav class="nav">
+      <a class="on" onclick="go(this)"><span class="ic">▤</span>片单</a>
+      <a onclick="go(this)"><span class="ic">▶</span>媒体库</a>
+      <a onclick="go(this)"><span class="ic">✓</span>订阅</a>
+      <a onclick="go(this)"><span class="ic">≡</span>日志</a>
+      <a onclick="go(this)"><span class="ic">⚙</span>设置</a>
+    </nav>
+    <div class="right">
+      <div class="stat-chip"><span>TG MONITOR</span><b class="g">● 在线</b></div>
+      <div class="stat-chip"><span>115 SESSION</span><b>✓ 有效</b></div>
+      <div class="stat-chip"><span>EMBY SYNC</span><b class="a">重试中</b></div>
+      <span class="av">A</span>
+    </div>
+  </div>
+</header>
+
+<div class="stage">
+
+  <!-- KPI -->
+  <section class="kpi-row">
+    <div class="kpi panel"><span class="lbl"><span class="dot"></span>活跃订阅</span><span class="val">28</span><span class="delta up">▲ +3 本周</span><div class="spark"><i style="height:30%"></i><i style="height:45%"></i><i style="height:40%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:75%"></i><i style="height:90%"></i></div></div>
+    <div class="kpi panel"><span class="lbl"><span class="dot"></span>命中率</span><span class="val">96.4<span style="font-size:15px">%</span></span><span class="delta up">▲ +1.2%</span><div class="spark"><i style="height:50%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:65%"></i><i style="height:85%"></i><i style="height:96%"></i></div></div>
+    <div class="kpi panel"><span class="lbl"><span class="dot"></span>今日入库</span><span class="val">18</span><span class="delta up">▲ +5</span><div class="spark"><i style="height:25%"></i><i style="height:35%"></i><i style="height:50%"></i><i style="height:45%"></i><i style="height:70%"></i><i style="height:80%"></i><i style="height:100%"></i></div></div>
+    <div class="kpi panel"><span class="lbl"><span class="dot"></span>平均时延</span><span class="val">38<span style="font-size:15px">s</span></span><span class="delta down">▼ -6s</span><div class="spark"><i style="height:90%"></i><i style="height:80%"></i><i style="height:70%"></i><i style="height:65%"></i><i style="height:55%"></i><i style="height:45%"></i><i style="height:38%"></i></div></div>
+  </section>
+
+  <!-- 总览 -->
+  <section class="overview">
+    <div class="panel">
+      <div class="head"><span class="id">MOD-01</span><h3>命中趋势 · 最近 7 天</h3><span class="meta"><span class="live">● LIVE</span></span></div>
+      <div class="body">
+        <div class="chart-area">
+          <div class="col"><div class="bar" style="height:40%" data-v="8"></div><span class="day">一</span></div>
+          <div class="col"><div class="bar" style="height:55%" data-v="11"></div><span class="day">二</span></div>
+          <div class="col"><div class="bar" style="height:45%" data-v="9"></div><span class="day">三</span></div>
+          <div class="col"><div class="bar" style="height:70%" data-v="14"></div><span class="day">四</span></div>
+          <div class="col"><div class="bar" style="height:60%" data-v="12"></div><span class="day">五</span></div>
+          <div class="col"><div class="bar" style="height:85%" data-v="17"></div><span class="day">六</span></div>
+          <div class="col"><div class="bar" style="height:100%" data-v="18"></div><span class="day">日</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="head"><span class="id">MOD-02</span><h3>来源分布</h3><span class="meta">24H</span></div>
+      <div class="body">
+        <div class="sources">
+          <div class="source"><div class="row1"><b>Telegram</b><span>46%</span></div><div class="bar"><i style="width:46%"></i></div></div>
+          <div class="source"><div class="row1"><b>RSS</b><span>28%</span></div><div class="bar"><i style="width:28%"></i></div></div>
+          <div class="source"><div class="row1"><b>海搜 API</b><span>18%</span></div><div class="bar"><i style="width:18%"></i></div></div>
+          <div class="source"><div class="row1"><b>站点插件</b><span>8%</span></div><div class="bar"><i style="width:8%"></i></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 热榜 -->
+  <section class="panel">
+    <div class="head"><span class="id">MOD-03</span><h3>本周热榜 · TMDB</h3><span class="meta">TRENDING</span><span class="more" onclick="alert('演示原型：更多')">更多 →</span></div>
+    <div class="body">
+      <div class="trend">
+        <div class="row" onclick="alert('演示原型：《双城之战》')"><span class="rk">01</span><div class="thumb" style="background-image:url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"></div><div class="tt"><div class="n">双城之战 第二季</div><div class="s">ARCANE S2 · 剧集 · TMDB 8.9</div></div><span class="sub">已订阅 ●</span></div>
+        <div class="row" onclick="alert('演示原型：《沙丘3》')"><span class="rk">02</span><div class="thumb" style="background-image:url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"></div><div class="tt"><div class="n">沙丘：厄拉科斯之战</div><div class="s">DUNE III · 电影 · TMDB 8.6</div></div><span class="sub">已订阅 ●</span></div>
+        <div class="row" onclick="alert('演示原型：《哥斯拉》')"><span class="rk">03</span><div class="thumb" style="background-image:url('https://image.tmdb.org/t/p/w342/mU35gT9aE7aTsZkJlrYTk5nLM8Y.jpg')"></div><div class="tt"><div class="n">哥斯拉：决战之巅</div><div class="s">电影 · 2026 · TMDB 7.4</div></div><span class="sub off">未订阅</span></div>
+        <div class="row" onclick="alert('演示原型：《白莲花》')"><span class="rk">04</span><div class="thumb" style="background-image:url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"></div><div class="tt"><div class="n">白莲花度假村 第三季</div><div class="s">THE WHITE LOTUS · TMDB 8.1</div></div><span class="sub">已订阅 ●</span></div>
+        <div class="row" onclick="alert('演示原型：《地球脉动》')"><span class="rk">05</span><div class="thumb" style="background-image:url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"></div><div class="tt"><div class="n">地球脉动 第三季</div><div class="s">PLANET EARTH III · TMDB 9.2</div></div><span class="sub">已订阅 ●</span></div>
+        <div class="row" onclick="alert('演示原型：《异形》')"><span class="rk">06</span><div class="thumb" style="background-image:url('https://image.tmdb.org/t/p/w342/d1RHS8nDC8bvtCFvTf2uSNDYJxS.jpg')"></div><div class="tt"><div class="n">异形：地球</div><div class="s">ALIEN: EARTH · 2025</div></div><span class="sub off">未订阅</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 订阅表 -->
+  <section class="panel">
+    <div class="head"><span class="id">MOD-04</span><h3>订阅矩阵</h3><span class="meta">28 ENTRIES</span><span class="more" onclick="alert('演示原型：新增')">＋ 新增</span></div>
+    <div class="body" style="padding:0">
+      <table class="table">
+        <tr><th>Title</th><th>Status</th><th>Progress</th><th>Source</th><th>Actions</th></tr>
+        <tr><td class="name"><b>双城之战 第二季</b><small>ARCANE S2 · 剧集</small></td><td><span class="st doing">连载中</span></td><td><span class="bar"><i style="width:78%"></i></span>E6/9</td><td>TG / RSS</td><td><span class="op">RESCAN</span><span class="op">DEL</span></td></tr>
+        <tr><td class="name"><b>沙丘：厄拉科斯之战</b><small>DUNE III · 电影</small></td><td><span class="st doing">转存中</span></td><td><span class="bar"><i style="width:40%" class="hot"></i></span>40%</td><td>TG 频道</td><td><span class="op">RESCAN</span><span class="op">DEL</span></td></tr>
+        <tr><td class="name"><b>地球脉动 第三季</b><small>PLANET EARTH III</small></td><td><span class="st done">已完结</span></td><td><span class="bar"><i style="width:100%"></i></span>8/8</td><td>磁力</td><td><span class="op">RESCAN</span><span class="op">DEL</span></td></tr>
+        <tr><td class="name"><b>白莲花度假村 第三季</b><small>WHITE LOTUS S3</small></td><td><span class="st doing">连载中</span></td><td><span class="bar"><i style="width:52%"></i></span>E4/8</td><td>TG 历史</td><td><span class="op">RESCAN</span><span class="op">DEL</span></td></tr>
+        <tr><td class="name"><b>奥本海默 第二季</b><small>OPPENHEIMER S2</small></td><td><span class="st danger">重试中</span></td><td><span class="bar"><i style="width:0%"></i></span>—</td><td>海搜</td><td><span class="op">RESCAN</span><span class="op">DEL</span></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 日志 -->
+  <section class="panel">
+    <div class="head"><span class="id">MOD-05</span><h3>事件日志</h3><span class="meta"><span class="live">● TAIL -F</span></span><span class="more" onclick="alert('演示原型：完整日志')">全部 →</span></div>
+    <div class="body">
+      <div class="logs">
+        <div class="ln"><span class="ts">02:41:18</span><span class="mod">TG</span><span class="msg">HIT <b>《沙丘：厄拉科斯之战》</b> · 115 链接已抽取 <span class="ok">OK</span></span></div>
+        <div class="ln"><span class="ts">02:41:25</span><span class="mod">DLV</span><span class="msg">转存 → <b>/影视/2026</b> <span class="ok">OK</span></span></div>
+        <div class="ln"><span class="ts">02:41:58</span><span class="mod">EMB</span><span class="msg"><b>沙丘：厄拉科斯之战</b> 入库成功 <span class="ok">OK</span></span></div>
+        <div class="ln"><span class="ts">02:40:03</span><span class="mod">HAS</span><span class="msg">海搜返回 3 条 · 匹配 1 条</span></div>
+        <div class="ln"><span class="ts">01:55:02</span><span class="mod">TG</span><span class="msg"><b>奥本海默 S2</b> 重搜 <span class="warn">0 HIT</span> 30min 后重试</span></div>
+        <div class="ln"><span class="ts">01:30:11</span><span class="mod">EMB</span><span class="msg">同步检查失败 <span class="warn">WARN</span> 自动重试中</span></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot">
+  TOGO115 // MONITOR DASHBOARD · 数据源 TELEGRAM/RSS/HAISOU/PLUGINS · 30MIN RESCAN · UI 演示原型
+</footer>
+
+<script>
+function go(el){
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on'));
+  el.classList.add('on');
+  if(el.textContent.includes('片单'))window.scrollTo({top:0,behavior:'smooth'});
+  else window.scrollTo({top:document.querySelector('.stage').offsetTop,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

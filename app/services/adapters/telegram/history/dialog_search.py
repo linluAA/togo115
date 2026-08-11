@@ -70,17 +70,44 @@ class TelegramDialogSearchMixin(TelegramDialogSearchQueryMixin, TelegramDialogSe
                 return index, [], 0, False, True
             return index, hits, int(dialog_extract_ms or 0), True, False
 
-        tasks = [asyncio.create_task(search_one(index, dialog)) for index, dialog in enumerate(ranked_dialogs)]
+        # Use a worker pool pattern: only create tasks for dialogs that can
+        # actually acquire the semaphore, rather than creating all tasks upfront
+        # and having most of them wait on the semaphore.
+        pending: set[asyncio.Task] = set()
         completed: list[tuple[int, list[SearchResult]]] = []
-        for task in asyncio.as_completed(tasks):
-            index, hits, dialog_extract_ms, did_search, did_fail = await task
-            if did_fail:
-                failed += 1
-            if did_search:
-                searched += 1
-                extract_ms_total += dialog_extract_ms
-            if hits:
-                completed.append((index, hits))
+        dialog_iter = iter(enumerate(ranked_dialogs))
+        # Prime the pool with as many tasks as the semaphore allows.
+        for _ in range(semaphore._value):
+            try:
+                index, dialog = next(dialog_iter)
+            except StopIteration:
+                break
+            pending.add(asyncio.create_task(search_one(index, dialog)))
+        try:
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    index, hits, dialog_extract_ms, did_search, did_fail = task.result()
+                    if did_fail:
+                        failed += 1
+                    if did_search:
+                        searched += 1
+                        extract_ms_total += dialog_extract_ms
+                    if hits:
+                        completed.append((index, hits))
+                    # Launch next dialog as soon as a slot frees up.
+                    if budget.exhausted():
+                        continue
+                    try:
+                        next_index, next_dialog = next(dialog_iter)
+                        pending.add(asyncio.create_task(search_one(next_index, next_dialog)))
+                    except StopIteration:
+                        pass
+        finally:
+            if pending:
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
         for _index, hits in sorted(completed, key=lambda item: item[0]):
             all_results.extend(hits)
         deduped_results: list[SearchResult] = []

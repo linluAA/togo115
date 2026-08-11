@@ -114,9 +114,7 @@ class TelegramHistorySearchMixin(TelegramDialogSearchMixin, TelegramFastSearchMi
         if not state.force_remote:
             indexed_results = self._search_indexed_telegram_messages(dialogs, queries)
             if indexed_results:
-                results = self._dedupe_results(indexed_results)
-                metrics.index_hits = len(results)
-                indexed_results = results
+                metrics.index_hits = len(indexed_results)
                 add_log(
                     "debug",
                     "telegram",
@@ -254,7 +252,7 @@ class TelegramHistorySearchMixin(TelegramDialogSearchMixin, TelegramFastSearchMi
         stats: TelegramPipelineStats,
     ) -> list[SearchResult]:
         results: list[SearchResult] = []
-        async for message in client.iter_messages(None, search=query, limit=8, wait_time=0):
+        async for message in client.iter_messages(None, search=query, limit=8, wait_time=0.05):
             links = await self._extract_global_search_links(client, message, query, seen_messages, stats)
             results.extend(links)
             if len(results) >= TELEGRAM_HISTORY_MAX_RESULTS:

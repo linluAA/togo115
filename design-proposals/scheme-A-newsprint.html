@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>ToGo115 · 方案 A｜报刊亭新丑风</title>
+<style>
+/* ============================================================
+   方案 A · 报刊亭新丑风（Neo-Brutalism）
+   米黄纸张底 + 纯黑粗框 + 无过渡阴影 + 印刷块字号
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --paper:#f3ead8; --paper-2:#e9dfc8; --ink:#141210; --ink-soft:#4b463c;
+  --red:#e0342b; --blue:#2b59e0; --green:#1e9e4a; --amber:#e8a10e;
+  --line:#141210; --w:3px; --shadow:6px 6px 0 #141210;
+  font-family:"Arial Black","Arial Bold","PingFang SC","Microsoft YaHei",sans-serif;
+}
+html,body{background:var(--paper)}
+body{
+  color:var(--ink); background-image:radial-gradient(var(--line) .7px,transparent .7px);
+  background-size:22px 22px; background-position:-8px -8px;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--red);color:#fff}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:var(--paper-2);border-left:3px solid var(--line)}
+::-webkit-scrollbar-thumb{background:var(--ink);border:2px solid var(--paper-2)}
+/* ===== 顶部报纸刊头 ===== */
+.masthead{
+  border-bottom:var(--w) solid var(--line); padding:14px 22px;
+  display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  background:var(--paper);
+}
+.masthead .logo{
+  display:flex; align-items:center; gap:12px; cursor:pointer;
+}
+.masthead .logo .box{
+  width:44px; height:44px; background:var(--ink); color:var(--paper);
+  display:grid; place-items:center; font-size:20px; font-weight:900;
+}
+.masthead .logo h1{
+  font-size:24px; letter-spacing:.04em; line-height:.9; text-transform:uppercase;
+}
+.masthead .logo small{
+  display:block; font-size:9px; letter-spacing:.26em; color:var(--ink-soft);
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif; margin-top:3px;
+}
+.masthead .stamp{
+  margin-left:auto; display:flex; align-items:center; gap:8px;
+}
+.masthead .stamp .tag{
+  font-size:11px; letter-spacing:.08em; border:3px solid var(--ink); padding:7px 12px;
+  text-transform:uppercase;
+}
+.masthead .stamp .tag.red{background:var(--red);color:#fff;box-shadow:var(--shadow)}
+.masthead .avatar{
+  width:44px;height:44px;background:var(--blue);color:#fff;border:3px solid var(--ink);
+  box-shadow:var(--shadow);display:grid;place-items:center;font-size:16px;
+}
+/* ===== 订阅源横幅 ===== */
+.ticker{
+  border-bottom:var(--w) solid var(--line); background:var(--blue); color:#fff;
+  overflow:hidden; white-space:nowrap; display:flex; align-items:center;
+}
+.ticker .label{
+  flex:0 0 auto; background:var(--red); border-right:3px solid var(--ink);
+  padding:9px 14px; font-size:12px; letter-spacing:.1em; font-weight:900;
+}
+.ticker .items{
+  display:flex; gap:28px; padding:9px 16px; font-size:12px; letter-spacing:.04em;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif; font-weight:600;
+  animation:scroll 26s linear infinite;
+}
+.ticker .items i{font-style:normal;opacity:.75}
+@keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+/* ===== 导航栏 ===== */
+.nav{
+  display:flex; gap:0; border-bottom:var(--w) solid var(--line); background:var(--paper);
+  flex-wrap:wrap;
+}
+.nav a{
+  padding:14px 22px; font-size:15px; font-weight:900; letter-spacing:.06em;
+  border-right:3px solid var(--line); display:flex; align-items:center; gap:8px;
+  text-transform:uppercase;
+}
+.nav a .k{font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-size:10px;font-weight:700;opacity:.55}
+.nav a:hover{background:var(--amber);transform:translateY(2px)}
+.nav a.on{background:var(--ink);color:var(--paper)}
+.nav a.on:hover{background:var(--ink)}
+.nav .search{
+  margin-left:auto; display:flex; align-items:stretch; border-left:3px solid var(--line);
+}
+.nav .search input{
+  border:none; background:var(--paper-2); padding:0 14px; font:600 13px "PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--ink); outline:none; width:220px;
+}
+.nav .search input::placeholder{color:var(--ink-soft)}
+.nav .search button{
+  border-left:3px solid var(--line); background:var(--red); color:#fff; padding:0 18px;
+  font-size:13px; font-weight:900; letter-spacing:.1em;
+}
+.nav .search button:hover{filter:brightness(1.1)}
+/* ===== 主体 ===== */
+.wrap{max-width:1200px;margin:0 auto;padding:26px 22px 80px}
+/* 头条 */
+.lead{
+  display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:26px; margin-bottom:34px;
+}
+@media(max-width:900px){.lead{grid-template-columns:1fr}}
+.lead .headline{
+  border:var(--w) solid var(--line); background:var(--paper); box-shadow:var(--shadow);
+  padding:30px; position:relative;
+}
+.lead .headline::before{content:"";position:absolute;inset:6px;border:2px dashed var(--line);pointer-events:none}
+.lead .headline>*{position:relative}
+.lead .kicker{
+  display:inline-block; background:var(--red); color:#fff; font-size:11px; letter-spacing:.12em;
+  padding:6px 10px; margin-bottom:16px; box-shadow:3px 3px 0 var(--ink);
+}
+.lead h2{
+  font-size:clamp(26px,4vw,44px); line-height:1.02; letter-spacing:-.01em; margin-bottom:12px;
+}
+.lead .sub{font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-weight:600;color:var(--ink-soft);line-height:1.7;margin-bottom:22px}
+.lead .stats{display:flex;gap:10px;flex-wrap:wrap}
+.lead .stats .s{
+  border:3px solid var(--line); background:#fff; padding:10px 14px; box-shadow:3px 3px 0 var(--ink);
+}
+.lead .stats .s b{font-size:22px;display:block;line-height:1}
+.lead .stats .s span{font-size:10px;letter-spacing:.12em;color:var(--ink-soft);text-transform:uppercase}
+/* 头版主海报 */
+.feature{
+  border:var(--w) solid var(--line); box-shadow:var(--shadow); background:var(--ink);
+  color:#fff; position:relative; overflow:hidden; min-height:100%;
+  display:flex; flex-direction:column;
+}
+.feature .film{position:relative;flex:1;display:flex;align-items:flex-end;padding:22px;background-size:cover;background-position:center}
+.feature .film::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.92))}
+.feature .film .cap{position:relative;z-index:2}
+.feature .film .badge{display:inline-block;background:var(--amber);color:var(--ink);font-size:11px;font-weight:900;padding:4px 8px;margin-bottom:8px}
+.feature .film h3{font-size:26px;line-height:1.05;margin-bottom:4px}
+.feature .film p{font-size:11px;opacity:.8;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.feature .foot{
+  border-top:3px solid var(--line); background:var(--blue); color:#fff;
+  padding:14px 22px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.feature .foot b{font-size:13px}
+.feature .foot .go{background:#fff;color:var(--ink);font-size:12px;font-weight:900;padding:8px 14px;cursor:pointer}
+.feature .foot .go:hover{background:var(--amber)}
+/* 区块标题 */
+.sec{margin-bottom:40px}
+.sec .h{
+  display:flex; align-items:center; gap:14px; margin-bottom:18px;
+}
+.sec .h .no{
+  background:var(--ink); color:var(--paper); padding:8px 10px; font-size:13px;
+  box-shadow:3px 3px 0 var(--line);
+}
+.sec .h h2{font-size:24px;text-transform:uppercase;letter-spacing:.02em}
+.sec .h .more{margin-left:auto;font-size:12px;font-weight:900;border:3px solid var(--line);padding:8px 14px;background:#fff;box-shadow:3px 3px 0 var(--line)}
+.sec .h .more:hover{background:var(--amber);transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line)}
+/* 海报网格 */
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:18px}
+.poster{position:relative;cursor:pointer}
+.poster .ph{aspect-ratio:2/3;border:var(--w) solid var(--line);background-size:cover;background-position:center;background-color:var(--paper-2)}
+.poster .num{
+  position:absolute; top:-10px; left:-10px; z-index:2; width:34px;height:34px;
+  background:var(--red);color:#fff;border:3px solid var(--line);box-shadow:2px 2px 0 var(--line);
+  display:grid;place-items:center;font-size:14px;
+}
+.poster .ph:hover{transform:translate(-3px,-3px);box-shadow:6px 6px 0 var(--ink)}
+.poster .ph:hover ~ .tag{transform:none}
+.poster .tag{
+  font-size:12px; font-weight:900; margin-top:9px; line-height:1.25; min-height:31px;
+}
+.poster .tag:hover{text-decoration:underline}
+.poster .st{font-size:10px;color:var(--ink-soft);font-weight:700;letter-spacing:.04em;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.poster .dot{
+  display:inline-block;width:9px;height:9px;background:var(--green);margin-right:5px;vertical-align:1px;
+}
+.poster .dot.red{background:var(--red)}
+/* 订阅表 */
+.table{width:100%;border-collapse:collapse;border:var(--w) solid var(--line);background:#fff;box-shadow:var(--shadow)}
+.table th{
+  background:var(--ink);color:var(--paper);text-align:left;padding:12px 14px;font-size:12px;
+  letter-spacing:.1em;text-transform:uppercase;
+}
+.table td{
+  padding:12px 14px;border-top:2px solid var(--line);font-size:13px;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-weight:600;
+}
+.table tr:hover td{background:var(--amber)}
+.table .st{font-size:11px;font-weight:900;border:2px solid var(--line);padding:3px 8px;white-space:nowrap}
+.table .st.doing{background:var(--green);color:#fff}
+.table .st.done{background:var(--blue);color:#fff}
+.table .st.paused{background:var(--amber)}
+.table td.act{white-space:nowrap}
+.table button.c{
+  border:2px solid var(--line);padding:5px 10px;font-size:11px;font-weight:900;background:#fff;
+}
+.table button.c:hover{background:var(--ink);color:#fff}
+/* 页脚 */
+footer{
+  border-top:var(--w) solid var(--line); padding:26px 22px 40px; display:flex; align-items:center; gap:18px;
+  flex-wrap:wrap; background:var(--ink); color:var(--paper);
+}
+footer .logo{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.06em}
+footer .logo .box{width:34px;height:34px;background:var(--red);display:grid;place-items:center}
+footer p{font-size:11px;opacity:.7;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+footer .up{margin-left:auto;background:var(--amber);color:var(--ink);font-size:12px;font-weight:900;padding:10px 16px;border:3px solid var(--paper);cursor:pointer}
+footer .up:hover{transform:translateY(-2px)}
+/* 打印感细线分隔 */
+.divider{border-top:2px dashed var(--line);margin:34px 0}
+</style>
+</head>
+<body>
+
+<!-- 刊头 -->
+<header class="masthead">
+  <div class="logo" onclick="go('tmdb')">
+    <div class="box">115</div>
+    <div><h1>ToGo115<small>网盘追新早报 · DAILY PULP</small></h1></div>
+  </div>
+  <div class="stamp">
+    <span class="tag red">● 实时追新中</span>
+    <div class="avatar">A</div>
+  </div>
+</header>
+
+<!-- 订阅源滚动条 -->
+<div class="ticker">
+  <span class="label">电报专线</span>
+  <div class="items">
+    <span>《沙丘3》高清已转存 · 115 就绪 <i>◆</i></span>
+    <span>Telegram 频道 @cangmao_hd 命中 <i>◆</i></span>
+    <span>《白莲花度假村3》E06 发现 2160p <i>◆</i></span>
+    <span>海搜 API 今日配额 87/100 <i>◆</i></span>
+    <span>《地球脉动3》蓝光原盘入库 Emby <i>◆</i></span>
+    <span>BT1207 站点插件搜到《双城之战2》<i>◆</i></span>
+  </div>
+</div>
+
+<!-- 导航 -->
+<nav class="nav">
+  <a class="on" data-v="tmdb" onclick="go('tmdb')">片单<span class="k">TMDB</span></a>
+  <a data-v="emby" onclick="go('emby')">放映厅<span class="k">EMBY</span></a>
+  <a data-v="subs" onclick="go('subs')">订阅<span class="k">追新</span></a>
+  <a data-v="logs" onclick="go('logs')">档案<span class="k">LOGS</span></a>
+  <a data-v="set" onclick="go('set')">印厂<span class="k">SETTINGS</span></a>
+  <div class="search"><input id="q" placeholder="搜索片名 / 关键字…" onkeydown="if(event.key==='Enter')alert('演示原型：搜索「'+this.value+'」')"/><button onclick="alert('演示原型：搜索「'+document.getElementById('q').value+'」')">搜</button></div>
+</nav>
+
+<div class="wrap">
+
+  <!-- 头条区 -->
+  <section class="lead">
+    <div class="headline">
+      <span class="kicker">今日头条 / 追到最热</span>
+      <h2>《沙丘：厄拉科斯之战》<br/>2160p 双版本已转存 115</h2>
+      <p class="sub">凌晨 02:41 于 Telegram 频道 <b>@cangmao_hd</b> 命中，自动完成链接抽取、转存与入库，全程 38 秒。</p>
+      <div class="stats">
+        <div class="s"><b>28</b><span>活跃订阅</span></div>
+        <div class="s"><b>96%</b><span>命中率</span></div>
+        <div class="s"><b>2.4h</b><span>平均时延</span></div>
+        <div class="s"><b>18</b><span>今日入库</span></div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="film" style="background-image:linear-gradient(180deg,transparent,#000),url('https://image.tmdb.org/t/p/w780/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')">
+        <div class="cap">
+          <span class="badge">★ 本周头版</span>
+          <h3>沙丘：厄拉科斯之战</h3>
+          <p>Dune: Part Three · 2026 · 科幻 / 史诗</p>
+        </div>
+      </div>
+      <div class="foot">
+        <b>观看：EMBY · 版本 2160p.HDR</b>
+        <span class="go" onclick="alert('演示原型：转存详情')">转存详情 →</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- 追新热点 -->
+  <section class="sec" id="tmdb">
+    <div class="h">
+      <span class="no">01</span><h2>本周热榜 · 一键追新</h2>
+      <span class="more" onclick="alert('演示原型：更多榜单')">更多榜单 →</span>
+    </div>
+    <div class="board">
+      <div class="poster" onclick="alert('演示原型：《双城之战2》详情')"><span class="num">1</span>
+        <div class="ph" style="background-image:linear-gradient(160deg,rgba(20,18,16,.25),rgba(20,18,16,.65)),url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"></div>
+        <div class="tag">双城之战 第二季</div><div class="st"><span class="dot"></span>已订阅 · 等待 S2</div>
+      </div>
+      <div class="poster" onclick="alert('演示原型：《沙丘3》详情')"><span class="num">2</span>
+        <div class="ph" style="background-image:linear-gradient(160deg,rgba(20,18,16,.25),rgba(20,18,16,.65)),url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"></div>
+        <div class="tag">沙丘：厄拉科斯之战</div><div class="st"><span class="dot"></span>已订阅 · 首映 2026</div>
+      </div>
+      <div class="poster" onclick="alert('演示原型：《哥斯拉2》详情')"><span class="num">3</span>
+        <div class="ph" style="background-image:linear-gradient(160deg,rgba(20,18,16,.25),rgba(20,18,16,.65)),url('https://image.tmdb.org/t/p/w342/mU35gT9aE7aTsZkJlrYTk5nLM8Y.jpg')"></div>
+        <div class="tag">哥斯拉：决战之巅</div><div class="st"><span class="dot"></span>已订阅 · 首映 2026</div>
+      </div>
+      <div class="poster" onclick="alert('演示原型：《地球脉动3》详情')"><span class="num">4</span>
+        <div class="ph" style="background-image:linear-gradient(160deg,rgba(20,18,16,.25),rgba(20,18,16,.65)),url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"></div>
+        <div class="tag">地球脉动 第三季</div><div class="st"><span class="dot"></span>已订阅 · 完结</div>
+      </div>
+      <div class="poster" onclick="alert('演示原型：《白莲花度假村3》详情')"><span class="num">5</span>
+        <div class="ph" style="background-image:linear-gradient(160deg,rgba(20,18,16,.25),rgba(20,18,16,.65)),url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"></div>
+        <div class="tag">白莲花度假村 第三季</div><div class="st"><span class="dot"></span>已订阅 · 连载中</div>
+      </div>
+      <div class="poster" onclick="alert('演示原型：《奥本海默2》详情')"><span class="num">6</span>
+        <div class="ph" style="background-image:linear-gradient(160deg,rgba(20,18,16,.25),rgba(20,18,16,.65)),url('https://image.tmdb.org/t/p/w342/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg')"></div>
+        <div class="tag">奥本海默 第二季</div><div class="st"><span class="dot red"></span>订阅失败 · 重试中</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- 订阅台账 -->
+  <section class="sec" id="subs">
+    <div class="h">
+      <span class="no">02</span><h2>追新台账 · 我的订阅</h2>
+      <span class="more" onclick="alert('演示原型：新增订阅')">＋ 新增订阅</span>
+    </div>
+    <table class="table">
+      <tr><th>片名</th><th>状态</th><th>已入库</th><th>最近命中</th><th>操作</th></tr>
+      <tr>
+        <td><b>沙丘：厄拉科斯之战</b><br/><span style="font-size:11px;color:var(--ink-soft)">Dune Part III · 电影</span></td>
+        <td><span class="st doing">转存中</span></td><td>—</td><td>02:41 · TG</td>
+        <td class="act"><button class="c" onclick="alert('演示原型：重搜')">重搜</button> <button class="c" onclick="alert('演示原型：取消订阅')">退订</button></td>
+      </tr>
+      <tr>
+        <td><b>双城之战 第二季</b><br/><span style="font-size:11px;color:var(--ink-soft)">Arcane S2 · 剧集</span></td>
+        <td><span class="st doing">连载中</span></td><td>E1-E6</td><td>01-12 · RSS</td>
+        <td class="act"><button class="c">重搜</button> <button class="c">退订</button></td>
+      </tr>
+      <tr>
+        <td><b>地球脉动 第三季</b><br/><span style="font-size:11px;color:var(--ink-soft)">Planet Earth III · 剧集</span></td>
+        <td><span class="st done">已完结</span></td><td>全 8 集</td><td>01-05 · 磁力</td>
+        <td class="act"><button class="c">重搜</button> <button class="c">退订</button></td>
+      </tr>
+      <tr>
+        <td><b>白莲花度假村 第三季</b><br/><span style="font-size:11px;color:var(--ink-soft)">White Lotus S3 · 剧集</span></td>
+        <td><span class="st doing">连载中</span></td><td>E1-E4</td><td>01-14 · TG</td>
+        <td class="act"><button class="c">重搜</button> <button class="c">退订</button></td>
+      </tr>
+      <tr>
+        <td><b>奥本海默 第二季</b><br/><span style="font-size:11px;color:var(--ink-soft)">Oppenheimer · 剧集</span></td>
+        <td><span class="st paused">暂停</span></td><td>—</td><td>—</td>
+        <td class="act"><button class="c">重搜</button> <button class="c">退订</button></td>
+      </tr>
+    </table>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- 放映厅 -->
+  <section class="sec" id="emby">
+    <div class="h">
+      <span class="no">03</span><h2>放映厅 · Emby 媒体库</h2>
+      <span class="more" onclick="alert('演示原型：打开 Emby')">打开 Emby →</span>
+    </div>
+    <div class="board">
+      <div class="poster" onclick="alert('演示原型：播放')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"></div><div class="tag">沙丘：厄拉科斯之战</div><div class="st">2160p · 已看 12%</div></div>
+      <div class="poster" onclick="alert('演示原型：播放')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"></div><div class="tag">双城之战 第二季</div><div class="st">1080p · S2E6</div></div>
+      <div class="poster" onclick="alert('演示原型：播放')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"></div><div class="tag">地球脉动 第三季</div><div class="st">4K · 已看 55%</div></div>
+      <div class="poster" onclick="alert('演示原型：播放')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"></div><div class="tag">白莲花度假村 第三季</div><div class="st">1080p · 未看</div></div>
+      <div class="poster" onclick="alert('演示原型：播放')"><div class="ph" style="background-image:url('https://image.tmdb.org/t/p/w342/mU35gT9aE7aTsZkJlrYTk5nLM8Y.jpg')"></div><div class="tag">哥斯拉：决战之巅</div><div class="st">2160p · 未看</div></div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="logo"><div class="box">115</div><span>ToGo115 日报</span></div>
+  <p>数据来自 Telegram / RSS / 海搜 · 每 30 分钟自动全量重搜 · 本页为 UI 演示原型，不含真实数据</p>
+  <span class="up" onclick="window.scrollTo({top:0,behavior:'smooth'})">回到报头 ↑</span>
+</footer>
+
+<script>
+function go(v){
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===v));
+  if(v==='tmdb'){window.scrollTo({top:0,behavior:'smooth'})}
+  else{document.querySelector('.wrap').scrollIntoView({behavior:'smooth'})}
+}
+</script>
+</body>
+</html>

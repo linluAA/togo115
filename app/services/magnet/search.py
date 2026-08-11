@@ -114,7 +114,8 @@ def _has_good_magnet_hit(subscription: dict[str, Any], candidates: list[SearchRe
         try:
             if _result_score(subscription, result) >= TG_BOT_MAGNET_GOOD_SCORE:
                 return True
-        except Exception:
+        except Exception as exc:
+            add_log("debug", "tg_bot", "TG Bot 磁力评分异常", {"url": str(getattr(result, "url", "")), "error": str(exc)})
             continue
     return False
 
@@ -123,7 +124,7 @@ def _order_sources_for_magnet(adapter: RssTorznabAdapter, sources: list[dict[str
     try:
         from app.services.source_stats import _source_stats_key, source_health_status
     except Exception:
-        return list(sources)
+        return sources
 
     def sort_key(source: dict[str, Any]) -> tuple[int, int, str]:
         priority = 0
@@ -137,7 +138,7 @@ def _order_sources_for_magnet(adapter: RssTorznabAdapter, sources: list[dict[str
         degraded = 1 if health.get("degraded") else 0
         return (degraded, -priority, name)
 
-    return sorted(list(sources), key=sort_key)
+    return sorted(sources, key=sort_key)
 
 async def _search_priority_batch(
     adapter: RssTorznabAdapter,

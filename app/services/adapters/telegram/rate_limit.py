@@ -39,14 +39,20 @@ class TelegramRequestGate:
         return self._current_interval
 
     async def wait(self) -> None:
+        # Phase 1: sleep outside the lock so other concurrent requests are not
+        # blocked during the wait.  Only the brief _next_at update below holds
+        # the lock.  This allows up to TELEGRAM_SOURCE_CONCURRENCY requests to
+        # be in-flight simultaneously, which is bounded by the semaphore.
+        now = time.monotonic()
+        target = max(self._next_at, self._cooldown_until)
+        delay = target - now
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        # Phase 2: quick atomic update of shared state under the lock.
         lock = self._ensure_lock()
         async with lock:
             now = time.monotonic()
-            target = max(self._next_at, self._cooldown_until)
-            delay = target - now
-            if delay > 0:
-                await asyncio.sleep(delay)
-                now = time.monotonic()
             self._next_at = now + self._current_interval
             # Gradually recover toward the default interval after a quiet period.
             if self._current_interval > self._default_interval and now >= self._cooldown_until:
@@ -66,13 +72,24 @@ class TelegramRequestGate:
         self._next_at = max(self._next_at, self._cooldown_until)
 
     def note_error(self, exc: Any = None) -> None:
+        if exc is None:
+            return
         name = type(exc).__name__ if exc is not None else ""
         text = str(exc or "")
-        if "FloodWait" in name or "FloodWait" in text or "flood" in text.casefold():
+        # FloodWait detection: check class name, string repr, attribute presence,
+        # and RPCError patterns to be resilient across Telethon versions.
+        is_flood = (
+            "FloodWait" in name
+            or "FloodWait" in text
+            or "flood" in text.casefold()
+            or hasattr(exc, "seconds")
+            or ("RPCError" in name and "FLOOD" in text.upper())
+        )
+        if is_flood:
             seconds = getattr(exc, "seconds", None)
             try:
                 self.note_flood_wait(float(seconds) if seconds is not None else 5.0)
-            except Exception:
+            except (TypeError, ValueError):
                 self.note_flood_wait(5.0)
 
     def stats(self) -> dict[str, float | int]:

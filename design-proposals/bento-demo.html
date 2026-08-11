@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>ToGo115 · Bento 动态瓦片 Demo</title>
+<style>
+/* ===== RESET & TOKENS ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c12; --bg-soft:#12121a; --tile:#17171f; --tile-2:#1c1c26;
+  --line:rgba(255,255,255,.07); --line-strong:rgba(255,255,255,.14);
+  --ink:#f2f2f6; --ink-soft:#a9a9b4; --muted:#66666f;
+  --indigo:#6366f1; --indigo-l:#818cf8; --cyan:#22d3ee; --amber:#f59e0b;
+  --green:#43d17a; --pink:#f472b6; --red:#ef5b5b;
+  --r:18px; --r-sm:12px;
+  font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:15px; line-height:1.55; color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+html,body{min-height:100%}
+body{
+  background:
+    radial-gradient(1100px 600px at 80% -10%, rgba(99,102,241,.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(34,211,238,.08), transparent 60%),
+    var(--bg);
+}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:99px;border:2px solid transparent;background-clip:content-box}
+
+/* ===== APP SHELL ===== */
+.shell{display:grid;grid-template-columns:78px 1fr;min-height:100vh}
+.rail{
+  position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:center;
+  gap:6px;padding:18px 0;border-right:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(255,255,255,.02),transparent);
+}
+.rail .logo{
+  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-weight:900;
+  font-size:17px;color:#fff;margin-bottom:18px;position:relative;
+  background:radial-gradient(circle at 30% 30%,var(--indigo-l),var(--indigo));
+  box-shadow:0 0 0 1px rgba(99,102,241,.4),0 8px 24px rgba(99,102,241,.35);
+}
+.rail .logo::after{content:"";position:absolute;inset:-3px;border-radius:16px;border:1.5px solid rgba(99,102,241,.4);animation:pulse 3s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:0;transform:scale(1.08)}}
+.nav-btn{
+  width:46px;height:46px;border-radius:13px;display:grid;place-items:center;color:var(--muted);
+  transition:.2s;position:relative;
+}
+.nav-btn svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8}
+.nav-btn:hover{color:var(--ink);background:rgba(255,255,255,.05)}
+.nav-btn.active{color:#fff;background:rgba(99,102,241,.16);box-shadow:inset 0 0 0 1px rgba(99,102,241,.4)}
+.nav-btn.active::before{content:"";position:absolute;left:-18px;top:50%;transform:translateY(-50%);width:3px;height:22px;border-radius:99px;background:var(--indigo-l)}
+.rail .spacer{flex:1}
+.rail .user{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#2a2a36,#15151c);display:grid;place-items:center;font-weight:700;font-size:13px;border:1px solid var(--line)}
+
+.main{min-width:0;padding:22px 30px 40px}
+.topbar{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.topbar h1{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.topbar .crumb{color:var(--muted);font-size:13px}
+.topbar .crumb b{color:var(--ink-soft);font-weight:600}
+.topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:99px;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--ink-soft)}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.pill.warn .dot{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:11px;font-weight:700;font-size:13.5px;background:linear-gradient(135deg,var(--indigo-l),var(--indigo));color:#fff;box-shadow:0 6px 18px rgba(99,102,241,.3)}
+.btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn.ghost{background:rgba(255,255,255,.05);border:1px solid var(--line-strong);color:var(--ink);box-shadow:none}
+
+/* ===== VIEW TRANSITION ===== */
+.view{display:none;animation:fade .35s ease}
+.view.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ===== BENTO GRID ===== */
+.bento{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;grid-auto-rows:96px}
+.tile{background:var(--tile);border:1px solid var(--line);border-radius:var(--r);padding:16px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s}
+.tile:hover{transform:translateY(-2px);border-color:var(--line-strong);box-shadow:0 14px 40px rgba(0,0,0,.35)}
+.tile .label{font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:.02em;display:flex;align-items:center;gap:7px}
+.tile .label svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
+.tile .big{font-size:32px;font-weight:800;letter-spacing:-.02em;margin-top:6px;line-height:1}
+.tile .sub{font-size:12px;color:var(--ink-soft);margin-top:4px}
+.tile.tap{cursor:pointer}
+
+/* size spans */
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}
+.c7{grid-column:span 7}.c8{grid-column:span 8}.c9{grid-column:span 9}.c12{grid-column:span 12}
+.r2{grid-row:span 2}.r3{grid-row:span 3}.r4{grid-row:span 4}
+
+/* CORE tile (circle) */
+.core{display:flex;flex-direction:column;justify-content:space-between}
+.core .orb-wrap{display:flex;align-items:center;gap:18px}
+.orb{width:84px;height:84px;border-radius:50%;position:relative;flex:none;
+  background:radial-gradient(circle at 32% 30%,var(--indigo-l),var(--indigo) 60%,#3b3ad1);
+  box-shadow:0 0 0 1px rgba(99,102,241,.4),0 10px 30px rgba(99,102,241,.4),inset 0 -8px 18px rgba(0,0,0,.3);
+  display:grid;place-items:center;animation:float 5s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.orb span{font-weight:900;font-size:22px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.4)}
+.orb::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1.5px solid rgba(99,102,241,.35);animation:pulse 3.5s ease-in-out infinite}
+.core .meta{font-size:12px;color:var(--ink-soft)}
+.core .meta b{color:var(--ink);font-weight:700}
+.core .ring{position:absolute;right:-30px;bottom:-30px;width:140px;height:140px;border-radius:50%;border:1px dashed rgba(255,255,255,.08)}
+
+/* mini charts */
+.spark{position:absolute;left:0;right:0;bottom:0;height:42px}
+svg.spark-svg{width:100%;height:100%;display:block}
+.wave{position:absolute;inset:0}
+.bar-mini{display:flex;align-items:flex-end;gap:3px;height:36px;margin-top:10px}
+.bar-mini i{flex:1;background:linear-gradient(180deg,var(--cyan),rgba(34,211,238,.2));border-radius:3px 3px 0 0;animation:grow 1s ease both}
+@keyframes grow{from{height:0}to{height:var(--h)}}
+.gauge{position:relative;width:64px;height:64px}
+.gauge svg{transform:rotate(-90deg)}
+.gauge .val{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;font-size:15px}
+
+/* activity feed tile */
+.feed{display:flex;flex-direction:column;gap:0;margin-top:8px;overflow:auto;height:100%}
+.feed .row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.feed .row:last-child{border-bottom:none}
+.feed .ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none;font-size:12px}
+.feed .ic.ok{background:rgba(67,209,122,.15);color:var(--green)}
+.feed .ic.warn{background:rgba(245,158,11,.15);color:var(--amber)}
+.feed .ic.info{background:rgba(34,211,238,.15);color:var(--cyan)}
+.feed .txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-soft)}
+.feed .txt b{color:var(--ink);font-weight:600}
+.feed .time{color:var(--muted);font-size:11px;flex:none}
+
+/* source chips in tile */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font-size:11px;font-weight:600;padding:4px 9px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--ink-soft)}
+.chip.on{background:rgba(99,102,241,.14);border-color:rgba(99,102,241,.4);color:#fff}
+
+/* ===== SUBSCRIPTION LIST (bento-ish) ===== */
+.sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.sub-card{background:var(--tile);border:1px solid var(--line);border-radius:var(--r);padding:16px;position:relative;overflow:hidden;transition:.2s;cursor:pointer}
+.sub-card:hover{transform:translateY(-3px);border-color:var(--line-strong);box-shadow:0 16px 44px rgba(0,0,0,.4)}
+.sub-card .poster{width:54px;height:78px;border-radius:10px;flex:none;background:linear-gradient(160deg,#2a2a3a,#16161f);position:relative;overflow:hidden}
+.sub-card .poster::after{content:attr(data-t);position:absolute;inset:0;display:grid;place-items:center;font-size:20px;font-weight:800;color:rgba(255,255,255,.18)}
+.sub-card .top{display:flex;gap:13px}
+.sub-card .nm{font-size:15px;font-weight:700;line-height:1.25}
+.sub-card .mt{font-size:12px;color:var(--muted);margin-top:3px}
+.sub-card .stat{display:flex;gap:14px;margin-top:14px}
+.sub-card .stat div .n{font-size:18px;font-weight:800}
+.sub-card .stat div .l{font-size:11px;color:var(--muted)}
+.prog{height:5px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:12px;overflow:hidden}
+.prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--indigo-l),var(--cyan))}
+.badge{position:absolute;top:14px;right:14px;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:99px}
+.badge.active{background:rgba(67,209,122,.16);color:var(--green)}
+.badge.partial{background:rgba(245,158,11,.16);color:var(--amber)}
+.badge.paused{background:rgba(255,255,255,.08);color:var(--muted)}
+
+/* ===== DISCOVER (bento media) ===== */
+.disc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.m-card{position:relative;border-radius:var(--r);overflow:hidden;aspect-ratio:2/3;background:#1a1a24;cursor:pointer;transition:.2s}
+.m-card:hover{transform:translateY(-4px) scale(1.01);box-shadow:0 18px 44px rgba(0,0,0,.5)}
+.m-card .ph{position:absolute;inset:0}
+.m-card .ov{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.92),transparent 60%);display:flex;flex-direction:column;justify-content:flex-end;padding:12px;opacity:0;transition:.25s}
+.m-card:hover .ov{opacity:1}
+.m-card .t{font-size:13.5px;font-weight:700;line-height:1.2}
+.m-card .s{font-size:11px;color:rgba(255,255,255,.6);margin-top:3px}
+.m-card .tag{position:absolute;top:10px;left:10px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(99,102,241,.85);color:#fff}
+
+/* ===== SETTINGS (bento) ===== */
+.set-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;grid-auto-rows:auto}
+.set-tile{background:var(--tile);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.set-tile h3{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.set-tile h3 .ic{width:28px;height:28px;border-radius:8px;background:rgba(99,102,241,.14);display:grid;place-items:center;color:var(--indigo-l)}
+.set-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.set-row:last-child{border-bottom:none}
+.set-row .k{color:var(--ink-soft)}
+.set-row .v{margin-left:auto;color:var(--ink);font-weight:600}
+.toggle{width:42px;height:24px;border-radius:99px;background:rgba(255,255,255,.12);position:relative;transition:.2s;flex:none}
+.toggle.on{background:var(--indigo)}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+.toggle.on::after{left:21px}
+
+/* ===== DETAIL DRAWER ===== */
+.drawer{position:fixed;top:0;right:0;height:100vh;width:420px;max-width:90vw;background:var(--bg-soft);border-left:1px solid var(--line-strong);z-index:50;transform:translateX(100%);transition:transform .35s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column}
+.drawer.open{transform:none;box-shadow:-20px 0 60px rgba(0,0,0,.5)}
+.drawer .dh{padding:22px;display:flex;gap:14px;align-items:flex-start;border-bottom:1px solid var(--line)}
+.drawer .dh .poster{width:64px;height:92px;border-radius:11px;background:linear-gradient(160deg,#2a2a3a,#16161f);position:relative;overflow:hidden;flex:none}
+.drawer .dh .poster::after{content:attr(data-t);position:absolute;inset:0;display:grid;place-items:center;font-size:24px;font-weight:800;color:rgba(255,255,255,.18)}
+.drawer .dh h2{font-size:18px;font-weight:800}
+.drawer .dh .mt{font-size:12.5px;color:var(--muted);margin-top:3px}
+.drawer .close{margin-left:auto;width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.05);display:grid;place-items:center;color:var(--ink-soft)}
+.drawer .db{padding:22px;overflow:auto;flex:1}
+.res-item{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--tile);transition:.15s}
+.res-item:hover{border-color:var(--line-strong)}
+.res-item .src{font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;background:rgba(34,211,238,.14);color:var(--cyan);flex:none}
+.res-item .info{flex:1;min-width:0}
+.res-item .info .t{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res-item .info .s{font-size:11px;color:var(--muted);margin-top:2px}
+.res-item .st{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;flex:none}
+.res-item .st.ok{background:rgba(67,209,122,.15);color:var(--green)}
+.res-item .st.pending{background:rgba(245,158,11,.15);color:var(--amber)}
+.res-item .st.fail{background:rgba(239,91,91,.15);color:var(--red)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.3s;z-index:40}
+.overlay.open{opacity:1;pointer-events:auto}
+
+/* logs */
+.logs{background:#0a0a0e;border:1px solid var(--line);border-radius:var(--r);padding:18px;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12.5px;line-height:1.9;height:calc(100vh - 200px);overflow:auto}
+.logs .l{display:flex;gap:12px;white-space:nowrap}
+.logs .ts{color:var(--muted)}
+.logs .lv{font-weight:700;flex:none;width:54px}
+.logs .lv.ok{color:var(--green)}.logs .lv.warn{color:var(--amber)}.logs .lv.info{color:var(--cyan)}.logs .lv.err{color:var(--red)}
+.logs .msg{color:var(--ink-soft);white-space:pre-wrap}
+
+/* responsive */
+@media(max-width:1100px){.c3{grid-column:span 6}.c4,.c5,.c6,.c7,.c8,.c9{grid-column:span 12}}
+@media(max-width:760px){
+  .shell{grid-template-columns:1fr}
+  .rail{position:fixed;bottom:0;left:0;right:0;top:auto;height:auto;flex-direction:row;justify-content:space-around;padding:8px;z-index:60;border-right:none;border-top:1px solid var(--line);background:rgba(18,18,26,.92);backdrop-filter:blur(12px)}
+  .rail .logo,.rail .spacer{display:none}
+  .main{padding:18px 16px 90px}
+  .bento{grid-auto-rows:88px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- RAIL -->
+  <nav class="rail">
+    <div class="logo">115</div>
+    <button class="nav-btn active" data-view="home" title="概览">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    </button>
+    <button class="nav-btn" data-view="subs" title="订阅">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    </button>
+    <button class="nav-btn" data-view="discover" title="发现">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
+    </button>
+    <button class="nav-btn" data-view="activity" title="活动">
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+    </button>
+    <button class="nav-btn" data-view="settings" title="设置">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <div class="user">A</div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb">ToGo115 / <b id="crumb">概览</b></div>
+        <h1 id="pageTitle">概览</h1>
+      </div>
+      <div class="right">
+        <span class="pill"><span class="dot"></span> 监控运行中</span>
+        <span class="pill warn"><span class="dot"></span> 8 待处理</span>
+        <button class="btn">+ 新建订阅</button>
+      </div>
+    </div>
+
+    <!-- ===== HOME / BENTO ===== -->
+    <section class="view on" id="view-home">
+      <div class="bento">
+        <!-- CORE -->
+        <div class="tile c4 r2 core">
+          <div class="label">115 网盘核心</div>
+          <div class="orb-wrap">
+            <div class="orb"><span>115</span></div>
+            <div class="meta">
+              <div><b>已连接</b> · Cookie 有效</div>
+              <div style="margin-top:6px">容量 <b>4.2 / 8 TB</b></div>
+              <div style="margin-top:3px">离线任务 <b>3 进行中</b></div>
+            </div>
+          </div>
+          <div class="ring"></div>
+        </div>
+
+        <!-- ACTIVE SUBS -->
+        <div class="tile c3 tap">
+          <div class="label">活跃订阅</div>
+          <div class="big">24</div>
+          <div class="sub">5 个本周有更新</div>
+        </div>
+
+        <!-- RESOURCES -->
+        <div class="tile c5 tap">
+          <div class="label">发现资源总量</div>
+          <div class="big">156</div>
+          <div class="sub">本周新增 23 · 待决策 8</div>
+          <div class="bar-mini" id="resBars"></div>
+        </div>
+
+        <!-- PENDING (tall) -->
+        <div class="tile c3 r2 tap">
+          <div class="label">待处理</div>
+          <div class="big" style="color:var(--amber)">8</div>
+          <div class="sub">需你确认转存</div>
+          <div class="feed" style="height:auto;margin-top:14px">
+            <div class="row"><div class="ic warn">!</div><div class="txt"><b>Foundation</b> S02E03 候选</div></div>
+            <div class="row"><div class="ic warn">!</div><div class="txt"><b>Silo</b> S01E09 候选</div></div>
+            <div class="row"><div class="ic warn">!</div><div class="txt"><b>Rick</b> S07E05 候选</div></div>
+          </div>
+        </div>
+
+        <!-- BANDWIDTH (wave) -->
+        <div class="tile c5 tap">
+          <div class="label">带宽波形 · 近 1 小时</div>
+          <div class="big" style="font-size:22px">4.2 <span style="font-size:13px;color:var(--muted);font-weight:600">MB/s</span></div>
+          <svg class="spark-svg wave" id="bwWave" preserveAspectRatio="none"></svg>
+        </div>
+
+        <!-- EMBY SYNC -->
+        <div class="tile c4 tap">
+          <div class="label">Emby 同步</div>
+          <div style="display:flex;align-items:center;gap:16px;margin-top:8px">
+            <div class="gauge">
+              <svg width="64" height="64"><circle cx="32" cy="32" r="27" stroke="rgba(255,255,255,.1)" stroke-width="6" fill="none"/><circle cx="32" cy="32" r="27" stroke="var(--green)" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="169.6" stroke-dashoffset="16"/></svg>
+              <div class="val" style="color:var(--green)">90%</div>
+            </div>
+            <div>
+              <div class="big" style="font-size:24px">1,247</div>
+              <div class="sub">已入库 · 同步正常</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SOURCES -->
+        <div class="tile c5 tap">
+          <div class="label">订阅源</div>
+          <div class="chips">
+            <span class="chip on">Telegram ×3</span>
+            <span class="chip on">RSS ×2</span>
+            <span class="chip on">海搜 API</span>
+            <span class="chip">Torznab</span>
+            <span class="chip on">站点插件</span>
+          </div>
+          <div class="sub" style="margin-top:12px">5 个在线 · 2 个降级</div>
+        </div>
+
+        <!-- ACTIVITY FEED (wide) -->
+        <div class="tile c7 r2">
+          <div class="label">实时活动</div>
+          <div class="feed" id="homeFeed"></div>
+        </div>
+
+        <!-- LATENCY -->
+        <div class="tile c5">
+          <div class="label">系统健康</div>
+          <div style="display:flex;gap:18px;margin-top:10px">
+            <div><div class="big" style="font-size:22px;color:var(--green)">42ms</div><div class="sub">延迟</div></div>
+            <div><div class="big" style="font-size:22px">3d14h</div><div class="sub">运行时间</div></div>
+            <div><div class="big" style="font-size:22px;color:var(--cyan)">12%</div><div class="sub">CPU</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSCRIPTIONS ===== -->
+    <section class="view" id="view-subs">
+      <div class="sub-grid" id="subGrid"></div>
+    </section>
+
+    <!-- ===== DISCOVER ===== -->
+    <section class="view" id="view-discover">
+      <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+        <button class="btn ghost" style="background:rgba(99,102,241,.16);border-color:rgba(99,102,241,.4)">热门剧集</button>
+        <button class="btn ghost">电影</button>
+        <button class="btn ghost">动画</button>
+        <button class="btn ghost">纪录片</button>
+      </div>
+      <div class="disc-grid" id="discGrid"></div>
+    </section>
+
+    <!-- ===== ACTIVITY / LOGS ===== -->
+    <section class="view" id="view-activity">
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <button class="btn ghost" style="background:rgba(99,102,241,.16);border-color:rgba(99,102,241,.4)">实时</button>
+        <button class="btn ghost">Debug</button>
+        <button class="btn ghost">全部</button>
+      </div>
+      <div class="logs" id="logsBox"></div>
+    </section>
+
+    <!-- ===== SETTINGS ===== -->
+    <section class="view" id="view-settings">
+      <div class="set-grid">
+        <div class="set-tile c4">
+          <h3><span class="ic">🔑</span> 账号安全</h3>
+          <div class="set-row"><span class="k">登录账号</span><span class="v">admin</span></div>
+          <div class="set-row"><span class="k">二次验证</span><div class="toggle on"></div></div>
+          <div class="set-row"><span class="k">登录通知</span><div class="toggle on"></div></div>
+        </div>
+        <div class="set-tile c4">
+          <h3><span class="ic">☁️</span> 115 网盘</h3>
+          <div class="set-row"><span class="k">登录方式</span><span class="v">扫码已绑定</span></div>
+          <div class="set-row"><span class="k">离线并发</span><span class="v">3</span></div>
+          <div class="set-row"><span class="k">自动转存</span><div class="toggle on"></div></div>
+        </div>
+        <div class="set-tile c4">
+          <h3><span class="ic">✈️</span> Telegram</h3>
+          <div class="set-row"><span class="k">账号</span><span class="v">已登录</span></div>
+          <div class="set-row"><span class="k">实时监听</span><div class="toggle on"></div></div>
+          <div class="set-row"><span class="k">历史搜索</span><div class="toggle on"></div></div>
+        </div>
+        <div class="set-tile c6">
+          <h3><span class="ic">🎬</span> TMDB</h3>
+          <div class="set-row"><span class="k">API Key</span><span class="v">已配置</span></div>
+          <div class="set-row"><span class="k">语言偏好</span><span class="v">zh-CN</span></div>
+          <div class="set-row"><span class="k">热门榜单自动订阅</span><div class="toggle"></div></div>
+        </div>
+        <div class="set-tile c6">
+          <h3><span class="ic">📡</span> 订阅源</h3>
+          <div class="set-row"><span class="k">RSS / Torznab</span><span class="v">2 已启用</span></div>
+          <div class="set-row"><span class="k">海搜 API</span><span class="v">在线</span></div>
+          <div class="set-row"><span class="k">站点插件</span><span class="v">1 已启用</span></div>
+        </div>
+        <div class="set-tile c12">
+          <h3><span class="ic">⚙️</span> 监控与系统</h3>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0">
+            <div class="set-row"><span class="k">监控循环</span><span class="v">60s</span></div>
+            <div class="set-row"><span class="k">全量重搜</span><span class="v">30min</span></div>
+            <div class="set-row"><span class="k">失败重试</span><span class="v">300s</span></div>
+            <div class="set-row"><span class="k">Emby 同步</span><span class="v">600s</span></div>
+            <div class="set-row"><span class="k">代理</span><span class="v">未启用</span></div>
+            <div class="set-row"><span class="k">数据目录</span><span class="v">./data</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- DRAWER -->
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <div class="dh">
+    <div class="poster" id="dPoster" data-t=""></div>
+    <div>
+      <h2 id="dTitle"></h2>
+      <div class="mt" id="dMeta"></div>
+    </div>
+    <button class="close" id="dClose">✕</button>
+  </div>
+  <div class="db" id="dBody"></div>
+</aside>
+
+<script>
+/* ============ MOCK DATA ============ */
+const subs=[
+  {t:"Ra",nm:"Rick and Morty",mt:"动画 · S07 · 追更中",active:18,pending:2,prog:87,status:"active"},
+  {t:"Fo",nm:"Foundation",mt:"科幻 · S02 · 追更中",active:10,pending:1,prog:62,status:"active"},
+  {t:"TL",nm:"The Last of Us",mt:"剧情 · S02 · 追更中",active:9,pending:0,prog:91,status:"active"},
+  {t:"Sl",nm:"Silo",mt:"惊悚 · S01 · 部分",active:9,pending:1,prog:38,status:"partial"},
+  {t:"FA",nm:"For All Mankind",mt:"剧情 · S05 · 追更中",active:10,pending:0,prog:84,status:"active"},
+  {t:"Se",nm:"Severance",mt:"科幻 · S02 · 追更中",active:9,pending:0,prog:95,status:"active"},
+  {t:"Ad",nm:"Andor",mt:"科幻 · S01 · 已完成",active:12,pending:0,prog:100,status:"paused"},
+  {t:"WP",nm:"Westworld",mt:"科幻 · S04 · 已暂停",active:8,pending:0,prog:60,status:"paused"},
+];
+const discs=[
+  {t:"Dune: Part Two",s:"2024 · 科幻",tag:"正在热映"},
+  {t:"Shōgun",s:"2024 · 历史剧情",tag:"高分"},
+  {t:"Fallout",s:"2024 · 科幻",tag:"热门"},
+  {t:"The Bear",s:"S3 · 剧情",tag:"推荐"},
+  {t:"3 Body Problem",s:"科幻 · 剧集",tag:"新书改"},
+  {t:"Arcane",s:"动画 · S2",tag:"神作"},
+  {t:"Succession",s:"剧情 · 完结",tag:"经典"},
+  {t:"Dark",s:"科幻 · 德剧",tag:"烧脑"},
+  {t:"The Gentlemen",s:"犯罪 · 动作",tag:"新上"},
+  {t:"Severance",s:"科幻 · S2",tag:"追更"},
+];
+const feed=[
+  {ic:"ok",c:"ok",txt:"<b>pan115</b> 转存成功 · Rick and Morty S07E04",time:"14:32"},
+  {ic:"info",c:"info",txt:"<b>Telegram</b> 发现 3 个新候选 · Foundation",time:"14:30"},
+  {ic:"warn",c:"warn",txt:"<b>海搜</b> 超时降级 · 切换 RSS fallback",time:"14:28"},
+  {ic:"ok",c:"ok",txt:"<b>Emby</b> 同步完成 · 1,247 项",time:"14:25"},
+  {ic:"ok",c:"ok",txt:"<b>magnet</b> 解析 5 条链接 · The Last of Us",time:"14:21"},
+  {ic:"info",c:"info",txt:"<b>monitor</b> 全量重搜完成 · 0 新增",time:"14:18"},
+  {ic:"ok",c:"ok",txt:"<b>pan115</b> 离线下载完成 · Silo S01E08",time:"14:12"},
+  {ic:"warn",c:"warn",txt:"<b>Telegram</b> 触发限流 · 退避 3s",time:"14:08"},
+];
+const logs=[
+  {ts:"14:32:01",lv:"ok",msg:"pan115: shared → saved (Rick and Morty S07E04) → offline started"},
+  {ts:"14:31:47",lv:"ok",msg:"magnet: resolved 5 links for \"The Last of Us S02E03\""},
+  {ts:"14:30:12",lv:"warn",msg:"telegram: rate-limited on channel #media_tracker, backoff 3s"},
+  {ts:"14:29:55",lv:"ok",msg:"monitor: subscription rescan completed, 0 new resources"},
+  {ts:"14:28:33",lv:"info",msg:"haisou: request timed out (>65s), falling back to RSS"},
+  {ts:"14:27:01",lv:"ok",msg:"emby: synced library, 1247 items up to date"},
+  {ts:"14:26:40",lv:"info",msg:"system: db checkpoint, 2.1MB WAL truncated"},
+  {ts:"14:25:18",lv:"ok",msg:"delivery: 115 review passed, marked collected (Silo S01E08)"},
+  {ts:"14:24:02",lv:"warn",msg:"source rss: torznab returned 503, scheduled retry in 300s"},
+  {ts:"14:22:55",lv:"ok",msg:"match: title/year/resolution matched (For All Mankind S05E02)"},
+];
+
+/* ============ RENDER ============ */
+function el(html){const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstChild;}
+
+// res bars
+const rb=document.getElementById('resBars');
+for(let i=0;i<12;i++){const h=20+Math.random()*70;rb.appendChild(el(`<i style="--h:${h}%;height:0"></i>`));setTimeout(()=>rb.lastChild.style.height=h+'%',50);}
+
+// bandwidth wave
+(function(){const svg=document.getElementById('bwWave');const W=600,H=42;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  let pts=[];for(let i=0;i<=40;i++)pts.push(10+Math.random()*22);
+  function draw(){pts.push(10+Math.random()*22);pts.shift();let d='M0 '+(H-pts[0]);
+    for(let i=1;i<pts.length;i++)d+=` L${(i/39*W).toFixed(1)} ${(H-pts[i]).toFixed(1)}`;
+    svg.innerHTML=`<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(34,211,238,.4)"/><stop offset="1" stop-color="rgba(34,211,238,0)"/></linearGradient></defs>
+    <path d="${d} L${W} ${H} L0 ${H} Z" fill="url(#bg)"/>
+    <path d="${d}" fill="none" stroke="#22d3ee" stroke-width="2"/>`;}
+  draw();setInterval(draw,900);})();
+
+// home feed
+const hf=document.getElementById('homeFeed');
+feed.forEach(f=>hf.appendChild(el(`<div class="row"><div class="ic ${f.c}">${f.ic}</div><div class="txt">${f.txt}</div><div class="time">${f.time}</div></div>`)));
+
+// subscriptions
+const sg=document.getElementById('subGrid');
+subs.forEach(s=>{
+  const card=el(`<div class="sub-card">
+    <div class="badge ${s.status}">${s.status==='active'?'活跃':s.status==='partial'?'部分':'暂停'}</div>
+    <div class="top">
+      <div class="poster" data-t="${s.t}"></div>
+      <div><div class="nm">${s.nm}</div><div class="mt">${s.mt}</div></div>
+    </div>
+    <div class="stat">
+      <div><div class="n">${s.active}</div><div class="l">已获取</div></div>
+      <div><div class="n" style="color:var(--amber)">${s.pending}</div><div class="l">待处理</div></div>
+      <div><div class="n">${s.prog}%</div><div class="l">进度</div></div>
+    </div>
+    <div class="prog"><i style="width:${s.prog}%"></i></div>
+  </div>`);
+  card.onclick=()=>openDrawer(s);
+  sg.appendChild(card);
+});
+
+// discover
+const dg=document.getElementById('discGrid');
+const posters=['linear-gradient(160deg,#3a2a5a,#16161f)','linear-gradient(160deg,#1a3a5a,#16161f)','linear-gradient(160deg,#5a3a1a,#16161f)','linear-gradient(160deg,#1a5a3a,#16161f)','linear-gradient(160deg,#4a1a3a,#16161f)','linear-gradient(160deg,#2a3a5a,#16161f)'];
+discs.forEach((d,i)=>{
+  const c=el(`<div class="m-card"><div class="ph" style="background:${posters[i%posters.length]}"></div>
+    <div class="tag">${d.tag}</div>
+    <div class="ov"><div class="t">${d.t}</div><div class="s">${d.s}</div></div></div>`);
+  dg.appendChild(c);
+});
+
+// logs
+const lb=document.getElementById('logsBox');
+logs.forEach(l=>lb.appendChild(el(`<div class="l"><span class="ts">${l.ts}</span><span class="lv ${l.lv}">[${l.lv.toUpperCase()}]</span><span class="msg">${l.msg}</span></div>`)));
+
+/* ============ DRAWER ============ */
+const drawer=document.getElementById('drawer'),overlay=document.getElementById('overlay');
+function openDrawer(s){
+  document.getElementById('dPoster').dataset.t=s.t;
+  document.getElementById('dTitle').textContent=s.nm;
+  document.getElementById('dMeta').textContent=s.mt;
+  const statuses=['ok','pending','ok','fail','ok','pending'];
+  const srcs=['TG','RSS','HS','TG','RS','TG'];
+  let html=`<div class="set-row"><span class="k">状态</span><span class="v">${s.status==='active'?'活跃':s.status==='partial'?'部分更新':'已暂停'}</span></div>
+    <div class="set-row"><span class="k">进度</span><span class="v">${s.prog}%</span></div>
+    <div class="set-row"><span class="k">已获取资源</span><span class="v">${s.active}</span></div>
+    <div class="set-row"><span class="k">待决策</span><span class="v" style="color:var(--amber)">${s.pending}</span></div>
+    <div style="margin:16px 0 10px;font-size:13px;font-weight:700">候选资源</div>`;
+  for(let i=0;i<6;i++){
+    const st=statuses[i];const src=srcs[i];
+    const title=`${s.nm} ${'S'+((i%5)+1)}E${((i*3)%12+1)}`;
+    const res=`${['1080p','2160p','720p'][i%3]} · ${['WEB-DL','BluRay','H264'][i%3]} · ${[2.1,4.8,1.4,3.2,5.6,2.9][i]}GB`;
+    const stTxt=st==='ok'?'已转存':st==='pending'?'待确认':'失败';
+    html+=`<div class="res-item"><span class="src">${src}</span><div class="info"><div class="t">${title}</div><div class="s">${res}</div></div><span class="st ${st}">${stTxt}</span></div>`;
+  }
+  document.getElementById('dBody').innerHTML=html;
+  drawer.classList.add('open');overlay.classList.add('open');
+}
+function closeDrawer(){drawer.classList.remove('open');overlay.classList.remove('open');}
+document.getElementById('dClose').onclick=closeDrawer;
+overlay.onclick=closeDrawer;
+
+/* ============ NAV ============ */
+const titles={home:"概览",subs:"订阅",discover:"发现",activity:"活动",settings:"设置"};
+document.querySelectorAll('.nav-btn').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    const v=b.dataset.view;
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+    document.getElementById('view-'+v).classList.add('on');
+    document.getElementById('pageTitle').textContent=titles[v];
+    document.getElementById('crumb').textContent=titles[v];
+    window.scrollTo(0,0);
+  };
+});
+</script>
+</body>
+</html>

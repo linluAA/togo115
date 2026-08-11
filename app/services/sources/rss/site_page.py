@@ -36,9 +36,9 @@ class RssTorznabSitePageMixin:
 
     def _is_site_plugin_download_link(self, link: str) -> bool:
         value = str(link or "").strip().casefold()
-        if not is_valid_download_link(link) or is_115_share_link(link):
+        if not is_valid_download_link(link):
             return False
-        return value.startswith("magnet:?") or value.endswith(".torrent") or ".torrent?" in value
+        return value.startswith("magnet:?") or value.endswith(".torrent") or ".torrent?" in value or is_115_share_link(link)
 
     def _results_from_links(
         self,

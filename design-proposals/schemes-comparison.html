@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ToGo115 · UI 重构方案对比</title>
+<style>
+/* ===== RESET & TOKENS ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f8f6f2; --surface:#fff; --ink:#1a1a1c; --ink-soft:#57575c; --muted:#96969e;
+  --line:rgba(0,0,0,.08); --radius:10px;
+  font-family:"Inter","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:15px; line-height:1.6; color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+
+h1{font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.12}
+h2{font-size:19px;font-weight:700;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+p{color:var(--ink-soft)}
+
+/* ===== LAYOUT ===== */
+.hero{
+  max-width:1120px; margin:0 auto; padding:72px 28px 48px; text-align:center;
+}
+.hero h1{margin-bottom:12px}
+.hero p{max-width:580px;margin:0 auto;font-size:16px}
+.hero .context{
+  margin-top:36px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;
+}
+.hero .context span{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 16px;border-radius:99px;font-size:13px;font-weight:600;
+  background:var(--surface);border:1px solid var(--line);color:var(--ink-soft);
+}
+.hero .context span b{color:var(--ink)}
+
+.container{max-width:1360px;margin:0 auto;padding:0 28px 80px}
+
+/* ===== SCHEME CARDS ===== */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.scheme{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;transition:box-shadow .25s,transform .25s;
+}
+.scheme:hover{box-shadow:0 16px 48px rgba(0,0,0,.1);transform:translateY(-3px)}
+
+.scheme .preview{
+  position:relative; height:340px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+}
+.scheme .preview canvas{position:absolute;inset:0;width:100%;height:100%}
+
+.scheme .info{padding:24px}
+.scheme .info h2{margin-bottom:6px}
+.scheme .info .sub{font-size:13px;color:var(--muted);margin-bottom:16px}
+.scheme .info p{font-size:14px;line-height:1.65;margin-bottom:18px;min-height:68px}
+
+/* ===== PALETTE SWATCHES ===== */
+.palette{display:flex;gap:6px;margin-bottom:18px}
+.palette .swatch{
+  width:32px;height:32px;border-radius:8px;border:1px solid rgba(0,0,0,.08);
+  position:relative;
+}
+.palette .swatch::after{
+  content:attr(data-label);
+  position:absolute;top:100%;left:50%;transform:translateX(-50%);
+  font-size:9px;color:var(--muted);margin-top:3px;white-space:nowrap;
+}
+
+/* ===== TAGS ===== */
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.tags span{
+  font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;
+  background:rgba(0,0,0,.04);color:var(--ink-soft);
+}
+
+.difficulty{
+  display:flex;align-items:center;gap:8px;
+  padding:12px 16px;border-radius:8px;background:rgba(0,0,0,.03);
+  font-size:13px;font-weight:600;color:var(--ink-soft);
+}
+.difficulty .dot{width:8px;height:8px;border-radius:50%}
+.dot.easy{background:#43d17a}
+.dot.medium{background:#f4b63f}
+.dot.hard{background:#ef5b5b}
+
+/* ===== FOOTER ===== */
+.recommendation{
+  max-width:1120px; margin:56px auto 0; text-align:center;
+  padding:44px 28px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+}
+.recommendation h2{margin-bottom:12px}
+.recommendation p{max-width:600px;margin:0 auto;font-size:14px}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:700px){
+  .hero{padding:44px 18px 32px}
+  .container{padding:0 18px 60px}
+  .grid{grid-template-columns:1fr}
+  .scheme .preview{height:260px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <h1>ToGo115 UI 重构 — 四套设计方案</h1>
+  <p>以下方案基于项目特性（个人媒体自动化工具）和 Impeccable 设计原则，
+  从四个截然不同的美学方向切入，避免泛 AI 审美。</p>
+  <div class="context">
+    <span>用户画像：<b>技术爱好者 / HomeLab 玩家</b></span>
+    <span>使用场景：<b>追剧管理 · 资源监控 · 系统配置</b></span>
+    <span>品牌调性：<b>高效 · 专业 · 个性化</b></span>
+  </div>
+</section>
+
+<!-- ===== SCHEMES ===== -->
+<div class="container">
+<div class="grid">
+
+  <!-- ===== SCHEME A: Noir Cinematic ===== -->
+  <article class="scheme">
+    <div class="preview" id="preview-a">
+      <canvas id="canvas-a"></canvas>
+    </div>
+    <div class="info">
+      <h2>🎬 A. Noir Cinematic</h2>
+      <div class="sub">暗色影院 · 进化现有方案</div>
+      <p>在现有 Netfl ix 暗色基因上做极致打磨。黑底上的光影层次、Hero 横幅的视觉冲击、横向滚动的卡片行——用电影级的构图语言浏览媒体内容。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#0a0a0d" data-label="墨黑"></div>
+        <div class="swatch" style="background:#1a1a24" data-label="深灰"></div>
+        <div class="swatch" style="background:#e50914" data-label="影院红"></div>
+        <div class="swatch" style="background:#f5a623" data-label="琥珀"></div>
+        <div class="swatch" style="background:#f8f8fc" data-label="白"></div>
+      </div>
+      <div class="tags">
+        <span>暗色主题</span><span>Netfl ix 风格</span><span>沉浸式</span><span>视觉优先</span><span>渐变光影</span>
+      </div>
+      <div class="difficulty">
+        <span class="dot easy"></span> 实施难度：中等 — 已在 preview.html 有原型，打磨细节即可
+      </div>
+    </div>
+  </article>
+
+  <!-- ===== SCHEME B: Terminal Modern ===== -->
+  <article class="scheme">
+    <div class="preview" id="preview-b">
+      <canvas id="canvas-b"></canvas>
+    </div>
+    <div class="info">
+      <h2>⌨️ B. Terminal Modern</h2>
+      <div class="sub">新粗野主义 · 极客工具箱</div>
+      <p>用等宽字体、高密度信息、类终端美学打造"黑客的工作台"。抛弃传统侧边栏，采用顶部状态栏 + 全宽命令行布局。信息密度极高，键盘驱动，专为效率而设计。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#0c0e0c" data-label="终端黑"></div>
+        <div class="swatch" style="background:#1a1f1a" data-label="面板"></div>
+        <div class="swatch" style="background:#3ddc84" data-label="终端绿"></div>
+        <div class="swatch" style="background:#ffb86c" data-label="琥珀"></div>
+        <div class="swatch" style="background:#bd93f9" data-label="紫"></div>
+      </div>
+      <div class="tags">
+        <span>等宽字体</span><span>高密度</span><span>粗野主义</span><span>键盘驱动</span><span>类终端</span>
+      </div>
+      <div class="difficulty">
+        <span class="dot hard"></span> 实施难度：较高 — 需要大幅改变布局逻辑和信息架构
+      </div>
+    </div>
+  </article>
+
+  <!-- ===== SCHEME C: Linear Clean ===== -->
+  <article class="scheme">
+    <div class="preview" id="preview-c">
+      <canvas id="canvas-c"></canvas>
+    </div>
+    <div class="info">
+      <h2>✨ C. Linear Clean</h2>
+      <div class="sub">现代 SaaS · 极简仪表盘</div>
+      <p>借鉴 Linear / Vercel 的设计语言：浅色默认主题、微妙阴影层次、精确的间距系统、状态标签和数据可视化。侧边栏极窄（图标+Tooltip），内容区宽大，让数据自己说话。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#fafafa" data-label="奶白"></div>
+        <div class="swatch" style="background:#fff" data-label="纯白"></div>
+        <div class="swatch" style="background:#5e6ad2" data-label="藤紫"></div>
+        <div class="swatch" style="background:#0d0d0d" data-label="墨色"></div>
+        <div class="swatch" style="background:#e2e4e9" data-label="线灰"></div>
+      </div>
+      <div class="tags">
+        <span>浅色主题</span><span>极简主义</span><span>数据可视化</span><span>Linear 风格</span><span>状态驱动</span>
+      </div>
+      <div class="difficulty">
+        <span class="dot medium"></span> 实施难度：中等 — CSS 变量体系重构，布局调整适中
+      </div>
+    </div>
+  </article>
+
+  <!-- ===== SCHEME D: Editorial Lounge ===== -->
+  <article class="scheme">
+    <div class="preview" id="preview-d">
+      <canvas id="canvas-d"></canvas>
+    </div>
+    <div class="info">
+      <h2>📖 D. Editorial Lounge</h2>
+      <div class="sub">杂志编辑风 · 影音阅览室</div>
+      <p>以排版为核心的设计：衬线标题、宽裕留白、暖色调背景。布局像一本精致的影音杂志——大图封面、双栏文字、讲究的字距行距。浏览 TMDB 就像翻阅 Criterion Collection 目录。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#f5f0e8" data-label="米白"></div>
+        <div class="swatch" style="background:#e8dcc8" data-label="羊皮"></div>
+        <div class="swatch" style="background:#c0392b" data-label="胭脂"></div>
+        <div class="swatch" style="background:#2c3e50" data-label="深蓝"></div>
+        <div class="swatch" style="background:#8b7355" data-label="暖棕"></div>
+      </div>
+      <div class="tags">
+        <span>暖色浅色</span><span>衬线标题</span><span>排版优先</span><span>杂志风格</span><span>宽裕留白</span>
+      </div>
+      <div class="difficulty">
+        <span class="dot medium"></span> 实施难度：中等 — 字体和比例改动较大，但布局结构可继承
+      </div>
+    </div>
+  </article>
+
+</div>
+
+<!-- ===== RECOMMENDATION ===== -->
+<div class="recommendation">
+  <h2>💡 推荐思路</h2>
+  <p>
+    <strong>方案 A</strong> 风险最低、落地最快（已有原型参考）；<br>
+    <strong>方案 C</strong> 现代化程度最高、最耐看，适合作为长期方向；<br>
+    <strong>方案 D</strong> 个性最强，适合想要极致差异化的玩家；<br>
+    <strong>方案 B</strong> 最硬核，适合追求效率的极客用户。<br><br>
+    也可以 <strong>A + C 混合</strong>：保留暗色影院浏览体验 (A)，但用 Linear 的简洁布局和交互 (C) 重构管理页面。
+  </p>
+</div>
+
+</div>
+
+<script>
+// ===== CANVAS PREVIEW RENDERERS =====
+
+function dpr(){return Math.min(window.devicePixelRatio||1,2)}
+
+function setup(canvasId,w,h){
+  const c=document.getElementById(canvasId);
+  const d=dpr();
+  c.width=w*d;c.height=h*d;
+  c.style.width=w+'px';c.style.height=h+'px';
+  const ctx=c.getContext('2d');
+  ctx.scale(d,d);
+  ctx.textBaseline='top';
+  return ctx;
+}
+
+function el(ctx,x,y,w,h,r,bg,bc){
+  ctx.save();
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r);ctx.closePath();
+  if(bg){ctx.fillStyle=bg;ctx.fill()}
+  if(bc){ctx.strokeStyle=bc;ctx.stroke()}
+  ctx.restore();
+}
+
+// --- Scheme A: Noir Cinematic ---
+(function(){
+  const ctx=setup('canvas-a',360,340);
+  const W=360,H=340;
+  // bg
+  ctx.fillStyle='#0a0a0d';ctx.fillRect(0,0,W,H);
+  // subtle gradient overlay
+  const grd=ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'rgba(229,9,20,.06)');grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  // hero banner
+  const hGrd=ctx.createLinearGradient(0,0,W,0);
+  hGrd.addColorStop(0,'#e50914');hGrd.addColorStop(1,'#0a0a0d');
+  ctx.fillStyle=hGrd;ctx.fillRect(8,8,W-16,110);
+  ctx.fillStyle='#0a0a0d';ctx.fillRect(120,8,W-128,110);
+  ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 16px Inter,sans-serif';ctx.fillText('THE MANDALORIAN',128,22);
+  ctx.fillStyle='rgba(255,255,255,.55)';ctx.font='11px Inter,sans-serif';ctx.fillText('Season 3 · 2023 · 8 Episodes',128,46);
+  ctx.fillStyle='rgba(255,255,255,.7)';ctx.font='10px Inter,sans-serif';
+  ctx.fillText('The travels of a lone bounty hunter',128,68);
+  ctx.fillText('in the outer reaches of the galaxy...',128,83);
+  // buttons
+  el(ctx,128,100,66,24,4,'#f5f6fa','');ctx.fillStyle='#0a0a0d';ctx.font='bold 10px Inter,sans-serif';ctx.fillText('Play',140,106);
+  el(ctx,202,100,76,24,4,'rgba(255,255,255,.16)',null);
+  ctx.fillStyle='#f5f6fa';ctx.fillText('More Info',212,106);
+  // card row
+  ctx.fillStyle='rgba(255,255,255,.74)';ctx.font='bold 11px Inter,sans-serif';ctx.fillText('Trending Now',12,130);
+  for(let i=0;i<5;i++){
+    const cx=12+i*70;
+    el(ctx,cx,146,62,92,5,'#1a1a24',null);
+    // poster gradient
+    const pg=ctx.createLinearGradient(0,146,0,238);
+    pg.addColorStop(0,['#2a1a3a','#1a2a3a','#3a2a1a','#1a3a2a','#2a1a2a'][i]);
+    pg.addColorStop(1,'#1a1a24');
+    ctx.fillStyle=pg;el(ctx,cx,146,62,92,5);ctx.fill();
+  }
+  // card row 2
+  ctx.fillStyle='rgba(255,255,255,.74)';ctx.font='bold 11px Inter,sans-serif';ctx.fillText('Continue Watching',12,252);
+  for(let i=0;i<4;i++){
+    const cx=12+i*88;
+    el(ctx,cx,268,78,54,5,'#1a1a24',null);
+    const pg=ctx.createLinearGradient(0,268,0,322);
+    pg.addColorStop(0,['#5a1a1a','#1a5a3a','#3a3a1a','#1a3a5a'][i]);
+    pg.addColorStop(1,'#1a1a24');
+    ctx.fillStyle=pg;el(ctx,cx,268,78,54,5);ctx.fill();
+  }
+})();
+
+// --- Scheme B: Terminal Modern ---
+(function(){
+  const ctx=setup('canvas-b',360,340);
+  const W=360,H=340;
+  ctx.fillStyle='#0c0e0c';ctx.fillRect(0,0,W,H);
+  // top status bar
+  ctx.fillStyle='rgba(61,220,132,.08)';ctx.fillRect(0,0,W,28);
+  ctx.fillStyle='#3ddc84';ctx.font='bold 10px "JetBrains Mono","Fira Code",monospace';
+  ctx.fillText('┌─ togo115@homelab ~ % monitor --status',12,8);
+  ctx.fillStyle='rgba(61,220,132,.5)';ctx.font='10px "JetBrains Mono","Fira Code",monospace';
+  ctx.fillText('uptime: 3d 14h │ cpu: 12% │ mem: 234MB │ tasks: 4/12',W-340,8);
+  // main panels
+  // left panel
+  el(ctx,8,36,168,140,3,'rgba(61,220,132,.04)','rgba(61,220,132,.12)');
+  ctx.fillStyle='#3ddc84';ctx.font='bold 10px "JetBrains Mono","Fira Code",monospace';
+  ctx.fillText('📋 SUBSCRIPTIONS',16,42);
+  const subs=['├─ Rick and Morty     [S7] ▓▓▓▓▓▓▓░ 87%','├─ Foundation          [S2] ▓▓▓▓▓░░░ 62%','├─ The Last of Us     [S2] ▓▓▓▓▓▓▓░ 91%','├─ Silo                  [S1] ▓▓▓░     38%','├─ For All Mankind  [S5] ▓▓▓▓▓▓▓░ 84%','└─ Severance         [S2] ▓▓▓▓▓▓▓░ 95%'];
+  ctx.fillStyle='rgba(189,147,249,.8)';ctx.font='9px "JetBrains Mono","Fira Code",monospace';
+  subs.forEach((s,i)=>{ctx.fillText(s,16,60+i*16)});
+  // right panel
+  el(ctx,184,36,168,140,3,'rgba(255,184,108,.04)','rgba(255,184,108,.12)');
+  ctx.fillStyle='#ffb86c';ctx.font='bold 10px "JetBrains Mono","Fira Code",monospace';
+  ctx.fillText('📡 RESOURCES',192,42);
+  ctx.fillStyle='rgba(255,184,108,.6)';ctx.font='9px "JetBrains Mono","Fira Code",monospace';
+  [
+    '[TG] 115share_bot  → 3 new','[TG] media_tracker  → 1 new','[RS] nyaa.si           → 5 new','[HS] haisou search  → 2 new',
+    '[TG] animeshare     → 4 new','[RS] dmhy.org        → 6 new',
+  ].forEach((s,i)=>{ctx.fillText(s,192,60+i*16)});
+  // bottom logs
+  el(ctx,8,184,W-16,148,3,'rgba(61,220,132,.03)','rgba(61,220,132,.08)');
+  ctx.fillStyle='rgba(61,220,132,.5)';ctx.font='bold 9px "JetBrains Mono","Fira Code",monospace';
+  ctx.fillText('LOG',16,190);
+  ctx.fillStyle='rgba(61,220,132,.35)';ctx.font='8px "JetBrains Mono","Fira Code",monospace';
+  const logs=[
+    '[14:32:01] [OK]   pan115: shared → saved (Rick and Morty S07E01)',
+    '[14:31:47] [OK]   magnet:  resolved 5 links for "Foundation S02E03"',
+    '[14:30:12] [WARN] telegram: rate-limited, backoff 3s',
+    '[14:29:55] [OK]   monitor: subscription rescan completed (0 new)',
+    '[14:28:01] [OK]   emby:     synced 1,247 items',
+    '[14:27:33] [INFO]  system:   db checkpoint, 2.1MB WAL',
+    '──────────────────────────────────────────────────────────────',
+    'togo115 ~ % █',
+  ];
+  logs.forEach((s,i)=>{ctx.fillText(s,16,206+i*14)});
+})();
+
+// --- Scheme C: Linear Clean ---
+(function(){
+  const ctx=setup('canvas-c',360,340);
+  const W=360,H=340;
+  ctx.fillStyle='#fafafa';ctx.fillRect(0,0,W,H);
+  // sidebar
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,46,H);
+  ctx.fillStyle='rgba(0,0,0,.06)';ctx.fillRect(45,0,1,H);
+  // sidebar items
+  const icons=['🏠','🎬','📋','📊','⚙️'];
+  icons.forEach((ic,i)=>{
+    const y=50+i*52;
+    el(ctx,7,y,32,32,7,i===0?'rgba(94,106,210,.12)':'',null);
+    ctx.font='15px sans-serif';ctx.fillText(ic,12,y+5);
+  });
+  // header
+  ctx.fillStyle='#fff';el(ctx,46,0,W-46,44,0,'','');ctx.fill();
+  ctx.fillStyle='#0d0d0d';ctx.font='bold 13px Inter,sans-serif';ctx.fillText('Subscriptions',62,14);
+  ctx.fillStyle='rgba(0,0,0,.04)';el(ctx,W-120,10,70,28,6,'',null);ctx.fill();
+  ctx.fillStyle='#5e6ad2';ctx.font='bold 11px Inter,sans-serif';ctx.fillText('+ New',W-106,17);
+  // stats row
+  for(let i=0;i<3;i++){
+    const sx=62+i*98;
+    el(ctx,sx,54,88,52,8,'#fff','rgba(0,0,0,.06)');
+    ctx.fillStyle='#0d0d0d';ctx.font='bold 18px Inter,sans-serif';ctx.fillText(['24','156','8'][i],sx+12,64);
+    ctx.fillStyle='#57575c';ctx.font='11px Inter,sans-serif';ctx.fillText(['Active','Resources','Pending'][i],sx+12,88);
+  }
+  // card grid
+  const titles=['Rick and Morty','Foundation','The Last of Us','Silo','For All Mankind','Severance'];
+  const statuses=['● Active','● Active','● Active','◐ Partial','● Active','● Active'];
+  for(let r=0;r<2;r++){
+    for(let c=0;c<3;c++){
+      const idx=r*3+c;
+      const cx=62+c*98,cy=120+r*102;
+      el(ctx,cx,cy,88,92,8,'#fff','rgba(0,0,0,.06)');
+      // poster placeholder
+      el(ctx,cx+4,cy+4,36,48,4,'rgba(94,106,210,.08)');
+      ctx.fillStyle='#0d0d0d';ctx.font='bold 11px Inter,sans-serif';
+      ctx.fillText(titles[idx],cx+12,cy+60);
+      ctx.fillStyle='#43d17a';ctx.font='10px Inter,sans-serif';
+      ctx.fillText(statuses[idx],cx+12,cy+77);
+      // progress bar
+      ctx.fillStyle='rgba(0,0,0,.06)';ctx.fillRect(cx+12,cy+84,60,3);
+      ctx.fillStyle='#5e6ad2';ctx.fillRect(cx+12,cy+84,38,3);
+    }
+  }
+})();
+
+// --- Scheme D: Editorial Lounge ---
+(function(){
+  const ctx=setup('canvas-d',360,340);
+  const W=360,H=340;
+  ctx.fillStyle='#f5f0e8';ctx.fillRect(0,0,W,H);
+  // masthead
+  ctx.fillStyle='#2c3e50';ctx.font='bold 22px "Playfair Display","Noto Serif SC",Georgia,serif';ctx.fillText('ToGo115',20,24);
+  ctx.fillStyle='#8b7355';ctx.font='10px Inter,sans-serif';ctx.fillText('MEDIA LIBRARY JOURNAL',20,42);
+  ctx.fillStyle='rgba(0,0,0,.06)';ctx.fillRect(20,50,W-40,1);
+  // nav
+  const nav=['FEATURED','COLLECTION','SUBSCRIPTIONS','ACTIVITY','SETTINGS'];
+  ctx.fillStyle='#2c3e50';ctx.font='9px Inter,sans-serif';ctx.fillText(nav.join('  ·  '),20,60);
+  // featured left
+  el(ctx,20,80,190,160,4,'','rgba(0,0,0,.08)');
+  // featured image placeholder with gradient
+  const fgrd=ctx.createLinearGradient(0,80,0,240);
+  fgrd.addColorStop(0,'#2c3e50');fgrd.addColorStop(.5,'#4a6274');fgrd.addColorStop(1,'#1a1a2e');
+  ctx.save();ctx.beginPath();ctx.moveTo(24,84);ctx.lineTo(206,84);ctx.arcTo(210,84,210,88,4);
+  ctx.lineTo(210,236);ctx.arcTo(210,240,206,240,4);ctx.lineTo(24,240);ctx.arcTo(20,240,20,236,4);
+  ctx.lineTo(20,88);ctx.arcTo(20,84,24,84,4);ctx.closePath();ctx.clip();
+  ctx.fillStyle=fgrd;ctx.fillRect(20,80,190,160);
+  // text overlay
+  ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(20,188,190,52);
+  ctx.fillStyle='#c0392b';ctx.font='8px Inter,sans-serif';ctx.fillText('STAFF PICK',30,196);
+  ctx.fillStyle='#f5f0e8';ctx.font='bold 15px "Playfair Display",serif';ctx.fillText('The Last of Us',30,210);
+  ctx.fillStyle='rgba(245,240,232,.7)';ctx.font='10px Inter,sans-serif';ctx.fillText('Season 2 · Drama · 2023',30,226);
+  // right column
+  const articles=[
+    {t:'Rick and Morty',s:'S7 · Animation',p:87},
+    {t:'Foundation',s:'S2 · Sci-Fi',p:62},
+    {t:'Silo',s:'S1 · Thriller',p:38},
+    {t:'For All Mankind',s:'S5 · Drama',p:84},
+  ];
+  articles.forEach((a,i)=>{
+    const ay=80+i*42;
+    ctx.fillStyle='#2c3e50';ctx.font='bold 11px Inter,sans-serif';ctx.fillText(a.t,224,ay);
+    ctx.fillStyle='#8b7355';ctx.font='9px Inter,sans-serif';ctx.fillText(a.s,224,ay+16);
+    ctx.fillStyle='rgba(0,0,0,.06)';ctx.fillRect(224,ay+30,120,3);
+    ctx.fillStyle='#c0392b';ctx.fillRect(224,ay+30,120*a.p/100,3);
+  });
+  // bottom spotlight
+  ctx.fillStyle='#2c3e50';ctx.font='bold 13px Inter,sans-serif';ctx.fillText('New This Week',20,258);
+  ctx.fillStyle='rgba(0,0,0,.06)';ctx.fillRect(20,300,W-40,1);
+  // horizontal cards
+  for(let i=0;i<5;i++){
+    el(ctx,20+i*68,268,58,30,3,'',null);
+    const sgrd=ctx.createLinearGradient(0,268,0,298);
+    sgrd.addColorStop(0,['#c0392b','#d4a574','#2c3e50','#6b8e23','#8b4513'][i]);
+    sgrd.addColorStop(1,'#f5f0e8');
+    ctx.fillStyle=sgrd;el(ctx,20+i*68,268,58,30,3);ctx.fill();
+  }
+  // article summary below
+  ctx.fillStyle='#2c3e50';ctx.font='10px "Playfair Display",Georgia,serif';
+  ctx.fillText('Five exceptional additions to your library this week — from hard sci-fi epics',20,318);
+  ctx.fillText('to intimate character studies. Curated by our editorial team.',20,332);
+})();
+</script>
+
+</body>
+</html>

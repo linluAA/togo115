@@ -38,7 +38,8 @@ async def search_all_active_subscriptions(*, force: bool = False) -> dict:
         },
     )
     global _pending_checked_ids
-    _pending_checked_ids = []
+    async with _pending_checked_lock:
+        _pending_checked_ids = []
     snapshot = await library_snapshot_or_none()
     # Best-effort TMDB refresh runs in background so search waves can start sooner.
     tmdb_task = asyncio.create_task(prefetch_tmdb_for_subscriptions(subscriptions))
@@ -75,7 +76,7 @@ async def search_all_active_subscriptions(*, force: bool = False) -> dict:
         "搜索全部活跃订阅完成",
         {"active": len(subscriptions), "searched": searched, "created": total, "failed": failed},
     )
-    _flush_pending_checked()
+    await _flush_pending_checked()
     flush_log_buffer()
     return {"ok": True, "searched": searched, "count": total, "failed": failed}
 
@@ -186,7 +187,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
             timeout=runtime.SUBSCRIPTION_SEARCH_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        _note_subscription_checked(int(subscription["id"]))
+        await _note_subscription_checked(int(subscription["id"]))
         add_log(
             "error",
             "subscription",
@@ -195,7 +196,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
         )
         return (1, 0, 1)
     except Exception as exc:
-        mark_subscription_checked(int(subscription["id"]))
+        await _note_subscription_checked(int(subscription["id"]))
         add_log(
             "error",
             "subscription",
@@ -209,7 +210,7 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
             },
         )
         return (1, 0, 1)
-    _note_subscription_checked(int(subscription["id"]))
+    await _note_subscription_checked(int(subscription["id"]))
     return (1, len(results), 0)
 
 
@@ -219,19 +220,22 @@ async def _search_and_attach_resources_guarded(subscription_id: int, snapshot, *
 
 
 _pending_checked_ids: list[int] = []
+_pending_checked_lock = asyncio.Lock()
 
 
-def _note_subscription_checked(subscription_id: int) -> None:
+async def _note_subscription_checked(subscription_id: int) -> None:
     """Collect a subscription that finished a search attempt for batch marking."""
-    _pending_checked_ids.append(int(subscription_id))
+    async with _pending_checked_lock:
+        _pending_checked_ids.append(int(subscription_id))
 
 
-def _flush_pending_checked() -> None:
+async def _flush_pending_checked() -> None:
     """Write collected last_checked_at updates in one transaction."""
-    if not _pending_checked_ids:
-        return
-    ids = list(dict.fromkeys(_pending_checked_ids))
-    _pending_checked_ids.clear()
+    async with _pending_checked_lock:
+        if not _pending_checked_ids:
+            return
+        ids = list(dict.fromkeys(_pending_checked_ids))
+        _pending_checked_ids.clear()
     now = utc_now()
     with db() as conn:
         conn.executemany(

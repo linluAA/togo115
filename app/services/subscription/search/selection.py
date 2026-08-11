@@ -70,8 +70,8 @@ async def attach_telegram_results(
     duplicate_count = 0
     save_failed_count = 0
     recheck_saved_count = 0
-    # Prefetch 115 states for top candidates with bounded concurrency, then save sequentially
-    # so "first created wins" ordering stays deterministic.
+    # Phase 1: Validate 115 availability outside any DB transaction.
+    # Prefetch 115 states for top candidates with bounded concurrency.
     share_cache = process_115_cache() if ordered else None
     prefaced_states: dict[str, str] = {}
     if share_cache is not None and ordered:
@@ -83,21 +83,45 @@ async def attach_telegram_results(
         if probe_urls:
             prefaced_states = await share_cache.availability_many(probe_urls)
 
+    # Validate remaining 115 URLs individually, also outside transaction.
+    all_115_states: dict[str, str] = {}
+    if share_cache is not None:
+        for result in ordered:
+            url = str(getattr(result, "url", "") or "")
+            if not PAN115_URL_RE.match(url):
+                continue
+            state = prefaced_states.get(url)
+            if state is not None:
+                all_115_states[url] = state
+                validation_report["checked_115"] += 1
+                if state == SHARE_UNAVAILABLE:
+                    validation_report["expired_115"] += 1
+                elif state == SHARE_UNKNOWN:
+                    validation_report["recheck_115"] += 1
+                continue
+            state = await share_cache.availability(url)
+            all_115_states[url] = state
+            validation_report["checked_115"] += 1
+            if state == SHARE_UNAVAILABLE:
+                validation_report["expired_115"] += 1
+            elif state == SHARE_UNKNOWN:
+                validation_report["recheck_115"] += 1
+
+    # Phase 2: DB operations inside transaction (no network calls).
     with db() as conn:
         existing_rows = existing_resource_rows(conn, subscription_id)
         covered_missing: set[tuple[int, int]] = set()
+        bare_pack_saved = False
         for result in ordered:
-            if covered_missing and _result_missing_already_covered(subscription, result, covered_missing):
+            if covered_missing and _result_missing_already_covered(
+                subscription, result, covered_missing, bare_pack_saved=bare_pack_saved
+            ):
                 continue
             url = str(getattr(result, "url", "") or "")
             mark_recheck = False
             if share_cache is not None and PAN115_URL_RE.match(url):
-                state = prefaced_states.get(url)
-                if state is None:
-                    state = await share_cache.availability(url)
-                validation_report["checked_115"] += 1
+                state = all_115_states.get(url, SHARE_UNKNOWN)
                 if state == SHARE_UNAVAILABLE:
-                    validation_report["expired_115"] += 1
                     add_log("debug",
                         "subscription",
                         "115 分享链接已失效，跳过保存和投递",
@@ -109,7 +133,6 @@ async def attach_telegram_results(
                     )
                     continue
                 if state == SHARE_UNKNOWN:
-                    validation_report["recheck_115"] += 1
                     mark_recheck = True
                     recheck_results.append(result)
                     add_log(
@@ -137,6 +160,7 @@ async def attach_telegram_results(
                     recheck_saved_count += 1
                 # Bare (no episode) packs already cover unknown scope; stop to avoid multi-save.
                 if not covered_missing:
+                    bare_pack_saved = True
                     break
                 continue
             if outcome == "duplicate":
@@ -145,8 +169,11 @@ async def attach_telegram_results(
                 continue
             save_failed_count += 1
         if not created:
+            bare_pack_saved = False
             for result in recheck_results:
-                if covered_missing and _result_missing_already_covered(subscription, result, covered_missing):
+                if covered_missing and _result_missing_already_covered(
+                    subscription, result, covered_missing, bare_pack_saved=bare_pack_saved
+                ):
                     continue
                 outcome = _save_telegram_result(conn, subscription, result, existing_rows, mark_recheck=True)
                 if outcome == "created":
@@ -155,6 +182,7 @@ async def attach_telegram_results(
                     covered_missing |= _missing_coverage_for_result(subscription, result)
                     recheck_saved_count += 1
                     if not covered_missing:
+                        bare_pack_saved = True
                         break
                     continue
                 if outcome == "duplicate":
@@ -257,7 +285,18 @@ async def attach_telegram_results(
 def _missing_coverage_for_result(subscription: dict, result: SearchResult) -> set[tuple[int, int]]:
     try:
         decision = decide_resource_candidate(subscription, result)
-    except Exception:
+    except Exception as exc:
+        add_log(
+            "warning",
+            "subscription",
+            "资源候选决策异常，跳过覆盖范围计算",
+            {
+                "id": subscription.get("id"),
+                "title": str(getattr(result, "title", "") or "")[:120],
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            },
+        )
         return set()
     return set(decision.missing_coverage or ())
 
@@ -266,12 +305,15 @@ def _result_missing_already_covered(
     subscription: dict,
     result: SearchResult,
     covered_missing: set[tuple[int, int]],
+    *,
+    bare_pack_saved: bool = False,
 ) -> bool:
     coverage = _missing_coverage_for_result(subscription, result)
     if coverage:
         return coverage.issubset(covered_missing)
-    # No explicit episode coverage: treat as whole-scope pack and skip once anything was created.
-    return bool(covered_missing)
+    # No explicit episode coverage: treat as whole-scope pack.
+    # Only skip if a bare pack was already saved in this pass.
+    return bare_pack_saved
 
 
 __all__ = [

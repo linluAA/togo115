@@ -62,14 +62,14 @@ def pending_magnet_label(token: str, index: int) -> str:
     title = _result_attr(result, "title") or "\u78c1\u529b\u8d44\u6e90"
     return f"{str(title).strip()[:48]} \u00b7 {size}"
 
-def _store_pending_magnet_results(detail: dict[str, Any], results: list[SearchResult]) -> str:
+def _store_pending_magnet_results(detail: dict[str, Any], results: list[SearchResult], max_results: int = 20) -> str:
     _load_pending_magnet_results()
     _prune_pending_magnet_results()
     token = secrets.token_urlsafe(6)
     _pending_magnet_picks[token] = {
         "created_at": time.time(),
         "detail": dict(detail),
-        "results": list(results),
+        "results": list(results)[:max_results],
     }
     _save_pending_magnet_results()
     return token

@@ -155,13 +155,19 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
         results: list[SearchResult] = []
         state = shared_state or TelegramSearchSharedState()
         empty_streak = 0
-        tasks = [
-            asyncio.create_task(
-                self._guarded_fast_dialog_search(semaphore, client, dialog, query, budget, results, shared_state=state)
-            )
-            for dialog in dialogs
-        ]
-        pending: set[asyncio.Task] = set(tasks)
+
+        # Worker pool: create only as many tasks as the semaphore allows,
+        # then feed new dialogs as slots free up.
+        pending: set[asyncio.Task] = set()
+        dialog_iter = iter(enumerate(dialogs))
+        for _ in range(semaphore._value):
+            try:
+                _index, dialog = next(dialog_iter)
+                pending.add(asyncio.create_task(
+                    self._guarded_fast_dialog_search(semaphore, client, dialog, query, budget, results, shared_state=state)
+                ))
+            except StopIteration:
+                break
         try:
             while pending and not budget.exhausted() and not results:
                 done, pending = await asyncio.wait(pending, timeout=budget.timeout(0.5), return_when=asyncio.FIRST_COMPLETED)
@@ -174,8 +180,21 @@ class TelegramFastSearchMixin(TelegramFastMessageMixin):
                 empty_streak += max(0, len(done) - (len(results) - before))
                 if empty_streak >= TELEGRAM_EMPTY_DIALOG_STREAK and pending:
                     break
+                # Feed next dialog as soon as a slot opens.
+                if budget.exhausted() or results:
+                    continue
+                try:
+                    _next_index, next_dialog = next(dialog_iter)
+                    pending.add(asyncio.create_task(
+                        self._guarded_fast_dialog_search(semaphore, client, next_dialog, query, budget, results, shared_state=state)
+                    ))
+                except StopIteration:
+                    pass
         finally:
-            await self._cancel_pending_dialog_searches(pending)
+            if pending:
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
         return results[:TELEGRAM_FAST_RETURN_TARGET]
 
     async def _guarded_fast_dialog_search(

@@ -169,7 +169,7 @@ def _cjk_suffix_boundary(char: str) -> bool:
         return True
     if char.isdigit():
         return True
-    return bool(re.match(r"[\s\[\]\(\)【】（）._\-/·]", char))
+    return bool(re.match(r"[\s\[\]\(\)【】（）.,，。：:、！!?？;；._\-/·\"'\"']", char))
 
 
 def _latin_title_match(term: str, compact_text: str) -> bool:

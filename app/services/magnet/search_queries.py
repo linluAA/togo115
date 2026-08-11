@@ -16,7 +16,7 @@ def _fast_magnet_query_batches(title: str, keywords: list[str]) -> list[list[str
     if not queries:
         return []
     first = queries[:1]
-    second = queries[1:TG_BOT_MAGNET_SOURCE_QUERY_LIMIT + 1]
+    second = queries[1:]
     return [batch for batch in (first, second) if batch]
 
 def _fast_magnet_queries(title: str, keywords: list[str]) -> list[str]:
@@ -32,7 +32,7 @@ def _fast_magnet_queries(title: str, keywords: list[str]) -> list[str]:
     for keyword in keywords:
         add(keyword)
         add(_query_without_year(keyword))
-    return queries[:4]
+    return queries[:8]
 
 def _query_without_year(value: str | None) -> str:
     text = str(value or "")

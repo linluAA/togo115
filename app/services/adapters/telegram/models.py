@@ -5,6 +5,27 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+# ── Size limits for TelegramSearchSharedState collections ──────────────
+_MAX_SEEN_URLS = 5000
+_MAX_SEEN_MESSAGE_IDS = 200       # per-source buckets
+_MAX_SEEN_MESSAGE_ID_BUCKET = 2000  # entries per bucket
+_MAX_QUERY_DIALOG_CACHE = 500
+_MAX_DIALOG_HIT_SCORES = 200
+_EVICT_FRACTION = 0.2             # evict oldest 20% when limit is exceeded
+
+
+def _evict_oldest(data: dict, max_size: int, fraction: float = _EVICT_FRACTION) -> None:
+    """Remove the oldest *fraction* of entries when *data* exceeds *max_size*."""
+    if len(data) <= max_size:
+        return
+    # If the dict tracks insertion order (Python 3.7+), the first items are oldest.
+    # We simply pop the first N items.
+    to_remove = int(max(1, len(data) * fraction))
+    keys = list(data.keys())[:to_remove]
+    for key in keys:
+        data.pop(key, None)
+
+
 @dataclass(frozen=True)
 class TelegramHistoryOptions:
     history_limit: int
@@ -69,6 +90,7 @@ class TelegramSearchSharedState:
         if bucket is None:
             bucket = set()
             self.seen_message_ids[key] = bucket
+            _evict_oldest(self.seen_message_ids, _MAX_SEEN_MESSAGE_IDS)
         return bucket
 
     def remember_results(self, results: list[Any]) -> list[Any]:
@@ -83,6 +105,9 @@ class TelegramSearchSharedState:
                 continue
             if url in self.seen_urls:
                 continue
+            # Enforce seen_urls capacity before adding.
+            if len(self.seen_urls) >= _MAX_SEEN_URLS:
+                self.seen_urls.clear()
             self.seen_urls.add(url)
             kept.append(result)
             message_id = getattr(result, "message_id", None)
@@ -90,7 +115,10 @@ class TelegramSearchSharedState:
             origin = index_origin_source(source) or (source if source and not is_telegram_index_source(source) else "")
             if message_id and origin:
                 try:
-                    self.seen_messages_for(origin).add(int(message_id))
+                    bucket = self.seen_messages_for(origin)
+                    if len(bucket) >= _MAX_SEEN_MESSAGE_ID_BUCKET:
+                        bucket.clear()
+                    bucket.add(int(message_id))
                 except (TypeError, ValueError):
                     pass
         return kept
@@ -113,6 +141,7 @@ class TelegramSearchSharedState:
         if not key or count <= 0:
             return
         self.dialog_hit_scores[key] = int(self.dialog_hit_scores.get(key, 0) or 0) + int(count)
+        _evict_oldest(self.dialog_hit_scores, _MAX_DIALOG_HIT_SCORES)
 
     def query_dialog_cache_key(self, source: str, query: str) -> str:
         return f"{str(source or '').strip()}\0{str(query or '').strip()}"
@@ -126,6 +155,7 @@ class TelegramSearchSharedState:
     def set_cached_query_dialog_results(self, source: str, query: str, results: list[Any]) -> None:
         key = self.query_dialog_cache_key(source, query)
         self.query_dialog_cache[key] = list(results or [])
+        _evict_oldest(self.query_dialog_cache, _MAX_QUERY_DIALOG_CACHE)
 
     def filter_dialogs(self, dialogs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Optionally narrow dialogs to preferred sources during force_remote recheck."""

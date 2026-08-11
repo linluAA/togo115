@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>ToGo115 · 方案 C｜瑞士工坊</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800;900&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+/* ============================================================
+   方案 C · 瑞士工坊（Swiss Editorial）
+   国际主义排版 · 白底黑线网格 · 信号红点缀 · 严格对齐
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --white:#fafaf7; --panel:#fff; --ink:#141414; --ink-2:#555; --muted:#9a9a92;
+  --red:#e63329; --line:#141414; --hairline:rgba(20,20,20,.16);
+  --sans:"Archivo","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",Consolas,monospace;
+}
+html{scroll-behavior:smooth}
+body{
+  background:var(--white); color:var(--ink); font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+  font-size:15px; line-height:1.5;
+}
+::selection{background:var(--red);color:#fff}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:var(--ink);border:3px solid var(--white)}
+::-webkit-scrollbar-track{background:var(--white)}
+/* ===== 顶部条形 ===== */
+.topbar{
+  position:sticky;top:0;z-index:100;background:var(--white);
+  border-bottom:2px solid var(--ink);
+}
+.topbar .inner{max-width:1220px;margin:0 auto;padding:0 26px;display:flex;align-items:center;gap:34px;height:64px}
+.brand{display:flex;align-items:baseline;gap:12px}
+.brand .mark{font-weight:900;font-size:22px;letter-spacing:-.02em}
+.brand .mark sup{color:var(--red);font-size:12px;font-weight:800}
+.brand .sub{font-size:10.5px;letter-spacing:.26em;color:var(--muted);font-weight:500;text-transform:uppercase}
+.topnav{display:flex;gap:2px}
+.topnav a{
+  padding:22px 15px 18px;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--ink-2);
+  border-bottom:3px solid transparent;display:flex;align-items:center;gap:7px;transition:.15s;
+}
+.topnav a .no{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.topnav a:hover{color:var(--ink)}
+.topnav a.on{color:var(--ink);border-bottom-color:var(--red)}
+.topnav a.on .no{color:var(--red)}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.clock{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.06em}
+.pill{
+  display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.1em;
+  border:1.5px solid var(--ink);padding:7px 12px;border-radius:99px;text-transform:uppercase;
+}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:blink 1.6s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.pill.ghost{border-color:var(--hairline);color:var(--ink-2)}
+.pill.ghost .av{width:22px;height:22px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800}
+/* ===== 主体 ===== */
+.wrap{max-width:1220px;margin:0 auto;padding:0 26px 110px}
+/* 大标题带 */
+.mast{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:30px;align-items:end;
+  padding:56px 0 34px;border-bottom:2px solid var(--ink);margin-bottom:34px;
+}
+.mast h1{font-size:clamp(40px,7vw,84px);font-weight:900;letter-spacing:-.03em;line-height:.95}
+.mast h1 .red{color:var(--red)}
+.mast .lede{max-width:340px;font-size:13px;line-height:1.8;color:var(--ink-2);border-left:3px solid var(--red);padding-left:16px}
+/* 指标行 */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--ink);margin-bottom:64px}
+@media(max-width:760px){.metrics{grid-template-columns:1fr 1fr}}
+.metrics .m{padding:22px;border-right:1px solid var(--hairline)}
+.metrics .m:last-child{border-right:none}
+@media(max-width:760px){.metrics .m:nth-child(2){border-right:none}.metrics .m{border-bottom:1px solid var(--hairline)}.metrics .m:nth-child(n+3){border-bottom:none}}
+.metrics .m b{display:block;font-size:34px;font-weight:900;letter-spacing:-.02em;line-height:1}
+.metrics .m b sup{font-size:14px;color:var(--red);margin-left:2px}
+.metrics .m span{font-size:10.5px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;font-weight:600}
+/* 区块 */
+.sec{margin-bottom:72px}
+.sec .hd{display:flex;align-items:baseline;gap:18px;margin-bottom:26px;padding-top:26px;border-top:1.5px solid var(--ink)}
+.sec .hd .no{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)}
+.sec .hd h2{font-size:26px;font-weight:800;letter-spacing:-.01em}
+.sec .hd .note{margin-left:auto;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.sec .hd .more{font-size:12px;font-weight:700;color:var(--ink);border-bottom:1.5px solid var(--ink);cursor:pointer;padding-bottom:2px}
+.sec .hd .more:hover{color:var(--red);border-color:var(--red)}
+/* 海报网格：严格网格，编号 */
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:26px 20px}
+@media(min-width:1100px){.board{grid-template-columns:repeat(6,1fr)}}
+.item{position:relative;cursor:pointer}
+.item .ph{
+  aspect-ratio:2/3;background-size:cover;background-position:center;
+  border:1.5px solid var(--ink);position:relative;transition:box-shadow .18s;
+  background-color:#efeee7;
+}
+.item .ph .idx{
+  position:absolute;top:-12px;left:-8px;width:26px;height:26px;background:var(--ink);color:#fff;
+  font-family:var(--mono);font-size:11px;font-weight:600;display:grid;place-items:center;z-index:2;
+}
+.item:hover .ph{box-shadow:6px 6px 0 var(--red)}
+.item .ph::after{
+  content:"";position:absolute;inset:0;border:2px solid transparent;transition:.18s;
+}
+.item:hover .ph::after{border-color:var(--red);inset:-5px}
+.item .t{font-size:13px;font-weight:700;margin-top:11px;line-height:1.3;letter-spacing:.01em}
+.item .d{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+.item .d .on{color:var(--red);font-weight:600}
+.item .d .off{text-decoration:line-through;opacity:.7}
+.item .act{display:inline-block;margin-top:8px;font-size:11px;font-weight:700;color:var(--ink);border-bottom:1px solid var(--ink);padding-bottom:1px;opacity:0;transform:translateY(3px);transition:.18s}
+.item:hover .act{opacity:1;transform:none}
+.item .act:hover{color:var(--red);border-color:var(--red)}
+/* 订阅表：数据网格 */
+.datagrid{width:100%;border-collapse:collapse;border-top:1.5px solid var(--ink)}
+.datagrid th{
+  text-align:left;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;padding:12px 14px;border-bottom:1px solid var(--ink);font-family:var(--mono);
+}
+.datagrid td{padding:16px 14px;border-bottom:1px solid var(--hairline);font-size:13.5px;vertical-align:middle}
+.datagrid tr:hover td{background:#f0efe8}
+.datagrid .name b{font-size:14.5px;font-weight:800;display:block;letter-spacing:-.01em}
+.datagrid .name small{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.03em}
+.datagrid .tag{
+  display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  border:1.5px solid;padding:4px 10px;border-radius:99px;white-space:nowrap;
+}
+.datagrid .tag.doing{color:var(--red);border-color:var(--red)}
+.datagrid .tag.done{color:#1e7d46;border-color:#1e7d46}
+.datagrid .tag.paused{color:var(--muted);border-color:var(--muted)}
+.datagrid .bar{width:90px;height:4px;background:rgba(20,20,20,.12);display:inline-block;vertical-align:middle;margin-right:8px}
+.datagrid .bar i{display:block;height:100%;background:var(--ink)}
+.datagrid .bar i.hot{background:var(--red)}
+.datagrid .op{font-size:12px;font-weight:700;color:var(--ink-2);cursor:pointer;margin-right:12px;border-bottom:1px solid transparent}
+.datagrid .op:hover{color:var(--red);border-color:var(--red)}
+/* 日志：等宽时间线 */
+.loglist{border:1.5px solid var(--ink)}
+.loglist .row{
+  display:grid;grid-template-columns:130px 150px 1fr;gap:18px;align-items:baseline;
+  padding:15px 18px;border-bottom:1px solid var(--hairline);font-size:13px;
+}
+.loglist .row:last-child{border-bottom:none}
+.loglist .row:hover{background:#f0efe8}
+.loglist .row .time{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.loglist .row .src{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink-2);text-transform:uppercase}
+.loglist .row .src b{color:var(--red);font-weight:700}
+.loglist .row .msg{color:var(--ink-2)}
+.loglist .row .msg b{color:var(--ink);font-weight:700}
+.loglist .row .msg em{font-style:normal;color:var(--red);font-weight:600}
+.loglist .row .bad{color:var(--red);font-family:var(--mono);font-size:11px;border:1px solid var(--red);padding:1px 7px;margin-left:6px;letter-spacing:.06em}
+/* 页脚 */
+.footer{background:var(--ink);color:#fff;padding:46px 26px 52px;display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap}
+.footer .mark{font-weight:900;font-size:24px}
+.footer .mark sup{color:var(--red)}
+.footer .cols{display:flex;gap:60px;flex-wrap:wrap;margin-left:auto}
+.footer .col h4{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#999;margin-bottom:14px;font-weight:600}
+.footer .col p{font-size:12px;color:#ccc;line-height:2}
+.footer .col p b{color:#fff}
+</style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<header class="topbar">
+  <div class="inner">
+    <div class="brand"><span class="mark">TOGO<sup>115</sup></span><span class="sub">Media Monitor</span></div>
+    <nav class="topnav">
+      <a class="on" onclick="go(this)"><span class="no">01</span>片单</a>
+      <a onclick="go(this)"><span class="no">02</span>放映厅</a>
+      <a onclick="go(this)"><span class="no">03</span>订阅</a>
+      <a onclick="go(this)"><span class="no">04</span>日志</a>
+      <a onclick="go(this)"><span class="no">05</span>设置</a>
+    </nav>
+    <div class="top-right">
+      <span class="clock">MON 10 AUG 2026 · 02:41</span>
+      <span class="pill"><span class="dot"></span>追新在线</span>
+      <span class="pill ghost"><span class="av">A</span>ADMIN</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- 大标题 -->
+  <section class="mast">
+    <h1>今日追新<br/><span class="red">SIGNAL REPORT</span></h1>
+    <p class="lede">自动从 Telegram / RSS / 海搜 / 站点插件聚合影视资源，匹配后直传 115 并同步 Emby。<br/>以下是今日 00:00 – 02:41 的运行简报。</p>
+  </section>
+
+  <!-- 指标 -->
+  <section class="metrics">
+    <div class="m"><b>28</b><span>Active Subscriptions</span></div>
+    <div class="m"><b>96<sup>%</sup></b><span>Hit Rate</span></div>
+    <div class="m"><b>38<sup>s</sup></b><span>Avg Pipeline</span></div>
+    <div class="m"><b>18</b><span>Added to Library</span></div>
+  </section>
+
+  <!-- 热榜 -->
+  <section class="sec" id="tmdb">
+    <div class="hd"><span class="no">01</span><h2>本周热榜</h2><span class="note">TMDB Trending</span><span class="more" onclick="alert('演示原型：查看更多')">全部 →</span></div>
+    <div class="board">
+      <div class="item" onclick="alert('演示原型：订阅《双城之战》')">
+        <div class="ph" style="background-image:linear-gradient(180deg,rgba(20,20,20,.06),rgba(20,20,20,.3)),url('https://image.tmdb.org/t/p/w342/65TRz7az7cLllTwO9bRcSK6TFpG.jpg')"><span class="idx">01</span></div>
+        <div class="t">双城之战 第二季</div><div class="d"><span class="on">● 已订阅</span> · ARCANE S2</div>
+        <span class="act">+ 追新</span>
+      </div>
+      <div class="item" onclick="alert('演示原型：订阅《沙丘3》')">
+        <div class="ph" style="background-image:linear-gradient(180deg,rgba(20,20,20,.06),rgba(20,20,20,.3)),url('https://image.tmdb.org/t/p/w342/4YptLm3YMAkeOkoWkHZzBxgFQO5.jpg')"><span class="idx">02</span></div>
+        <div class="t">沙丘：厄拉科斯之战</div><div class="d"><span class="on">● 已订阅</span> · DUNE III</div>
+        <span class="act">+ 追新</span>
+      </div>
+      <div class="item" onclick="alert('演示原型：订阅《哥斯拉》')">
+        <div class="ph" style="background-image:linear-gradient(180deg,rgba(20,20,20,.06),rgba(20,20,20,.3)),url('https://image.tmdb.org/t/p/w342/mU35gT9aE7aTsZkJlrYTk5nLM8Y.jpg')"><span class="idx">03</span></div>
+        <div class="t">哥斯拉：决战之巅</div><div class="d"><span class="off">未订阅</span> · 2026</div>
+        <span class="act">+ 追新</span>
+      </div>
+      <div class="item" onclick="alert('演示原型：订阅《白莲花》')">
+        <div class="ph" style="background-image:linear-gradient(180deg,rgba(20,20,20,.06),rgba(20,20,20,.3)),url('https://image.tmdb.org/t/p/w342/xYujFp1wEIkqk52vTD4LKp5Q8vT.jpg')"><span class="idx">04</span></div>
+        <div class="t">白莲花度假村 第三季</div><div class="d"><span class="on">● 已订阅</span> · S3</div>
+        <span class="act">+ 追新</span>
+      </div>
+      <div class="item" onclick="alert('演示原型：订阅《地球脉动》')">
+        <div class="ph" style="background-image:linear-gradient(180deg,rgba(20,20,20,.06),rgba(20,20,20,.3)),url('https://image.tmdb.org/t/p/w342/hv7o3VgfsairBoQIFbvb1WubJvM.jpg')"><span class="idx">05</span></div>
+        <div class="t">地球脉动 第三季</div><div class="d"><span class="on">● 已订阅</span> · 完结</div>
+        <span class="act">+ 追新</span>
+      </div>
+      <div class="item" onclick="alert('演示原型：订阅《异形》')">
+        <div class="ph" style="background-image:linear-gradient(180deg,rgba(20,20,20,.06),rgba(20,20,20,.3)),url('https://image.tmdb.org/t/p/w342/d1RHS8nDC8bvtCFvTf2uSNDYJxS.jpg')"><span class="idx">06</span></div>
+        <div class="t">异形：地球</div><div class="d"><span class="off">未订阅</span> · 2025</div>
+        <span class="act">+ 追新</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 订阅台账 -->
+  <section class="sec" id="subs">
+    <div class="hd"><span class="no">02</span><h2>订阅台账</h2><span class="note">Subscription Ledger</span><span class="more" onclick="alert('演示原型：新增订阅')">＋ 新建</span></div>
+    <table class="datagrid">
+      <tr><th style="width:28%">Title</th><th>Status</th><th>Progress</th><th>Last Hit</th><th style="width:15%">Actions</th></tr>
+      <tr>
+        <td class="name"><b>沙丘：厄拉科斯之战</b><small>Dune: Part Three · 2026 · Movie</small></td>
+        <td><span class="tag doing">转存中</span></td>
+        <td><span class="bar"><i style="width:40%" class="hot"></i></span>40%</td>
+        <td>02:41 · TG</td>
+        <td><span class="op">重搜</span><span class="op">详情</span></td>
+      </tr>
+      <tr>
+        <td class="name"><b>双城之战 第二季</b><small>Arcane S2 · 2024 · Series</small></td>
+        <td><span class="tag doing">连载中</span></td>
+        <td><span class="bar"><i style="width:78%"></i></span>E6/9</td>
+        <td>01-12 · RSS</td>
+        <td><span class="op">重搜</span><span class="op">详情</span></td>
+      </tr>
+      <tr>
+        <td class="name"><b>地球脉动 第三季</b><small>Planet Earth III · Series</small></td>
+        <td><span class="tag done">已完结</span></td>
+        <td><span class="bar"><i style="width:100%"></i></span>8/8</td>
+        <td>01-05 · 磁力</td>
+        <td><span class="op">重搜</span><span class="op">详情</span></td>
+      </tr>
+      <tr>
+        <td class="name"><b>白莲花度假村 第三季</b><small>The White Lotus S3 · Series</small></td>
+        <td><span class="tag doing">连载中</span></td>
+        <td><span class="bar"><i style="width:52%"></i></span>E4/8</td>
+        <td>01-14 · TG</td>
+        <td><span class="op">重搜</span><span class="op">详情</span></td>
+      </tr>
+      <tr>
+        <td class="name"><b>奥本海默 第二季</b><small>Oppenheimer S2 · Series</small></td>
+        <td><span class="tag paused">暂停</span></td>
+        <td><span class="bar"><i style="width:0%"></i></span>—</td>
+        <td>—</td>
+        <td><span class="op">重搜</span><span class="op">详情</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 日志 -->
+  <section class="sec" id="logs">
+    <div class="hd"><span class="no">03</span><h2>事件日志</h2><span class="note">Event Log · 最近 6 条</span><span class="more" onclick="alert('演示原型：打开完整日志')">全部 →</span></div>
+    <div class="loglist">
+      <div class="row"><span class="time">02:41:18</span><span class="src">telegram</span><span class="msg">命中 <b>《沙丘：厄拉科斯之战》</b>，抽取 <em>115 链接</em> · @cangmao_hd</span></div>
+      <div class="row"><span class="time">02:41:25</span><span class="src">delivery</span><span class="msg">转存任务创建 → 目录 <em>/影视/2026</em></span></div>
+      <div class="row"><span class="time">02:41:58</span><span class="src">emby</span><span class="msg">入库成功 · <b>沙丘：厄拉科斯之战</b></span></div>
+      <div class="row"><span class="time">02:40:03</span><span class="src">haisou</span><span class="msg">返回 3 条 115 分享 · 匹配 1 条</span></div>
+      <div class="row"><span class="time">02:12:47</span><span class="src">rss</span><span class="msg">BT1207 新增 2 条 · 标题不匹配，忽略</span></div>
+      <div class="row"><span class="time">01:55:02</span><span class="src">telegram</span><span class="msg">重搜完成 · <b>奥本海默 S2</b> <span class="bad">0 HIT</span> 30 分钟后重试</span></div>
+    </div>
+  </section>
+
+</div>
+
+<footer class="footer">
+  <div class="brand"><span class="mark">TOGO<sup>115</sup></span></div>
+  <div class="cols">
+    <div class="col"><h4>Sources</h4><p><b>Telegram</b> 历史 + 实时<br/><b>RSS / Torznab</b><br/><b>海搜 API</b> · 站点插件</p></div>
+    <div class="col"><h4>Pipeline</h4><p>匹配 → 转存 115 → 离线下载<br/>→ Emby 同步入库</p></div>
+    <div class="col"><h4>Note</h4><p>UI 演示原型 · 不含真实数据</p></div>
+  </div>
+</footer>
+
+<script>
+function go(el){
+  document.querySelectorAll('.topnav a').forEach(a=>a.classList.remove('on'));
+  el.classList.add('on');
+  if(el.textContent.includes('片单'))window.scrollTo({top:0,behavior:'smooth'});
+  else window.scrollTo({top:document.querySelector('.wrap').offsetTop,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

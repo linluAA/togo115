@@ -73,6 +73,11 @@ SCHEMA_SQL = """
             updated_at TEXT NOT NULL
         );
 
+        CREATE INDEX IF NOT EXISTS idx_resources_subscription_id ON resources(subscription_id);
+        CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
+        CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+        CREATE INDEX IF NOT EXISTS idx_subscriptions_created_at ON subscriptions(created_at);
+
         CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             level TEXT NOT NULL,

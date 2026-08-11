@@ -88,7 +88,7 @@ def _update_resource_delivery_status(resource_id: int, ok: bool, error_message: 
             """
             UPDATE resources
             SET status = ?,
-                retry_count = CASE WHEN ? THEN retry_count ELSE retry_count + 1 END,
+                retry_count = CASE WHEN ? THEN 0 ELSE retry_count + 1 END,
                 last_error = ?,
                 updated_at = ?
             WHERE id = ?
@@ -124,7 +124,6 @@ def classify_delivery_failure(error_message: str) -> str:
         for word in (
             "待复检",
             "recheck",
-            "unknown",
             "cookie",
             "auth_required",
             "未配置",
@@ -138,6 +137,8 @@ def classify_delivery_failure(error_message: str) -> str:
         if any(word in text for word in ("cookie", "auth", "login", "未配置", "请先登录", "unauthorized", "401", "403")):
             return "auth"
         return "recheck"
+    if "unknown" in text:
+        return "temporary"
     if any(
         word in text
         for word in (

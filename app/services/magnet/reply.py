@@ -22,9 +22,15 @@ def magnet_results_reply(detail: dict[str, Any], results: list[SearchResult]) ->
 
 def magnet_results_reply_markup(detail: dict[str, Any], results: list[SearchResult]) -> dict[str, Any]:
     token = _store_pending_magnet_results(detail, results)
-    buttons = [[]]
+    buttons = []
+    row = []
     for index, result in enumerate(results, start=1):
-        buttons[0].append({"text": str(index), "callback_data": f"magpick:{token}:{index - 1}"})
+        row.append({"text": str(index), "callback_data": f"magpick:{token}:{index - 1}"})
+        if len(row) >= 5:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
     return {"inline_keyboard": buttons}
 
 

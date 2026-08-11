@@ -93,12 +93,13 @@ async def _merge_completed_magnet_sources(done: set[asyncio.Task], candidates: l
 async def _cancel_slow_magnet_sources(pending: set[asyncio.Task], timeout: float | None) -> None:
     pending_count = len(pending)
     await _cancel_pending_magnet_sources(pending)
-    add_log(
-        "warning",
-        "tg_bot",
-        "TG Bot 磁力订阅源搜索超时，已取消慢源",
-        {"timeout": round(timeout or TG_BOT_MAGNET_SOURCE_TIMEOUT_SECONDS, 2), "pending": pending_count},
-    )
+    if pending_count:
+        add_log(
+            "warning",
+            "tg_bot",
+            "TG Bot 磁力订阅源搜索超时，已取消慢源",
+            {"timeout": round(timeout or TG_BOT_MAGNET_SOURCE_TIMEOUT_SECONDS, 2), "pending": pending_count},
+        )
 
 async def _cancel_pending_magnet_sources(pending: set[asyncio.Task]) -> None:
     for item in pending:

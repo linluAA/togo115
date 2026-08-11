@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ToGo115 · UI 重构方案总览</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d10; --surface:#16161c; --surface-2:#1e1e26; --line:rgba(255,255,255,.09);
+  --ink:#f2f2f4; --ink-2:#b0b0b8; --muted:#71717a;
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+body{background:var(--bg);color:var(--ink);min-height:100vh}
+.wrap{max-width:1240px;margin:0 auto;padding:40px 26px 80px}
+header{margin-bottom:34px}
+header .eyebrow{font-size:11px;letter-spacing:.24em;color:#ffb13d;font-weight:700;margin-bottom:10px}
+header h1{font-size:clamp(26px,4vw,38px);font-weight:800;letter-spacing:-.02em}
+header p{color:var(--ink-2);margin-top:10px;font-size:14px;line-height:1.7;max-width:720px}
+.layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;align-items:start}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+/* 左侧方案列表 */
+.schemes{display:grid;gap:10px;position:sticky;top:24px}
+@media(max-width:900px){.schemes{position:static}}
+.scheme{
+  display:grid;grid-template-columns:44px 1fr auto;gap:14px;align-items:center;
+  padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);
+  cursor:pointer;transition:.2s;text-align:left;color:inherit;font:inherit;
+}
+.group-label{margin:8px 0 2px;font-size:10.5px;letter-spacing:.16em;color:var(--muted);font-weight:700;text-transform:uppercase}
+.scheme:hover{border-color:rgba(255,255,255,.2);transform:translateY(-2px)}
+.scheme.on{border-color:#ffb13d;background:linear-gradient(135deg,rgba(255,177,61,.1),transparent 60%),var(--surface)}
+.scheme .letter{
+  width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-weight:900;font-size:18px;
+  color:#0d0d10;
+}
+.scheme .info strong{display:block;font-size:14.5px}
+.scheme .info span{font-size:11.5px;color:var(--muted);margin-top:3px;display:block;line-height:1.5}
+.scheme .tag{
+  font-size:10px;font-weight:700;letter-spacing:.06em;padding:4px 9px;border-radius:99px;
+  background:rgba(255,255,255,.07);color:var(--ink-2);white-space:nowrap;
+}
+/* 色板 */
+.palette{display:flex;gap:5px;margin-top:9px}
+.palette i{width:18px;height:18px;border-radius:5px;border:1px solid rgba(255,255,255,.15)}
+/* 右侧预览 */
+.preview-frame{
+  border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;
+  height:calc(100vh - 130px);min-height:560px;position:relative;
+}
+.preview-frame .bar{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface-2);
+  border-bottom:1px solid var(--line);font-size:11px;color:var(--ink-2);font-family:Consolas,monospace;
+}
+.preview-frame .bar .dots{display:flex;gap:5px}
+.preview-frame .bar .dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.15)}
+.preview-frame .bar .url{margin-left:auto;padding:4px 12px;border-radius:99px;background:rgba(255,255,255,.05);letter-spacing:.04em}
+.preview-frame iframe{width:100%;height:calc(100% - 41px);border:0;background:#fff}
+/* 底部提示 */
+.footnote{margin-top:26px;font-size:12px;color:var(--muted);line-height:1.9;border-top:1px solid var(--line);padding-top:18px}
+.footnote code{background:rgba(255,255,255,.08);padding:2px 7px;border-radius:6px;font-size:11px}
+@media(max-width:900px){.preview-frame{height:520px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">DESIGN PROPOSALS</div>
+    <h1>ToGo115 · UI 重构方案总览</h1>
+    <p>8 套完全不同的视觉风格高保真原型（A–D 第一轮 + E–H 第二轮），覆盖同一个后台的 5 大视图（片单 / 媒体库 / 订阅 / 日志 / 设置）。点击左侧方案即可切换预览，所有原型均为静态 HTML，未改动任何项目代码。</p>
+  </header>
+
+  <div class="layout">
+    <nav class="schemes">
+      <button class="scheme on" data-f="scheme-A-newsprint.html" data-letter="A" data-bg="#e0342b" onclick="pick(this)">
+        <span class="letter" style="background:#e0342b">A</span>
+        <span class="info">
+          <strong>报刊亭新丑风</strong>
+          <span>Neo-Brutalism · 米黄纸底、粗黑框、硬阴影，像一份每日发行的追新早报</span>
+          <span class="palette"><i style="background:#f3ead8"></i><i style="background:#141210"></i><i style="background:#e0342b"></i><i style="background:#2b59e0"></i><i style="background:#e8a10e"></i></span>
+        </span>
+        <span class="tag">暖 · 高对比</span>
+      </button>
+
+      <button class="scheme" data-f="scheme-B-noir.html" data-letter="B" data-bg="#f0b429" onclick="pick(this)">
+        <span class="letter" style="background:#f0b429">B</span>
+        <span class="info">
+          <strong>午夜放映室</strong>
+          <span>Cinematic Noir · 黑丝绒、琥珀碘钨灯、衬线字幕，电影感的追片体验</span>
+          <span class="palette"><i style="background:#0b0a09"></i><i style="background:#f0b429"></i><i style="background:#141210"></i><i style="background:#c0392b"></i><i style="background:#efe9dc"></i></span>
+        </span>
+        <span class="tag">暗 · 电影感</span>
+      </button>
+
+      <button class="scheme" data-f="scheme-C-swiss.html" data-letter="C" data-bg="#e63329" onclick="pick(this)">
+        <span class="letter" style="background:#e63329">C</span>
+        <span class="info">
+          <strong>瑞士工坊</strong>
+          <span>Swiss Editorial · 国际主义排版，白底黑线网格、大字号、信号红，工整利落</span>
+          <span class="palette"><i style="background:#fafaf7"></i><i style="background:#141414"></i><i style="background:#e63329"></i><i style="background:#999"></i></span>
+        </span>
+        <span class="tag">亮 · 极简</span>
+      </button>
+
+      <button class="scheme" data-f="scheme-D-console.html" data-letter="D" data-bg="#7de8ff" onclick="pick(this)">
+        <span class="letter" style="background:#7de8ff;color:#04070b">D</span>
+        <span class="info">
+          <strong>深空控制台</strong>
+          <span>Aerospace Console · 任务控制中心，遥测面板、等宽字体、青色状态灯</span>
+          <span class="palette"><i style="background:#04070b"></i><i style="background:#0a1118"></i><i style="background:#7de8ff"></i><i style="background:#43d17a"></i><i style="background:#ffb13d"></i></span>
+        </span>
+        <span class="tag">暗 · 科技感</span>
+      </button>
+
+      <div class="group-label">— 第二轮 · 与报刊亭完全不同的风格 —</div>
+
+      <button class="scheme" data-f="scheme-E2-glass.html" data-letter="E" data-bg="#5b8cff" onclick="pick(this)">
+        <span class="letter" style="background:#5b8cff">E</span>
+        <span class="info">
+          <strong>玻璃轻净风</strong>
+          <span>Glassmorphism · 浅色柔和渐变 + 大面积毛玻璃 + 圆润轻盈，通透有呼吸感</span>
+          <span class="palette"><i style="background:#eef2ff"></i><i style="background:#5b8cff"></i><i style="background:#7c5bff"></i><i style="background:#2bc0a4"></i><i style="background:#ff6b9d"></i></span>
+        </span>
+        <span class="tag">亮 · 通透</span>
+      </button>
+
+      <button class="scheme" data-f="scheme-F2-neon.html" data-letter="F" data-bg="#0ff0ff" onclick="pick(this)">
+        <span class="letter" style="background:#0ff0ff;color:#0a0e17">F</span>
+        <span class="info">
+          <strong>霓虹赛博夜风</strong>
+          <span>Cyberpunk Neon · 深黑雨夜 + 酸性霓虹 + 发光描边 + 科技网格，未来感拉满</span>
+          <span class="palette"><i style="background:#0a0e17"></i><i style="background:#0ff0ff"></i><i style="background:#ff2ec4"></i><i style="background:#ffe600"></i><i style="background:#b4ff39"></i></span>
+        </span>
+        <span class="tag">暗 · 未来感</span>
+      </button>
+
+      <button class="scheme" data-f="scheme-G2-wabi.html" data-letter="G" data-bg="#c2544a" onclick="pick(this)">
+        <span class="letter" style="background:#c2544a">G</span>
+        <span class="info">
+          <strong>日系手账极简风</strong>
+          <span>Wabi-sabi · 暖米白纸 + 极细描边 + 大量留白 + 手写感数字，和风禅意安静</span>
+          <span class="palette"><i style="background:#faf7f0"></i><i style="background:#c2544a"></i><i style="background:#6f9e72"></i><i style="background:#d9a441"></i><i style="background:#3d3a33"></i></span>
+        </span>
+        <span class="tag">亮 · 禅意</span>
+      </button>
+
+      <button class="scheme" data-f="scheme-H2-dashboard.html" data-letter="H" data-bg="#4d9fff" onclick="pick(this)">
+        <span class="letter" style="background:#4d9fff">H</span>
+        <span class="info">
+          <strong>数据驾驶舱风</strong>
+          <span>Data Dashboard · 深色监控大屏，KPI 卡片 + 图表 + 密集信息网格，专业操控感</span>
+          <span class="palette"><i style="background:#0d1117"></i><i style="background:#4d9fff"></i><i style="background:#3fb68b"></i><i style="background:#f5a623"></i><i style="background:#a371f7"></i></span>
+        </span>
+        <span class="tag">暗 · 专业</span>
+      </button>
+    </nav>
+
+    <div class="preview-frame">
+      <div class="bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span id="frameLabel">scheme-A-newsprint.html</span>
+        <span class="url">localhost · 静态演示</span>
+      </div>
+      <iframe id="frame" title="方案预览" src="scheme-A-newsprint.html"></iframe>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <b>使用说明</b>：四个原型均为独立 HTML 文件，位于 <code>design-proposals/</code> 目录，可用任意浏览器直接打开。
+    图片使用 TMDB 公开海报地址做视觉演示；所有按钮点击为示意提示，不包含真实业务逻辑。
+    确认喜欢的风格后，可基于该方案重写 <code>app/static/styles.css</code> 及局部视图模板。
+  </div>
+</div>
+
+<script>
+function pick(el){
+  document.querySelectorAll('.scheme').forEach(s=>s.classList.remove('on'));
+  el.classList.add('on');
+  const f=el.dataset.f;
+  document.getElementById('frame').src=f;
+  document.getElementById('frameLabel').textContent=f;
+}
+</script>
+</body>
+</html>

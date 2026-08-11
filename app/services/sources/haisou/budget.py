@@ -56,6 +56,32 @@ def allow_haisou_validate() -> bool:
         return _VALIDATE_CALLS < MAX_VALIDATE_PER_WINDOW
 
 
+def acquire_haisou_search_slot() -> bool:
+    """Atomically check and consume a search slot.
+
+    Returns True if a slot was available and consumed, False otherwise.
+    This eliminates the TOCTOU race between allow_haisou_search() + note_haisou_search().
+    """
+    global _SEARCH_CALLS
+    _roll_window()
+    with _LOCK:
+        if _SEARCH_CALLS >= MAX_SEARCH_PER_WINDOW:
+            return False
+        _SEARCH_CALLS += 1
+        return True
+
+
+def acquire_haisou_validate_slot() -> bool:
+    """Atomically check and consume a validate slot."""
+    global _VALIDATE_CALLS
+    _roll_window()
+    with _LOCK:
+        if _VALIDATE_CALLS >= MAX_VALIDATE_PER_WINDOW:
+            return False
+        _VALIDATE_CALLS += 1
+        return True
+
+
 def note_haisou_search() -> None:
     global _SEARCH_CALLS
     _roll_window()
@@ -120,6 +146,7 @@ def _cache_get(store: dict[str, tuple[float, Any]], key: str, ttl: float) -> Any
 
 def _cache_set(store: dict[str, tuple[float, Any]], key: str, value: Any) -> None:
     now = time.monotonic()
+    ttl = SEARCH_CACHE_TTL_SECONDS if store is _SEARCH_CACHE else VALIDATE_CACHE_TTL_SECONDS
     with _LOCK:
         if len(store) >= _CACHE_MAX:
             # Drop oldest-ish entries cheaply.
@@ -129,7 +156,4 @@ def _cache_set(store: dict[str, tuple[float, Any]], key: str, value: Any) -> Non
             if len(store) >= _CACHE_MAX:
                 for stale_key in list(store.keys())[: max(1, _CACHE_MAX // 8)]:
                     store.pop(stale_key, None)
-        store[key] = (now + 1.0, value)  # placeholder overwritten below
-        # Fix TTL after size control.
-        ttl = SEARCH_CACHE_TTL_SECONDS if store is _SEARCH_CACHE else VALIDATE_CACHE_TTL_SECONDS
         store[key] = (now + ttl, value)

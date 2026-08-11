@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ToGo115 · UI 重构 V2 — 非传统范式</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c0e; --surface:#16161a; --ink:#f2f2f4; --ink-soft:#a0a0a8; --muted:#6e6e76;
+  --line:rgba(255,255,255,.08); --radius:12px;
+  font-family:"Inter","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:15px; line-height:1.6; color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+h1{font-size:clamp(28px,4vw,42px);font-weight:800;letter-spacing:-.03em;line-height:1.1}
+h2{font-size:20px;font-weight:800;letter-spacing:-.02em}
+p{color:var(--ink-soft)}
+
+.hero{max-width:1120px;margin:0 auto;padding:72px 28px 40px;text-align:center}
+.hero h1{margin-bottom:12px}
+.hero .accent{background:linear-gradient(90deg,#ff3d6e,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{max-width:620px;margin:0 auto;font-size:16px}
+.hero .note{margin-top:24px;font-size:13px;color:var(--muted);letter-spacing:.04em}
+
+.container{max-width:1360px;margin:0 auto;padding:0 28px 90px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.scheme{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  transition:box-shadow .25s,transform .25s,border-color .25s}
+.scheme:hover{box-shadow:0 18px 56px rgba(0,0,0,.45);transform:translateY(-4px);border-color:rgba(255,255,255,.16)}
+
+.scheme .preview{position:relative;height:360px;overflow:hidden;background:#050507}
+.scheme .preview canvas{position:absolute;inset:0;width:100%;height:100%}
+.scheme .badge{position:absolute;top:14px;left:14px;z-index:5;font-size:11px;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:6px;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12)}
+
+.scheme .info{padding:24px}
+.scheme .info h2{margin-bottom:4px}
+.scheme .info .sub{font-size:13px;color:var(--muted);margin-bottom:14px;font-weight:600}
+.scheme .info p{font-size:14px;line-height:1.62;margin-bottom:18px;min-height:74px}
+
+.palette{display:flex;gap:5px;margin-bottom:16px}
+.palette .swatch{width:30px;height:30px;border-radius:7px;border:1px solid rgba(255,255,255,.1)}
+
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.tags span{font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;background:rgba(255,255,255,.05);color:var(--ink-soft)}
+
+.paradigm{font-size:12px;font-weight:700;color:#ff3d6e;letter-spacing:.03em;margin-bottom:6px}
+
+@media(max-width:700px){
+  .hero{padding:44px 18px 28px}
+  .container{padding:0 18px 64px}
+  .scheme .preview{height:280px}
+}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <h1>突破范式 — <span class="accent">ToGo115 V2 重构</span></h1>
+  <p>以下 4 个方案完全抛弃"侧边栏 + 卡片网格"的传统后台范式，
+  用全新的信息组织方式重新审视这个工具。</p>
+  <div class="note">← 每个预览都用 Canvas 真实绘制了该方案的核心布局逻辑</div>
+</section>
+
+<div class="container">
+<div class="grid">
+
+  <!-- A: ORBITAL -->
+  <article class="scheme">
+    <div class="preview"><span class="badge">A · Orbital</span><canvas id="c-a"></canvas></div>
+    <div class="info">
+      <div class="paradigm">范式：以 115 网盘为引力中心，订阅=行星轨道</div>
+      <h2>🌌 星系轨道式</h2>
+      <div class="sub">Orbital Galaxy · 放射状宇宙隐喻</div>
+      <p>把 115 网盘画成中心恒星，每个订阅是一颗沿轨道运行的行星，新资源是环绕的小卫星。
+      无矩形卡片、无列表，完全靠空间关系表达"谁在追、追到哪了"。悬停轨道高亮，点击行星展开详情。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#05070f"></div>
+        <div class="swatch" style="background:#5eead4"></div>
+        <div class="swatch" style="background:#a78bfa"></div>
+        <div class="swatch" style="background:#f472b6"></div>
+        <div class="swatch" style="background:#1e293b"></div>
+      </div>
+      <div class="tags"><span>放射状布局</span><span>空间隐喻</span><span>轨道动画</span><span>零矩形</span><span>沉浸式</span></div>
+    </div>
+  </article>
+
+  <!-- B: HUD -->
+  <article class="scheme">
+    <div class="preview"><span class="badge">B · HUD</span><canvas id="c-b"></canvas></div>
+    <div class="info">
+      <div class="paradigm">范式：平视显示器 — 四角括号 + 中心雷达</div>
+      <h2>🎯 飞行 HUD 式</h2>
+      <div class="sub">Aviation HUD · 座舱仪表隐喻</div>
+      <p>像战机平视显示器：屏幕四角是 L 形角标，中心是旋转的雷达扫描盘，
+      顶部是横向飞行数据条（uptime/任务/带宽）。所有信息围绕"你在驾驶一艘资源母舰"的隐喻组织。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#070b07"></div>
+        <div class="swatch" style="background:#39ff14"></div>
+        <div class="swatch" style="background:#ffb000"></div>
+        <div class="swatch" style="background:#00e5ff"></div>
+        <div class="swatch" style="background:#1a2a1a"></div>
+      </div>
+      <div class="tags"><span>座舱隐喻</span><span>雷达扫描</span><span>四角角标</span><span>数据条</span><span>科技感</span></div>
+    </div>
+  </article>
+
+  <!-- C: SWISS -->
+  <article class="scheme">
+    <div class="preview"><span class="badge">C · Swiss</span><canvas id="c-c"></canvas></div>
+    <div class="info">
+      <div class="paradigm">范式：巨型字体 + 粗网格 — 反后台设计</div>
+      <h2>📰 Swiss 大字报</h2>
+      <div class="sub">International Typographic · 编辑式粗野</div>
+      <p>完全不像一个工具后台。半屏被一个超粗巨型标题占据，粗黑线把屏幕切成严格网格，
+      单一信号红做强调。信息像报纸头条一样被"排印"出来，而不是被"塞进卡片"。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#ffffff"></div>
+        <div class="swatch" style="background:#0a0a0a"></div>
+        <div class="swatch" style="background:#ff2d2d"></div>
+        <div class="swatch" style="background:#e8e8e8"></div>
+        <div class="swatch" style="background:#c8c8c8"></div>
+      </div>
+      <div class="tags"><span>巨型字体</span><span>网格系统</span><span>高对比</span><span>反 UI</span><span>编辑式</span></div>
+    </div>
+  </article>
+
+  <!-- D: BENTO -->
+  <article class="scheme">
+    <div class="preview"><span class="badge">D · Bento</span><canvas id="c-d"></canvas></div>
+    <div class="info">
+      <div class="paradigm">范式：不规则瓦片马赛克 — 信息即拼贴</div>
+      <h2>🔲 Bento 动态瓦片</h2>
+      <div class="sub">Bento Mosaic · 异形拼贴网格</div>
+      <p>首屏由形状各异的瓦片拼成：一个圆形瓦片是 115 核心，周围是不同尺寸的矩形/
+      方形瓦片，各装一种实时数据（订阅数、待处理、带宽波形、资源流）。
+      像 Apple 官网或 iOS 锁屏，每个瓦片形状不同、呼吸感不同。</p>
+      <div class="palette">
+        <div class="swatch" style="background:#0f0f14"></div>
+        <div class="swatch" style="background:#1c1c24"></div>
+        <div class="swatch" style="background:#6366f1"></div>
+        <div class="swatch" style="background:#22d3ee"></div>
+        <div class="swatch" style="background:#f59e0b"></div>
+      </div>
+      <div class="tags"><span>异形网格</span><span>实时数据</span><span>拼贴美学</span><span>Apple 风</span><span>呼吸动效</span></div>
+    </div>
+  </article>
+
+</div>
+</div>
+
+<script>
+const DPR=Math.min(window.devicePixelRatio||1,2);
+function setup(id,W,H){
+  const c=document.getElementById(id);c.width=W*DPR;c.height=H*DPR;
+  c.style.width=W+'px';c.style.height=H+'px';
+  const x=c.getContext('2d');x.scale(DPR,DPR);x.textBaseline='top';return x;
+}
+function rr(x,X,Y,W,H,r){x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+W,Y,X+W,Y+H,r);
+  x.arcTo(X+W,Y+H,X,Y+H,r);x.arcTo(X,Y+H,X,Y,r);x.arcTo(X,Y,X+W,Y,r);x.closePath();}
+
+/* ========== A. ORBITAL GALAXY ========== */
+(function(){
+  const W=360,H=360,x=setup('c-a',W,H);
+  x.fillStyle='#05070f';x.fillRect(0,0,W,H);
+  // stars
+  for(let i=0;i<120;i++){const sx=Math.random()*W,sy=Math.random()*H;
+    x.fillStyle='rgba(255,255,255,'+(Math.random()*.5+.1)+')';
+    x.fillRect(sx,sy,Math.random()*1.4+.3,Math.random()*1.4+.3);}
+  const cx=W/2,cy=H/2+6;
+  // orbits
+  const orbits=[[70,'#5eead4'],[108,'#a78bfa'],[146,'#f472b6']];
+  orbits.forEach(([r,col])=>{
+    x.strokeStyle='rgba(255,255,255,.08)';x.lineWidth=1;
+    x.beginPath();x.ellipse(cx,cy,r,r*.78,0,0,Math.PI*2);x.stroke();
+    // planets on orbit
+    const n=r===70?3:(r===108?4:5);
+    for(let i=0;i<n;i++){
+      const a=i/n*Math.PI*2+0.3;
+      const px=cx+Math.cos(a)*r, py=cy+Math.sin(a)*r*.78;
+      x.save();x.shadowBlur=14;x.shadowColor=col;
+      x.fillStyle=col;x.beginPath();x.arc(px,py,r===70?6:5,0,Math.PI*2);x.fill();x.restore();
+    }
+  });
+  // central star (115)
+  const g=x.createRadialGradient(cx,cy,4,cx,cy,40);
+  g.addColorStop(0,'#fff');g.addColorStop(.3,'#5eead4');g.addColorStop(1,'rgba(94,234,212,0)');
+  x.fillStyle=g;x.beginPath();x.arc(cx,cy,40,0,Math.PI*2);x.fill();
+  x.fillStyle='#05070f';x.beginPath();x.arc(cx,cy,22,0,Math.PI*2);x.fill();
+  x.fillStyle='#5eead4';x.font='bold 13px Inter';x.textAlign='center';
+  x.fillText('115',cx,cy-8);x.font='8px Inter';x.fillStyle='rgba(94,234,212,.7)';x.fillText('CORE',cx,cy+6);
+  x.textAlign='left';
+  // legend
+  x.fillStyle='rgba(255,255,255,.5)';x.font='9px Inter';
+  x.fillText('● 24 subscriptions',14,330);
+  x.fillText('● 156 resources orbiting',14,344);
+})();
+
+/* ========== B. HUD ========== */
+(function(){
+  const W=360,H=360,x=setup('c-b',W,H);
+  x.fillStyle='#070b07';x.fillRect(0,0,W,H);
+  // subtle scanlines
+  x.strokeStyle='rgba(57,255,20,.04)';x.lineWidth=1;
+  for(let y=0;y<H;y+=3){x.beginPath();x.moveTo(0,y);x.lineTo(W,y);x.stroke();}
+  const m=22;
+  // corner brackets
+  x.strokeStyle='#39ff14';x.lineWidth=2;
+  [[m,m,1,1],[W-m,m,-1,1],[m,H-m,1,-1],[W-m,H-m,-1,-1]].forEach(([px,py,sx,sy])=>{
+    x.beginPath();x.moveTo(px,py+18*sy);x.lineTo(px,py);x.lineTo(px+18*sx,py);x.stroke();
+  });
+  const cx=W/2,cy=H/2+8;
+  // radar
+  x.save();x.translate(cx,cy);
+  x.strokeStyle='rgba(57,255,20,.25)';x.lineWidth=1;
+  [40,72,104].forEach(r=>{x.beginPath();x.arc(0,0,r,0,Math.PI*2);x.stroke();});
+  x.beginPath();x.moveTo(-104,0);x.lineTo(104,0);x.moveTo(0,-104);x.lineTo(0,104);x.stroke();
+  // sweep
+  const sg=x.createConicGradient?x.createConicGradient(-Math.PI/2,0,0):null;
+  if(sg){sg.addColorStop(0,'rgba(57,255,20,.5)');sg.addColorStop(.12,'rgba(57,255,20,0)');sg.addColorStop(1,'rgba(57,255,20,0)');
+    x.fillStyle=sg;x.beginPath();x.arc(0,0,104,0,Math.PI*2);x.fill();}
+  // blips
+  [[30,-20,'#39ff14'],[-50,40,'#ffb000'],[10,60,'#00e5ff'],[60,10,'#39ff14']].forEach(([bx,by,c])=>{
+    x.save();x.shadowBlur=8;x.shadowColor=c;x.fillStyle=c;x.beginPath();x.arc(bx,by,3.5,0,Math.PI*2);x.fill();x.restore();
+  });
+  x.restore();
+  // top data bar
+  x.fillStyle='rgba(57,255,20,.9)';x.font='bold 9px "JetBrains Mono",monospace';
+  x.fillText('ALT 3d14h  SPD 12%  BAND 4.2MB/s  TGT 4/12',m,H-34);
+  x.fillStyle='rgba(57,255,20,.4)';x.font='8px monospace';
+  x.fillText('▸ DRIVING: 115 CARRIER  ◂',cx-58,H-22);
+  // left/right labels
+  x.fillStyle='rgba(0,229,255,.7)';x.font='8px monospace';
+  x.fillText('SUBS',m+4,40);x.fillText('SRC',m+4,54);
+  x.textAlign='right';x.fillStyle='rgba(255,176,0,.7)';
+  x.fillText('RESOURCES',W-m-4,40);x.fillText('EMBY SYNC',W-m-4,54);
+  x.textAlign='left';
+})();
+
+/* ========== C. SWISS ========== */
+(function(){
+  const W=360,H=360,x=setup('c-c',W,H);
+  x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
+  // giant title
+  x.fillStyle='#0a0a0a';
+  x.font='800 64px Inter,Arial,sans-serif';x.fillText('TOGO',18,30);
+  x.fillText('115',18,92);
+  // red block
+  x.fillStyle='#ff2d2d';rr(x,18,170,150,30,0);x.fill();
+  x.fillStyle='#fff';x.font='700 11px Inter';x.fillText('MEDIA SUBSCRIPTION',26,178);
+  // thick grid lines
+  x.strokeStyle='#0a0a0a';x.lineWidth=2.5;
+  x.beginPath();x.moveTo(0,224);x.lineTo(W,224);x.stroke();
+  x.beginPath();x.moveTo(190,0);x.lineTo(190,H);x.stroke();
+  // right column small text (grid)
+  x.fillStyle='#0a0a0a';x.font='700 10px Inter';
+  const items=[['SUBSCRIPTIONS','24'],['RESOURCES','156'],['ACTIVE TASKS','4/12'],['EMBY LIBRARY','1,247'],['UPTIME','3d 14h'],['LATENCY','42ms']];
+  items.forEach((it,i)=>{const yy=20+i*32;x.fillStyle='#6e6e76';x.font='600 8px Inter';x.fillText(it[0],202,yy);
+    x.fillStyle='#0a0a0a';x.font='800 16px Inter';x.fillText(it[1],202,yy+9);});
+  // bottom row stats under line
+  x.fillStyle='#0a0a0a';x.font='800 13px Inter';
+  x.fillText('THE CONTROL',18,242);
+  x.fillText('CENTER FOR',18,260);
+  x.fillStyle='#ff2d2d';x.fillText('MEDIA.',18,278);
+  x.fillStyle='#6e6e76';x.font='9px Inter';
+  x.fillText('115 · Telegram · RSS · Emby',18,300);
+  x.fillText('Auto-discover · Transfer · Sync',18,313);
+})();
+
+/* ========== D. BENTO ========== */
+(function(){
+  const W=360,H=360,x=setup('c-d',W,H);
+  x.fillStyle='#0f0f14';x.fillRect(0,0,W,H);
+  const gap=8,pad=12,col=(W-pad*2-gap*2)/3;
+  const rh=(H-pad*2-gap*2)/4;
+  function tile(X,Y,Wt,Ht,fill){
+    x.fillStyle=fill;rr(x,X,Y,Wt,Ht,14);x.fill();
+  }
+  function label(t,X,Y,c='rgba(255,255,255,.6)'){x.fillStyle=c;x.font='600 9px Inter';x.fillText(t,X+12,Y+14);}
+  // top-left big (115 core) - spans 2 cols, 2 rows, with circle
+  tile(pad,pad,col*2+gap,rh*2+gap,'#1c1c24');
+  const ccx=pad+col*0.5+6,ccy=pad+rh*0.5+4;
+  x.save();x.shadowBlur=20;x.shadowColor='rgba(99,102,241,.8)';
+  const g=x.createRadialGradient(ccx,ccy,2,ccx,ccy,34);g.addColorStop(0,'#818cf8');g.addColorStop(1,'#6366f1');
+  x.fillStyle=g;x.beginPath();x.arc(ccx,ccy,30,0,Math.PI*2);x.fill();x.restore();
+  x.fillStyle='#fff';x.font='bold 14px Inter';x.textAlign='center';x.fillText('115',ccx,ccy-5);
+  x.fillStyle='rgba(255,255,255,.6)';x.font='8px Inter';x.fillText('CORE',ccx,ccy+9);x.textAlign='left';
+  label('Subscriptions',pad,pad+rh+gap+2);
+  x.fillStyle='#fff';x.font='800 22px Inter';x.fillText('24',pad+12,pad+rh+gap+34);
+  // top-right tall
+  tile(pad+col*2+gap*2,pad,col,rh*2+gap,'#1c1c24');
+  label('Pending',pad+col*2+gap*2,pad+2);
+  x.fillStyle='#22d3ee';x.font='800 26px Inter';x.fillText('8',pad+col*2+gap*2+12,pad+34);
+  // waveform in tall tile
+  x.strokeStyle='rgba(34,211,238,.6)';x.lineWidth=1.5;x.beginPath();
+  for(let i=0;i<=20;i++){const wx=pad+col*2+gap*2+10+i*((col-20)/20);
+    const wy=pad+rh+30+Math.sin(i*.7)*9;if(i===0)x.moveTo(wx,wy);else x.lineTo(wx,wy);}x.stroke();
+  // bottom row 3 tiles
+  const by=pad+rh*2+gap*2;
+  tile(pad,by,col,rh*2+gap,'#1c1c24');label('Bandwidth',pad,by);
+  x.strokeStyle='#f59e0b';x.lineWidth=1.5;x.beginPath();
+  for(let i=0;i<=16;i++){const wx=pad+8+i*((col-16)/16);const wy=by+rh+18+Math.sin(i*.9)*12;if(i===0)x.moveTo(wx,wy);else x.lineTo(wx,wy);}x.stroke();
+  tile(pad+col+gap,by,col,rh*2+gap,'#1c1c24');label('Emby Sync',pad+col+gap,by);
+  x.fillStyle='#fff';x.font='800 18px Inter';x.fillText('1,247',pad+col+gap+12,by+rh+6);
+  x.fillStyle='rgba(67,209,122,.8)';x.font='9px Inter';x.fillText('✓ synced',pad+col+gap+12,by+rh+24);
+  tile(pad+col*2+gap*2,by,col,rh*2+gap,'#1c1c24');label('Sources',pad+col*2+gap*2,by);
+  x.fillStyle='#fff';x.font='800 18px Inter';x.fillText('5',pad+col*2+gap*2+12,by+rh+6);
+  x.fillStyle='rgba(255,255,255,.5)';x.font='8px Inter';x.fillText('TG·RSS·HS',pad+col*2+gap*2+12,by+rh+24);
+})();
+</script>
+
+</body>
+</html>

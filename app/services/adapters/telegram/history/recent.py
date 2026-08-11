@@ -64,9 +64,28 @@ def _recent_watermark_set(source: str, message_id: int) -> None:
         return
     _RECENT_WATERMARKS[key] = (time.monotonic(), value)
     if len(_RECENT_WATERMARKS) > 512:
-        oldest = sorted(_RECENT_WATERMARKS.items(), key=lambda item: item[1][0])[:64]
-        for old_key, _ in oldest:
-            _RECENT_WATERMARKS.pop(old_key, None)
+        # Linear scan for expired entries (TTL check) — O(n) instead of O(n log n) sort.
+        now = time.monotonic()
+        expired = [k for k, (stamp, _) in _RECENT_WATERMARKS.items() if now - stamp > RECENT_WATERMARK_TTL_SECONDS]
+        if expired:
+            for k in expired:
+                _RECENT_WATERMARKS.pop(k, None)
+        # If still over limit after TTL eviction, remove oldest 20% via linear scan.
+        if len(_RECENT_WATERMARKS) > 512:
+            # Find threshold: the timestamp at 20% position.
+            entries = list(_RECENT_WATERMARKS.items())
+            cutoff_idx = int(len(entries) * 0.2)
+            # Sort only the first cutoff_idx+1 entries to find the cutoff timestamp.
+            # Use nsmallest for O(n log k) where k = cutoff_idx << n.
+            import heapq
+            oldest_k = heapq.nsmallest(cutoff_idx + 1, entries, key=lambda item: item[1][0])
+            if oldest_k:
+                threshold = oldest_k[-1][1][0]
+                for k, (stamp, _) in entries:
+                    if stamp <= threshold:
+                        _RECENT_WATERMARKS.pop(k, None)
+                    if len(_RECENT_WATERMARKS) <= 512:
+                        break
 
 
 def clear_recent_watermarks(source: str | None = None) -> None:
@@ -206,20 +225,23 @@ class TelegramRecentScanMixin(TelegramRecentExtractMixin, TelegramRecentWindowMi
                 add_log("debug", "telegram", "Telegram get_messages 最近消息超时，回退 iter_messages", {"limit": limit, "timeout": 2})
             except Exception as exc:
                 add_log("debug", "telegram", "Telegram get_messages 最近消息失败，回退 iter_messages", {"limit": limit, "error": str(exc), "error_type": type(exc).__name__})
+        # iter_messages fallback: shorter timeout so the total chain stays within
+        # the 12s recent_budget / 4s single-query budget.
         try:
-            messages = await asyncio.wait_for(self._iter_recent_messages(client, entity, limit), timeout=4)
+            messages = await asyncio.wait_for(self._iter_recent_messages(client, entity, limit), timeout=3)
             if messages:
                 add_log("debug", "telegram", "Telegram iter_messages 最近消息读取成功", {"limit": limit, "count": len(messages)})
             return messages
         except asyncio.TimeoutError:
-            add_log("warning", "telegram", "Telegram iter_messages 最近消息读取超时", {"limit": limit, "timeout": 4})
+            add_log("warning", "telegram", "Telegram iter_messages 最近消息读取超时", {"limit": limit, "timeout": 3})
         except Exception as exc:
             add_log("warning", "telegram", "Telegram iter_messages 最近消息读取失败", {"limit": limit, "error": str(exc), "error_type": type(exc).__name__})
         return []
 
     async def _iter_recent_messages(self, client: TelegramClient, entity: Any, limit: int) -> list[Any]:
         messages: list[Any] = []
-        async for message in client.iter_messages(entity, limit=limit, wait_time=0):
+        # Small wait_time to avoid triggering Telegram FloodWait on rapid pagination.
+        async for message in client.iter_messages(entity, limit=limit, wait_time=0.05):
             messages.append(message)
         return messages
 

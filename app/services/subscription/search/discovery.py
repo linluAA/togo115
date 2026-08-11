@@ -80,24 +80,23 @@ def _telegram_search_call(
 def fallback_usable_checker(facade: Any, subscription: dict) -> Callable[[SearchResult], bool]:
     """Build a predicate used by subscription sources to stop at the first usable hit."""
     subscription_id = int(subscription["id"])
-    existing_rows: list[dict[str, Any]] | None = None
-    existing_115: list[dict[str, Any]] | None = None
+
+    # Preload existing resource data once outside the closure to avoid N+1 transactions.
+    # The data is snapshotted at checker creation time, which is acceptable because
+    # the checker is used within a single search wave where no concurrent writes occur.
+    with db() as conn:
+        _existing_rows = existing_resource_rows(conn, subscription_id)
+        _existing_115 = subscription_115_resources(conn, subscription_id)
 
     def is_usable(result: SearchResult) -> bool:
-        nonlocal existing_rows, existing_115
         try:
             if not is_valid_download_link(getattr(result, "url", "")):
                 return False
             if not matching_results(subscription, [result]):
                 return False
-            with db() as conn:
-                if existing_rows is None:
-                    existing_rows = existing_resource_rows(conn, subscription_id)
-                if existing_115 is None:
-                    existing_115 = subscription_115_resources(conn, subscription_id)
-                if fallback_blocked_by_primary_resource(conn, subscription, result, existing_115):
-                    return False
-                return resource_already_exists(conn, subscription_id, result, subscription, existing_rows) is None
+            if fallback_blocked_by_primary_resource(None, subscription, result, _existing_115):
+                return False
+            return resource_already_exists(None, subscription_id, result, subscription, _existing_rows) is None
         except Exception as exc:
             add_log(
                 "warning",
@@ -114,11 +113,14 @@ async def search_fallback_sources(
     facade: Any,
     subscription: dict,
     search_title: str,
-) -> list[dict[str, Any]]:
-    """Search RSS/Torznab/site-plugin sources after Telegram has no new usable hit."""
+) -> tuple[list[dict[str, Any]], str]:
+    """Search RSS/Torznab/site-plugin sources after Telegram has no new usable hit.
+
+    Returns (results, status) where status is ``"ok"``, ``"timeout"``, or ``"error"``.
+    """
     subscription_id = int(subscription["id"])
     try:
-        return await asyncio.wait_for(
+        results = await asyncio.wait_for(
             RssTorznabAdapter().search_history_by_priority_until_match(
                 search_title,
                 extra_search_keywords(subscription),
@@ -127,6 +129,7 @@ async def search_fallback_sources(
             ),
             timeout=runtime.RSS_SEARCH_TIMEOUT_SECONDS,
         )
+        return results, "ok"
     except asyncio.TimeoutError:
         add_log(
             "warning",
@@ -134,6 +137,7 @@ async def search_fallback_sources(
             "订阅源/磁力搜索超时",
             {"id": subscription_id, "title": search_title, "timeout": runtime.RSS_SEARCH_TIMEOUT_SECONDS},
         )
+        return [], "timeout"
     except Exception as exc:
         add_log(
             "warning",
@@ -141,7 +145,7 @@ async def search_fallback_sources(
             "订阅源/磁力搜索异常",
             {"id": subscription_id, "title": search_title, "error": str(exc)},
         )
-    return []
+        return [], "error"
 
 
 def _rss_query_context(subscription: dict) -> dict[str, Any]:
