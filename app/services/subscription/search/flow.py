@@ -118,7 +118,7 @@ def _telegram_should_skip_full_after_fast(summary: dict[str, Any], subscription:
     available = int(summary.get("available_matched") or 0)
     duplicates = int(summary.get("duplicates") or 0)
     raw_matched = int(summary.get("raw_matched") or 0)
-    pure_duplicates = (raw_matched > 0 and available > 0 and duplicates >= raw_matched) or (
+    pure_duplicates = (raw_matched > 0 and duplicates >= raw_matched) or (
         available > 0 and duplicates >= available and int(summary.get("created") or 0) == 0
     )
     if not pure_duplicates:

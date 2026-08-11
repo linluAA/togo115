@@ -13,7 +13,7 @@ from app.services.link import (
     title_from_link_context,
     extract_download_links,
 )
-from app.services.link.downloads import is_115_share_link, is_valid_download_link
+from app.services.link.downloads import is_valid_download_link
 from app.services.types import SearchResult
 
 
@@ -38,7 +38,7 @@ class RssTorznabSitePageMixin:
         value = str(link or "").strip().casefold()
         if not is_valid_download_link(link):
             return False
-        return value.startswith("magnet:?") or value.endswith(".torrent") or ".torrent?" in value or is_115_share_link(link)
+        return value.startswith("magnet:?") or value.endswith(".torrent") or ".torrent?" in value
 
     def _results_from_links(
         self,

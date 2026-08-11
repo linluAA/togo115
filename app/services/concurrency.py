@@ -63,7 +63,8 @@ def search_semaphore() -> asyncio.Semaphore:
     When the desired limit decreases we immediately shrink the semaphore's _value
     so new acquirers see the tighter ceiling.  In-flight holders are unaffected
     but the burst window is capped at the number of already-acquired permits
-    rather than the old limit.
+    rather than the old limit.  When the semaphore is idle (all permits
+    available), we rebuild it to avoid accumulating stale state.
     """
     global subscription_search_semaphore, subscription_search_semaphore_loop, subscription_search_semaphore_limit
     loop = asyncio.get_running_loop()
@@ -81,6 +82,13 @@ def search_semaphore() -> asyncio.Semaphore:
             and subscription_search_semaphore_loop is loop
             and desired < subscription_search_semaphore_limit
         ):
+            # If idle (all permits available), rebuild with the tighter limit.
+            if current._value >= subscription_search_semaphore_limit:
+                subscription_search_semaphore = asyncio.Semaphore(desired)
+                subscription_search_semaphore_loop = loop
+                subscription_search_semaphore_limit = desired
+                return subscription_search_semaphore
+            # Otherwise, shrink in place to preserve in-flight holders.
             current._value = min(current._value, desired)
             subscription_search_semaphore_limit = desired
             return current
@@ -115,6 +123,13 @@ def telegram_dialog_search_semaphore() -> asyncio.Semaphore:
             and telegram_dialog_semaphore_loop is loop
             and desired < telegram_dialog_semaphore_limit
         ):
+            # If idle (all permits available), rebuild with the tighter limit.
+            if current._value >= telegram_dialog_semaphore_limit:
+                telegram_dialog_semaphore = asyncio.Semaphore(desired)
+                telegram_dialog_semaphore_loop = loop
+                telegram_dialog_semaphore_limit = desired
+                return telegram_dialog_semaphore
+            # Otherwise, shrink in place to preserve in-flight holders.
             current._value = min(current._value, desired)
             telegram_dialog_semaphore_limit = desired
             return current

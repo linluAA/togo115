@@ -10,9 +10,11 @@ SOURCE_HEALTH_COOLDOWN_SECONDS = 600
 SOURCE_HEALTH_FAIL_MARGIN = 3
 SOURCE_HEALTH_SLOW_LATENCY_MS = 12000
 
+_UNKNOWN_SOURCE = "未知源"
+
 
 def _source_stats_key(source_type: str, name: str, url: str = "") -> str:
-    return f"{source_type}:{name or url or '\u672a\u77e5\u6e90'}"
+    return f"{source_type}:{name or url or _UNKNOWN_SOURCE}"
 
 
 def record_source_fetch(source_key: str, source_name: str, source_type: str, ok: bool, items: int = 0, latency_ms: int | None = None, error: str = "") -> None:

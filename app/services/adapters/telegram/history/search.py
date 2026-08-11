@@ -119,7 +119,7 @@ class TelegramHistorySearchMixin(TelegramDialogSearchMixin, TelegramFastSearchMi
                     "debug",
                     "telegram",
                     "Telegram 本地索引命中，继续远程复核",
-                    {"title": title, "count": len(results), "sources": len(dialogs), "force_remote": state.force_remote},
+                    {"title": title, "count": len(indexed_results), "sources": len(dialogs), "force_remote": state.force_remote},
                 )
 
         search_started = time.perf_counter()
