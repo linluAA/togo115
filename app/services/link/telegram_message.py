@@ -94,3 +94,13 @@ def _add_serialized_message_text(message: Any, add, parts: list[str], seen: set[
                 add(method())
             except Exception:
                 pass
+    # Last resort: full to_dict() serialization for edge cases where
+    # the message content is only available in nested dict structures.
+    to_dict = _safe_attr(message, "to_dict")
+    if callable(to_dict):
+        try:
+            data = to_dict()
+            if isinstance(data, dict):
+                _collect_dict_texts(data, parts, seen)
+        except Exception:
+            pass
