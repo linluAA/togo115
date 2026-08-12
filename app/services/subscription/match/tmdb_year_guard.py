@@ -52,9 +52,6 @@ def _release_year_matches(subscription: dict, result: SearchResult, text: str, *
         return True
     if _result_has_subscription_tmdb_id(subscription, text, *extra_texts):
         return True
-    text_years = years_from_text(text)
-    if text_years and release_year not in text_years:
-        return False
     title_term, _ = _subscription_required_terms(subscription)
     for candidate in _year_guard_texts(result, *extra_texts):
         years = years_from_text(candidate)

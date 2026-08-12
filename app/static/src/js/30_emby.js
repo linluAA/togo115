@@ -18,45 +18,42 @@ async function renderEmby() {
           <h2>媒体库</h2>
           <button class="btn btn-secondary btn-sm" id="syncEmbyLibrary">同步</button>
         </div>
-        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:24px">
+        <div class="emby-library-grid">
           ${libraries.length ? libraries.map((item) => {
+            const initial = escapeHtml((item.name || "📁").charAt(0));
             const image = item.image_url
-              ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius-lg)" onerror="this.style.display='none'" />`
-              : "";
-            return `<div class="media-card">
-              <div class="poster">${image}<div class="overlay"><div class="rating">${item.child_count || 0} 部</div></div></div>
-              <div class="card-body"><div class="title">${escapeHtml(item.name || "媒体库")}</div><div class="meta"><span>${item.collection_type || "媒体库"}</span></div></div>
+              ? `<img class="library-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" onerror="this.style.visibility='hidden'" />`
+              : `<div class="emby-placeholder">${initial}</div>`;
+            return `<div class="emby-card emby-library-card">
+              ${image}
+              <div class="emby-library-meta">
+                <h3>${escapeHtml(item.name || "媒体库")}</h3>
+                <p>${escapeHtml(item.collection_type || "媒体库")} · ${item.child_count || 0} 部</p>
+              </div>
             </div>`;
           }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无媒体库数据</h3></div>`}
         </div>
       </div>
       <div class="emby-side-section">
         <div class="section-header"><h2>历史记录</h2></div>
-        <div class="activity-feed" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:12px 16px">
+        <div class="emby-history-list">
           ${history.length ? history.slice(0, 6).map((item) => {
             const title = escapeHtml(item.name || item.title || "项目");
             const date = item.date_played || "";
-            return `<div class="activity-item">
-              <span class="a-dot" style="background:var(--green)"></span>
-              <span class="a-text"><strong>${title}</strong> 已播放</span>
-              <span class="a-time">${date ? escapeHtml(date) : ""}</span>
-            </div>`;
-          }).join("") : `<div class="activity-item"><span class="a-text" style="color:var(--dim)">暂无观看历史</span></div>`}
+            const thumb = item.image_url
+              ? `<img src="${escapeHtml(item.image_url)}" alt="" onerror="this.style.display='none'" />`
+              : `<div class="emby-history-thumb">🎬</div>`;
+            return `<div class="emby-history-item">${thumb}<div><h3>${title}</h3><p>${date ? escapeHtml(date) : "已播放"}</p></div></div>`;
+          }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无观看历史</h3></div>`}
         </div>
         <div class="section-header" style="margin-top:16px"><h2>用户</h2></div>
-        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px">
+        <div class="emby-grid">
           ${users.length ? users.slice(0, 3).map((user) => {
             const name = escapeHtml(user.name || user.username || "用户");
             const initial = name.charAt(0).toUpperCase();
-            return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117;flex-shrink:0">${initial}</div>
-              <div><div style="font-weight:600;font-size:14px">${name}</div><div style="font-size:12px;color:var(--dim)">管理员</div></div>
-            </div>`;
-          }).join("") : `<div style="display:flex;align-items:center;gap:12px">
-            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117">A</div>
-            <div><div style="font-weight:600;font-size:14px">Admin</div><div style="font-size:12px;color:var(--dim)">管理员</div></div>
-          </div>`}
-          <div style="display:flex;gap:12px;font-size:12px;color:var(--dim);margin-top:8px">
+            return `<div class="emby-card"><div class="emby-placeholder">${initial}</div><div><div style="font-weight:600;font-size:14px">${name}</div><div style="font-size:12px;color:var(--dim)">管理员</div></div></div>`;
+          }).join("") : `<div class="emby-card"><div class="emby-placeholder">A</div><div><div style="font-weight:600;font-size:14px">Admin</div><div style="font-size:12px;color:var(--dim)">管理员</div></div></div>`}
+          <div style="display:flex;gap:12px;font-size:12px;color:var(--dim);margin-top:8px;grid-column:1 / -1">
             <span>📺 ${movieCount + seriesCount} 部</span>
             <span>📀 ${data.media_count || 0} 集</span>
           </div>

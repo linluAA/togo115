@@ -118,8 +118,8 @@ async function renderTmdb() {
   const typeFilter = state.tmdbTypeFilter || "all";
   root.innerHTML = `
     <div class="toolbar view-section">
-      <button class="btn ${typeFilter === "tv" ? "btn-primary" : "btn-secondary"}" data-tmdb-type="tv">热门剧集</button>
-      <button class="btn ${typeFilter === "movie" ? "btn-primary" : "btn-secondary"}" data-tmdb-type="movie">热门电影</button>
+      <button class="btn ${typeFilter === "tv" ? "btn-primary" : "btn-secondary"}" data-tmdb-type="tv">剧集</button>
+      <button class="btn ${typeFilter === "movie" ? "btn-primary" : "btn-secondary"}" data-tmdb-type="movie">电影</button>
       <button class="btn ${typeFilter === "all" ? "btn-primary" : "btn-ghost"}" data-tmdb-type="all">高分推荐</button>
       <div class="toolbar-filters">
         <div class="topbar-search" style="width:200px">

@@ -4,6 +4,7 @@ async function renderLogs() {
   state.logsHasMore = false;
   state.logsLevel = state.logsLevel || "all";
   root.innerHTML = `
+    <div class="log-view-wrap">
     <div class="toolbar view-section">
       <button class="btn ${state.logsLevel === "all" ? "btn-secondary" : "btn-ghost"} btn-sm" data-log-level="all">全部</button>
       <button class="btn ${state.logsLevel === "info" ? "btn-secondary" : "btn-ghost"} btn-sm" data-log-level="info">信息</button>
@@ -16,6 +17,7 @@ async function renderLogs() {
     <div class="log-list view-section" id="logList"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取日志...</h3></div></div>
     <div style="text-align:center;padding:16px" id="logMoreWrap">
       <button class="btn btn-ghost btn-sm" id="loadMoreLogs" style="display:none">加载更多</button>
+    </div>
     </div>
   `;
   root.querySelectorAll("[data-log-level]").forEach((btn) => btn.addEventListener("click", () => {

@@ -132,7 +132,17 @@
 }
 
 .emby-library-grid {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+.emby-library-grid > .emby-card,
+.emby-library-grid > .emby-library-card {
+  flex: 0 0 232px;
+  scroll-snap-align: start;
 }
 
 .emby-card {

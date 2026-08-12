@@ -19,7 +19,7 @@ function subscriptionCards(filtered) {
     const footerColor = completed ? "var(--green)" : (item.status === "active" ? "var(--amber)" : "var(--rose)");
     return `<div class="sub-card" data-sub-id="${item.id}">
       <div class="sub-card-header">
-        <div class="poster-sm">🎬</div>
+        <div class="poster-sm">${posterImgTag(item, item.title)}</div>
         <div class="info">
           <div class="title">${escapeHtml(item.title)}</div>
           <div class="desc">
