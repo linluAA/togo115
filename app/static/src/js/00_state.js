@@ -1,4 +1,4 @@
-const VIEW_KEYS = ["tmdb", "emby", "subscriptions", "logs", "settings"];
+const VIEW_KEYS = ["dashboard", "tmdb", "emby", "subscriptions", "logs", "settings"];
 const SETTINGS_TAB_KEYS = ["credentials", "delivery", "115", "telegram", "tmdb", "proxy", "rss_sources", "tg_bot", "emby", "backup"];
 const TMDB_MORE_MIN_PAGE_SIZE = 40;
 const BUILTIN_RSS_PLUGINS = new Set(["bt1207", "haisou"]);
@@ -38,7 +38,6 @@ const state = {
   resourceDeleteMode: false,
   selectedResourceIds: new Set(),
   subscriptionsEmbySynced: false,
-  sidebarCollapsed: localStorage.getItem("sidebarCollapsed") === "true",
   rssSourceExpanded: new Set(),
   builtinRssSourceExpanded: new Set(),
   panQrTimer: null,
@@ -46,14 +45,17 @@ const state = {
   backupText: "",
   panFolder: { cid: "0", path: "/" },
   subscriptionRefreshTimer: null,
+  dashboardHeroTimer: null,
+  dashboardHeroIndex: 0,
 };
 
 const navItems = [
-  ["tmdb", "TMDB", "片单", "TM"],
-  ["emby", "Emby", "媒体库", "Em"],
-  ["subscriptions", "订阅", "追新", "订"],
-  ["logs", "日志", "事件", "Log"],
-  ["settings", "设置", "配置", "设"],
+  ["dashboard", "概览", "仪表盘", "◉"],
+  ["tmdb", "TMDB", "片单", "⊞"],
+  ["emby", "Emby", "媒体库", "▦"],
+  ["subscriptions", "订阅", "追新", "◎"],
+  ["logs", "日志", "事件", "☰"],
+  ["settings", "设置", "配置", "⚙"],
 ];
 
 const $ = (selector) => document.querySelector(selector);
@@ -65,7 +67,7 @@ function routeView() {
 
 function initialView() {
   const stored = localStorage.getItem("currentView") || "";
-  return routeView() || (VIEW_KEYS.includes(stored) ? stored : "tmdb");
+  return routeView() || (VIEW_KEYS.includes(stored) ? stored : "dashboard");
 }
 
 function initialSettingsTab() {
@@ -89,7 +91,7 @@ function toggleTheme() {
 }
 
 function persistView() {
-  if (!VIEW_KEYS.includes(state.view)) state.view = "tmdb";
+  if (!VIEW_KEYS.includes(state.view)) state.view = "dashboard";
   localStorage.setItem("currentView", state.view);
   const hash = `#${state.view}`;
   if (window.location.hash !== hash) history.replaceState(null, "", hash);
@@ -111,6 +113,7 @@ function setView(view, options = {}) {
   // Bump token so any in-flight async page renderer can ignore stale work.
   appRenderToken += 1;
   if (view !== "tmdb" && typeof stopTmdbHeroRotation === "function") stopTmdbHeroRotation();
+  if (view !== "dashboard" && typeof stopDashboardHeroRotation === "function") stopDashboardHeroRotation();
   state.view = view;
   state.userMenuOpen = false;
   persistView();
@@ -123,6 +126,7 @@ window.addEventListener("hashchange", () => {
   const view = routeView();
   if (!view || view === state.view) return;
   if (view !== "tmdb" && typeof stopTmdbHeroRotation === "function") stopTmdbHeroRotation();
+  if (view !== "dashboard" && typeof stopDashboardHeroRotation === "function") stopDashboardHeroRotation();
   state.view = view;
   localStorage.setItem("currentView", view);
   state.userMenuOpen = false;

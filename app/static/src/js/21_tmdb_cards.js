@@ -53,16 +53,18 @@ function mediaGrid(items, type, options = {}) {
     };
     state.mediaPayloads.set(payloadId, payload);
     const year = (item.first_air_date || item.release_date || "").slice(0, 4) || "未知";
+    const rating = item.vote_average ? `★ ${Number(item.vote_average).toFixed(1)}` : "";
     return `<article class="media-card">
-      <button class="poster-button" data-detail="${payloadId}" aria-label="查看 ${title} 详情">
-        <img class="poster" src="${posterUrl(item)}" alt="${escapeHtml(title)}" />
-        <span class="poster-overlay">
-          <span>详情</span>
-        </span>
-      </button>
-      <div class="media-meta">
-        <h3>${escapeHtml(title)}</h3>
-        <p><span>${mediaType === "tv" ? "剧集" : "电影"}</span><span>${year}</span></p>
+      <div class="poster" data-detail="${payloadId}" aria-label="查看 ${title} 详情" title="查看详情">
+        <img src="${posterUrl(item)}" alt="${escapeHtml(title)}" loading="lazy" />
+        <div class="overlay">
+          ${rating ? `<div class="rating">${rating}</div>` : ""}
+          <div class="year">${year}</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="title">${escapeHtml(title)}</div>
+        <div class="meta"><span>${mediaType === "tv" ? "剧集" : "电影"} · ${year}</span></div>
       </div>
     </article>`;
   }).join("");

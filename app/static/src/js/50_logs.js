@@ -2,31 +2,31 @@ async function renderLogs() {
   const root = $("#view");
   state.logs = [];
   state.logsHasMore = false;
+  state.logsLevel = state.logsLevel || "all";
   root.innerHTML = `
-    <section class="page-heading log-heading">
-      <div><span class="eyebrow">EVENTS</span><h1>运行日志</h1></div>
-    </section>
-    <section class="log-toolbar">
-      <span class="log-status">● 已连接</span>
-      <input id="logFilter" placeholder="输入过滤关键字" />
-      <button class="${state.logsMode === "simple" ? "active" : ""}" data-mode="simple">重要</button>
-      <button class="${state.logsMode === "debug" ? "active" : ""}" data-mode="debug">全部</button>
-      <button class="danger" id="clearLogView">清空</button>
-    </section>
-    <div class="log-terminal"><div class="log-list"><div class="empty">正在读取日志...</div></div></div>
-    <button class="secondary log-more" id="loadMoreLogs">加载更多</button>
+    <div class="toolbar view-section">
+      <button class="btn ${state.logsLevel === "all" ? "btn-secondary" : "btn-ghost"} btn-sm" data-log-level="all">全部</button>
+      <button class="btn ${state.logsLevel === "info" ? "btn-secondary" : "btn-ghost"} btn-sm" data-log-level="info">信息</button>
+      <button class="btn ${state.logsLevel === "warn" ? "btn-secondary" : "btn-ghost"} btn-sm" data-log-level="warn">警告</button>
+      <button class="btn ${state.logsLevel === "error" ? "btn-secondary" : "btn-ghost"} btn-sm" data-log-level="error">错误</button>
+      <div class="toolbar-filters">
+        <button class="btn btn-ghost btn-sm" id="clearLogView">清空筛选</button>
+      </div>
+    </div>
+    <div class="log-list view-section" id="logList"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取日志...</h3></div></div>
+    <div style="text-align:center;padding:16px" id="logMoreWrap">
+      <button class="btn btn-ghost btn-sm" id="loadMoreLogs" style="display:none">加载更多</button>
+    </div>
   `;
-  root.querySelectorAll("[data-mode]").forEach((btn) => btn.addEventListener("click", () => {
-    state.logsMode = btn.dataset.mode;
+  root.querySelectorAll("[data-log-level]").forEach((btn) => btn.addEventListener("click", () => {
+    state.logsLevel = btn.dataset.logLevel;
     renderLogs();
   }));
   await loadLogsPage();
-  $("#logFilter").addEventListener("input", () => renderLogRows(state.logs));
   $("#clearLogView").addEventListener("click", () => {
     state.logs = [];
-    root.querySelector(".log-list").innerHTML = "";
+    document.querySelector("#logList").innerHTML = "";
   });
-  $("#loadMoreLogs")?.addEventListener("click", () => loadLogsPage());
 }
 
 async function loadLogsPage() {
@@ -36,7 +36,7 @@ async function loadLogsPage() {
     button.textContent = "加载中...";
   }
   const beforeId = state.logs.length ? Math.min(...state.logs.map((log) => Number(log.id))) : 0;
-  const url = `/api/logs?mode=${state.logsMode}&limit=100${beforeId ? `&before_id=${beforeId}` : ""}`;
+  const url = `/api/logs?limit=100${beforeId ? `&before_id=${beforeId}` : ""}`;
   const logs = await api(url);
   const seen = new Set(state.logs.map((log) => Number(log.id)));
   state.logs = [...state.logs, ...logs.filter((log) => !seen.has(Number(log.id)))];
@@ -46,29 +46,27 @@ async function loadLogsPage() {
     button.disabled = false;
     button.textContent = state.logsHasMore ? "加载更多" : "没有更多日志";
     button.classList.toggle("hidden", !state.logsHasMore && state.logs.length > 0);
+    const wrap = $("#logMoreWrap");
+    if (wrap) wrap.style.display = state.logsHasMore ? "" : "none";
   }
 }
 
 function renderLogRows(logs) {
-  const keyword = $("#logFilter")?.value.trim().toLowerCase() || "";
-  const filtered = keyword ? logs.filter((log) => `${log.level} ${log.scope} ${log.message} ${log.payload || ""}`.toLowerCase().includes(keyword)) : logs;
+  const level = state.logsLevel || "all";
+  const filtered = level === "all" ? logs : logs.filter((log) => log.level === level);
   const grouped = groupLogRows(filtered);
-  $(".log-list").innerHTML = grouped.length ? grouped.map((entry, index) => {
+  const logList = $(".log-list");
+  if (!logList) return;
+  logList.innerHTML = grouped.length ? grouped.map((entry) => {
     const log = entry.log;
-    const time = new Date(log.created_at).toLocaleString();
-    const payload = formatLogPayload(log.payload);
-    const repeat = entry.count > 1 ? `<span class="repeat-badge">×${entry.count}</span>` : "";
-    return `<details class="log-line ${log.level}">
-      <summary>
-        <span class="line-no">${index + 1}</span>
-        <span class="level">${log.level.toUpperCase()}</span>
-        <span class="time">${time}</span>
-        <span class="scope">${escapeHtml(log.scope)}</span>
-        <span class="message">${escapeHtml(log.message)}${repeat}</span>
-      </summary>
-      ${payload ? `<pre class="log-payload">${escapeHtml(payload)}</pre>` : ""}
-    </details>`;
-  }).join("") : `<div class="log-empty">暂无日志</div>`;
+    const time = new Date(log.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const repeat = entry.count > 1 ? ` <span style="color:var(--amber);font-size:10px;font-weight:700">×${entry.count}</span>` : "";
+    return `<div class="log-entry">
+      <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+      <span class="log-time">${time}</span>
+      <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+    </div>`;
+  }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无日志</h3></div>`;
 }
 
 function formatLogPayload(raw) {
@@ -131,7 +129,7 @@ function decodeLogUrl(value) {
 }
 
 function compactLogError(value) {
-  const status = value.match(/Server error '(\d{3})/i)?.[1];
+  const status = value.match(/Server error '(\d{3})'/i)?.[1];
   if (status === "503") return "HTTP 503：订阅源临时不可用或触发站点限流";
   if (status === "429") return "HTTP 429：订阅源请求过快，稍后会自动重试";
   return value.replace(/\s*For more information check:.*/is, "").trim();
@@ -150,6 +148,3 @@ function groupLogRows(logs) {
   }
   return groups;
 }
-
-
-

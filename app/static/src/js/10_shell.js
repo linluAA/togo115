@@ -1,5 +1,6 @@
 function renderLogin() {
   $("#app").innerHTML = `
+    <div class="bg-atmosphere"></div>
     <main class="login">
       <section class="login-card">
         <h1>ToGo115</h1>
@@ -28,17 +29,8 @@ function renderLogin() {
 }
 
 function updateShellUiState() {
-  const shell = $(".shell");
-  if (shell) {
-    shell.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
-  }
   const userMenu = $(".user-menu");
   if (userMenu) userMenu.classList.toggle("open", state.userMenuOpen);
-  const sidebarToggle = $("#sidebarToggle");
-  if (sidebarToggle) {
-    sidebarToggle.innerHTML = state.sidebarCollapsed ? "&rsaquo;" : "&lsaquo;";
-    sidebarToggle.setAttribute("aria-label", state.sidebarCollapsed ? "展开侧边栏" : "收起侧边栏");
-  }
 }
 
 function renderApp() {
@@ -46,32 +38,47 @@ function renderApp() {
   const current = navItems.find(([key]) => key === state.view) || navItems[0];
   const username = escapeHtml(state.user?.username || "用户");
   const themeLabel = state.theme === "light" ? "切换深色主题" : "切换浅色主题";
-  const themeIcon = state.theme === "light" ? "深" : "浅";
+  const themeIcon = state.theme === "light" ? "☀" : "☾";
+  const firstLetter = username.slice(0, 1).toUpperCase();
   $("#app").innerHTML = `
-    <div class="shell ${state.sidebarCollapsed ? "sidebar-collapsed" : ""}">
+    <div class="bg-atmosphere"></div>
+    <div class="shell">
       <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-mark">115</div>
-          <div class="brand-copy"><strong>ToGo115</strong><span>Auto Media</span></div>
+        <div class="sidebar-brand">
+          <div class="logo">✦</div>
+          <span class="brand-text">togo115</span>
         </div>
-        <nav class="nav">
-          ${navItems.map(([key, label, description, icon]) => `<button class="${state.view === key ? "active" : ""}" data-view="${key}" title="${label}">
+        <nav class="sidebar-nav">
+          ${navItems.map(([key, label, description, icon]) => `<button class="${state.view === key ? "active" : ""} nav-item" data-view="${key}" title="${description}">
             <span class="nav-icon">${icon}</span>
-            <span class="nav-copy"><strong>${label}</strong><small>${description}</small></span>
+            <span class="nav-label">${label}</span>
           </button>`).join("")}
         </nav>
-        <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="${state.sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}">${state.sidebarCollapsed ? "›" : "‹"}</button>
+        <div class="sidebar-bottom">
+          <button type="button" class="theme-toggle" id="sidebarThemeBtn">
+            <span class="icon">${themeIcon}</span>
+            <span>${themeLabel}</span>
+          </button>
+        </div>
       </aside>
       <main class="main">
         <header class="topbar">
-          <div class="topbar-title"><h2>${current[1]}</h2><p>${current[2]}</p></div>
-          <div class="top-actions">
-            <button class="icon-action" id="quickLogBtn" title="日志" aria-label="日志">Log</button>
+          <div class="topbar-breadcrumb">
+            <span>首页</span>
+            <span style="color:var(--dim)">/</span>
+            <span class="current">${current[1]}</span>
+          </div>
+          <div class="topbar-spacer"></div>
+          <div class="topbar-actions">
+            <div class="topbar-search">
+              <span class="search-icon">⌕</span>
+              <input type="text" placeholder="搜索片名、关键词..." id="globalSearch">
+            </div>
             <div class="user-menu ${state.userMenuOpen ? "open" : ""}">
-              <button type="button" class="avatar-btn" id="userMenuBtn" aria-label="账号菜单">${username.slice(0, 1).toUpperCase()}</button>
+              <div class="topbar-avatar" id="userMenuBtn" title="账号菜单">${firstLetter}</div>
               <div class="user-menu-panel">
                 <div class="user-menu-head">
-                  <span class="user-menu-avatar">${username.slice(0, 1).toUpperCase()}</span>
+                  <span class="user-menu-avatar">${firstLetter}</span>
                   <div class="user-menu-meta"><span>当前账号</span><strong>${username}</strong></div>
                 </div>
                 <div class="user-menu-list">
@@ -96,17 +103,19 @@ function renderApp() {
   document.querySelectorAll("[data-view]").forEach((btn) => btn.addEventListener("click", () => {
     setView(btn.dataset.view);
   }));
-  $("#sidebarToggle").addEventListener("click", () => {
-    state.sidebarCollapsed = !state.sidebarCollapsed;
-    localStorage.setItem("sidebarCollapsed", String(state.sidebarCollapsed));
-    updateShellUiState();
-  });
-  $("#quickLogBtn").addEventListener("click", () => {
-    setView("logs");
-  });
-  $("#userMenuBtn").addEventListener("click", () => {
+  $("#userMenuBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
     state.userMenuOpen = !state.userMenuOpen;
     updateShellUiState();
+  });
+  document.addEventListener("click", () => {
+    if (state.userMenuOpen) {
+      state.userMenuOpen = false;
+      updateShellUiState();
+    }
+  }, { once: false });
+  $("#sidebarThemeBtn")?.addEventListener("click", () => {
+    toggleTheme();
   });
   $("#accountSettingsBtn")?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -124,6 +133,23 @@ function renderApp() {
     state.user = null;
     renderLogin();
   });
+  $("#globalSearch")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const query = event.currentTarget.value.trim();
+    if (!query) return;
+    const run = () => {
+      const input = $("#tmdbQuery");
+      if (input) {
+        input.value = query;
+        searchTmdb();
+      }
+    };
+    if (state.view === "tmdb") run();
+    else {
+      setView("tmdb");
+      run();
+    }
+  });
   renderView();
 }
 
@@ -133,7 +159,6 @@ function openAccountSecuritySettings() {
   localStorage.setItem("settingsTab", state.settingsTab);
   state.userMenuOpen = false;
   if (state.view === "settings") {
-    // Same page: force re-render credentials and focus password for clear feedback.
     updateShellUiState();
     renderSettings();
     focusAccountPasswordField();
@@ -141,7 +166,6 @@ function openAccountSecuritySettings() {
     return;
   }
   setView("settings");
-  // renderApp is sync; focus after shell rebuild.
   focusAccountPasswordField();
 }
 
@@ -162,6 +186,7 @@ function focusAccountPasswordField() {
 }
 
 function renderView() {
+  if (state.view === "dashboard") renderDashboard();
   if (state.view === "tmdb") renderTmdb();
   if (state.view === "emby") renderEmby();
   if (state.view === "subscriptions") renderSubscriptions();

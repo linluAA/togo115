@@ -9,6 +9,7 @@ CSS_SRC = STATIC / "src" / "css"
 JS_FILES = [
     "00_state.js",
     "10_shell.js",
+    "15_dashboard.js",
     "20_tmdb_home.js",
     "21_tmdb_cards.js",
     "22_tmdb_detail.js",
@@ -241,14 +242,21 @@ def _looks_like_regex(prev_token: str | None, prev_word: str | None) -> bool:
 
 def bundle(files, source_dir, target, header, minify=False):
     chunks = [header.rstrip(), ""]
-    for name in files:
-        path = source_dir / name
-        chunks.append(f"/* source: {path.relative_to(ROOT).as_posix()} */")
-        chunks.append(path.read_text(encoding="utf-8").strip())
-        chunks.append("")
+    if minify and target.suffix == ".js":
+        for name in files:
+            path = source_dir / name
+            raw = path.read_text(encoding="utf-8").strip()
+            chunks.append(_minify_js(raw).rstrip())
+            chunks.append("")
+    else:
+        for name in files:
+            path = source_dir / name
+            chunks.append(f"/* source: {path.relative_to(ROOT).as_posix()} */")
+            chunks.append(path.read_text(encoding="utf-8").strip())
+            chunks.append("")
     text = "\n".join(chunks).rstrip() + "\n"
-    if minify:
-        text = (_minify_js(text) if target.suffix == ".js" else _minify_css(text)) + "\n"
+    if minify and target.suffix == ".css":
+        text = _minify_css(text) + "\n"
     target.write_text(text, encoding="utf-8")
 
 

@@ -1,6 +1,6 @@
 @media (max-width: 860px) {
   body {
-    background: var(--bg);
+    background: var(--bg-deep);
   }
 
   body::after {
@@ -15,8 +15,7 @@
     background: var(--bg);
   }
 
-  .shell,
-  .shell.sidebar-collapsed {
+  .shell {
     display: block;
   }
 
@@ -29,16 +28,32 @@
   }
 
   .main {
-    padding: 18px 14px calc(98px + env(safe-area-inset-bottom, 0px));
+    padding: 0;
   }
 
   .topbar {
-    margin: -18px -14px 16px;
-    padding: 12px 14px;
+    height: var(--topbar-h);
+    margin: 0;
+    padding: 0 16px;
   }
 
-  .topbar-title p {
+  .topbar-breadcrumb span:first-child {
     display: none;
+  }
+
+  .topbar-breadcrumb .sep {
+    display: none;
+  }
+
+  .topbar-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  #view {
+    padding: 16px;
+    gap: 16px;
   }
 
   .mobile-bottom-nav {
@@ -48,14 +63,14 @@
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 4px;
     padding: 6px;
     border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: rgba(24, 22, 19, .92);
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(18px);
+    border-radius: var(--radius-lg);
+    background: rgba(11, 17, 23, .88);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(20px);
   }
 
   .mobile-bottom-nav button {
@@ -72,8 +87,8 @@
   }
 
   .mobile-bottom-nav button.active {
-    color: var(--ink);
-    background: rgba(45, 212, 191, .13);
+    color: var(--brand);
+    background: rgba(255, 183, 77, .10);
   }
 
   .mobile-bottom-nav .nav-icon {
@@ -183,8 +198,8 @@
     padding: 16px;
     border-radius: var(--radius);
     background:
-      linear-gradient(135deg, rgba(45, 212, 191, .10), rgba(244, 182, 63, .05)),
-      rgba(18, 26, 29, .72);
+      linear-gradient(145deg, rgba(255, 183, 77, .12), transparent 46%),
+      rgba(18, 26, 29, .84);
   }
 
   .emby-overview-panel .eyebrow {
@@ -412,8 +427,6 @@
     gap: 8px;
   }
 
-  
-
   .subscription-control-grid select.control-cell {
     min-width: 108px;
     height: 34px;
@@ -543,7 +556,7 @@
     border-width: 1px 0;
     border-radius: 0;
     scroll-padding-inline: 14px;
-    background: rgba(17, 16, 14, .92);
+    background: rgba(16, 24, 31, .88);
   }
 
   .settings-tabs button {
@@ -670,6 +683,6 @@
   }
 
   .settings-tabs {
-    background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+    background: rgba(16, 24, 31, .88);
   }
 }

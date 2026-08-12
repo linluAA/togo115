@@ -1,15 +1,15 @@
 function renderSettings() {
   const tabs = [
-    ["credentials", "账号安全"],
-    ["delivery", "推送方式"],
-    ["115", "115 网盘"],
-    ["telegram", "Telegram"],
-    ["tmdb", "TMDB"],
-    ["proxy", "代理设置"],
-    ["rss_sources", "订阅源"],
-    ["tg_bot", "TG Bot"],
-    ["emby", "媒体库"],
-    ["backup", "备份恢复"],
+    ["credentials", "🔐 账号安全"],
+    ["delivery", "📤 分发设置"],
+    ["115", "☁ 115 网盘"],
+    ["telegram", "✈ Telegram"],
+    ["tmdb", "🎬 TMDB"],
+    ["proxy", "🔧 代理设置"],
+    ["rss_sources", "📡 订阅源"],
+    ["tg_bot", "🤖 TG Bot"],
+    ["emby", "📺 Emby"],
+    ["backup", "💾 备份"],
   ];
   const tabMeta = {
     credentials: ["账号安全", "修改后台登录账号和密码，留空新密码则保持原密码。"],

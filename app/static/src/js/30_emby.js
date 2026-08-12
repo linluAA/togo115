@@ -1,70 +1,75 @@
 async function renderEmby() {
   const root = $("#view");
-  root.innerHTML = `<div class="empty">正在读取 Emby 看板...</div>`;
+  root.innerHTML = `<div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 Emby 看板...</h3></div>`;
   const data = await api("/api/emby/dashboard");
+  if (data.error) {
+    root.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠</div><h3>Emby 数据获取失败</h3><p>${escapeHtml(data.error)}</p></div>`;
+    return;
+  }
   const movieCount = data.movie_count ?? data.counts?.MovieCount ?? 0;
   const seriesCount = data.series_count ?? data.counts?.SeriesCount ?? 0;
+  const libraries = data.libraries || [];
+  const history = data.history || [];
+  const users = data.users || [];
   root.innerHTML = `
-    ${data.error ? `<div class="empty">Emby 数据获取失败：${data.error}</div>` : ""}
-    <section class="emby-console">
-      <aside class="emby-overview-panel">
-        <span class="eyebrow">EMBY</span>
-        <h1>媒体库看板</h1>
-        <p>查看媒体体量、媒体库封面和最近播放记录。</p>
-        <div class="stats">
-          <div class="stat"><span>媒体总数</span><b>${data.media_count || 0}</b></div>
-          <div class="stat"><span>电视剧</span><b>${seriesCount}</b></div>
-          <div class="stat"><span>电影</span><b>${movieCount}</b></div>
-          <div class="stat"><span>媒体库</span><b>${(data.libraries || []).length}</b></div>
-          <div class="stat"><span>用户</span><b>${(data.users || []).length}</b></div>
-          <div class="stat"><span>观看记录</span><b>${(data.history || []).length}</b></div>
+    <div class="emby-sections view-section">
+      <div class="emby-main-section">
+        <div class="section-header">
+          <h2>媒体库</h2>
+          <button class="btn btn-secondary btn-sm" id="syncEmbyLibrary">同步</button>
         </div>
-      </aside>
-      <div class="emby-content-stack">
-        <section class="section emby-library-section"><div class="section-heading"><h3>媒体库</h3><span>${(data.libraries || []).length} 个</span></div>${embyGrid(data.libraries, "暂无媒体库数据", "library")}</section>
-        <section class="section emby-history-section"><div class="section-heading"><h3>观看历史</h3><span>${(data.history || []).length} 条</span></div>${embyGrid(data.history, "暂无观看历史", "history")}</section>
-        <section class="section emby-user-section"><div class="section-heading"><h3>用户</h3><span>${(data.users || []).length} 个</span></div>${embyGrid(data.users, "暂无用户数据", "user")}</section>
+        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:24px">
+          ${libraries.length ? libraries.map((item) => {
+            const image = item.image_url
+              ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius-lg)" onerror="this.style.display='none'" />`
+              : "";
+            return `<div class="media-card">
+              <div class="poster">${image}<div class="overlay"><div class="rating">${item.child_count || 0} 部</div></div></div>
+              <div class="card-body"><div class="title">${escapeHtml(item.name || "媒体库")}</div><div class="meta"><span>${item.collection_type || "媒体库"}</span></div></div>
+            </div>`;
+          }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无媒体库数据</h3></div>`}
+        </div>
       </div>
-    </section>
+      <div class="emby-side-section">
+        <div class="section-header"><h2>历史记录</h2></div>
+        <div class="activity-feed" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:12px 16px">
+          ${history.length ? history.slice(0, 6).map((item) => {
+            const title = escapeHtml(item.name || item.title || "项目");
+            const date = item.date_played || "";
+            return `<div class="activity-item">
+              <span class="a-dot" style="background:var(--green)"></span>
+              <span class="a-text"><strong>${title}</strong> 已播放</span>
+              <span class="a-time">${date ? escapeHtml(date) : ""}</span>
+            </div>`;
+          }).join("") : `<div class="activity-item"><span class="a-text" style="color:var(--dim)">暂无观看历史</span></div>`}
+        </div>
+        <div class="section-header" style="margin-top:16px"><h2>用户</h2></div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px">
+          ${users.length ? users.slice(0, 3).map((user) => {
+            const name = escapeHtml(user.name || user.username || "用户");
+            const initial = name.charAt(0).toUpperCase();
+            return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117;flex-shrink:0">${initial}</div>
+              <div><div style="font-weight:600;font-size:14px">${name}</div><div style="font-size:12px;color:var(--dim)">管理员</div></div>
+            </div>`;
+          }).join("") : `<div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117">A</div>
+            <div><div style="font-weight:600;font-size:14px">Admin</div><div style="font-size:12px;color:var(--dim)">管理员</div></div>
+          </div>`}
+          <div style="display:flex;gap:12px;font-size:12px;color:var(--dim);margin-top:8px">
+            <span>📺 ${movieCount + seriesCount} 部</span>
+            <span>📀 ${data.media_count || 0} 集</span>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
-}
-
-function simpleList(items, empty) {
-  if (!items || !items.length) return `<div class="empty">${empty}</div>`;
-  return `<div class="grid">${items.map((item) => `<div class="card"><div class="card-body"><h3>${item.name || item.title || "项目"}</h3><p class="muted">${item.description || ""}</p></div></div>`).join("")}</div>`;
-}
-
-function embyGrid(items, empty, kind) {
-  if (!items || !items.length) return `<div class="empty">${empty}</div>`;
-  if (kind === "history") {
-    return `<div class="emby-history-list">${items.slice(0, 20).map((item) => {
-      const title = item.name || item.title || "项目";
-      const date = item.date_played || item.description || "";
-      const image = item.image_url
-        ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(title)}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'emby-history-thumb', textContent:'播放'}))" />`
-        : `<div class="emby-history-thumb">播放</div>`;
-      return `<article class="emby-history-item">
-        ${image}
-        <div>
-          <h3>${escapeHtml(title)}</h3>
-          ${date ? `<p>${escapeHtml(date)}</p>` : ""}
-        </div>
-      </article>`;
-    }).join("")}</div>`;
-  }
-  return `<div class="emby-grid ${kind === "library" ? "emby-library-grid" : ""}">${items.map((item) => {
-    const fallback = kind === "user" ? "" : `<div class="emby-placeholder">媒体</div>`;
-    const image = kind === "user"
-      ? ""
-      : (item.image_url ? `<img class="library-image" src="${item.image_url}" alt="${item.name || item.title || "Emby"}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'emby-placeholder', textContent:'媒体'}))" />` : fallback);
-    const metaClass = kind === "library" ? "emby-library-meta" : "";
-    const description = kind === "library" ? "" : (item.description || item.collection_type || item.date_played || "");
-    return `<article class="emby-card ${kind === "library" ? "emby-library-card" : ""}">
-      ${image}
-      <div class="${metaClass}">
-        <h3>${escapeHtml(item.name || item.title || "项目")}</h3>
-        ${description ? `<p>${description}</p>` : ""}
-      </div>
-    </article>`;
-  }).join("")}</div>`;
+  $("#syncEmbyLibrary")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/emby/sync", { method: "POST" });
+      toast(res.ok ? "媒体库同步已启动" : `同步失败：${res.error || "未知错误"}`);
+    } catch (error) {
+      toast(`同步失败：${error.message}`);
+    }
+  });
 }

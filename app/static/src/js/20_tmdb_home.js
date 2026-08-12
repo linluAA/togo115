@@ -20,13 +20,9 @@ function buildTmdbHeroPool(tv = [], movie = []) {
     if (!item || !item.id) continue;
     const key = tmdbHeroItemKey(item);
     if (seen.has(key)) continue;
-    // Prefer items with a backdrop so the hero banner looks complete.
-    if (!item.backdrop_path && !item.poster_path) continue;
     seen.add(key);
     pool.push(item);
   }
-  // Prefer backdrop-first ordering while still allowing random selection later.
-  pool.sort((a, b) => Number(Boolean(b.backdrop_path)) - Number(Boolean(a.backdrop_path)));
   return pool;
 }
 
@@ -56,25 +52,6 @@ function applyTmdbHero(featured) {
     release_year: Number.parseInt(year, 10) || null,
     keywords: [title],
   });
-  const heroOverlay = state.theme === "light"
-    ? "linear-gradient(90deg, rgba(248, 251, 252, .96), rgba(248, 251, 252, .76), rgba(248, 251, 252, .38))"
-    : "linear-gradient(90deg, rgba(9, 15, 17, .94), rgba(9, 15, 17, .62), rgba(9, 15, 17, .28))";
-  const imageUrl = backdropUrl(featured);
-  // Preload next banner image to reduce flicker on rotation.
-  const preload = new Image();
-  preload.src = imageUrl;
-  hero.style.backgroundImage = `${heroOverlay}, url('${imageUrl}')`;
-  if (heroFeature) {
-    heroFeature.innerHTML = `
-      <img class="hero-feature-poster" src="${posterUrl(featured)}" alt="${escapeHtml(title)}" />
-      <div class="hero-feature-copy">
-        <span>精选推荐</span>
-        <strong>${escapeHtml(title)}</strong>
-        <small>${year} · ${mediaType === "movie" ? "电影" : "剧集"}</small>
-      </div>
-      <button type="button" class="hero-feature-link" data-detail="${payloadId}">查看</button>
-    `;
-  }
 }
 
 function rotateTmdbHeroOnce() {
@@ -85,9 +62,6 @@ function rotateTmdbHeroOnce() {
   const featured = pickRandomTmdbHero(state.tmdbHeroPool, state.tmdbHeroFeaturedKey);
   if (!featured) return;
   applyTmdbHero(featured);
-  // Rebind detail actions for the rewritten hero button.
-  const root = $("#view");
-  if (root && typeof bindMediaActions === "function") bindMediaActions(root);
 }
 
 function startTmdbHeroRotation(pool) {
@@ -116,13 +90,14 @@ async function renderTmdb() {
     </div>`;
     state.tmdbMore.page = page;
     root.innerHTML = `
-      <section class="page-heading compact-toolbar tmdb-more-heading">
-        <div><h1>${sectionTitle(state.tmdbMore.type)}</h1><p>${items.length} 个条目 · 第 ${page}/${pageCount} 页</p></div>
-        ${pager}
-        <button class="secondary" id="backToTmdb">返回</button>
-      </section>
-      <section class="section media-section tmdb-more-section">${mediaGrid(pageItems, state.tmdbMore.type, { limit: pageSize, more: false })}</section>
-      <section class="tmdb-page-footer">${pager}</section>
+      <div class="toolbar view-section">
+        <h2 style="font-size:18px;font-weight:700;color:var(--ink)">${sectionTitle(state.tmdbMore.type)}</h2>
+        <span style="color:var(--dim);font-size:13px">${items.length} 个条目 · 第 ${page}/${pageCount} 页</span>
+        <div class="toolbar-filters">${pager}</div>
+        <button class="btn btn-ghost btn-sm" id="backToTmdb">返回</button>
+      </div>
+      <div class="media-grid view-section">${mediaGrid(pageItems, state.tmdbMore.type, { limit: pageSize, more: false })}</div>
+      <div class="tmdb-page-footer">${pager}</div>
     `;
     $("#backToTmdb").addEventListener("click", () => {
       state.tmdbMore = null;
@@ -140,100 +115,83 @@ async function renderTmdb() {
     return;
   }
   const isSearching = Boolean(state.tmdbSearchQuery.trim());
-  const activeSubscriptions = state.subscriptions.filter((item) => item.status === "active").length;
-  const completedSubscriptions = state.subscriptions.filter((item) => item.status === "completed" || item.in_library).length;
-  const discoveredResources = state.resources.length;
+  const typeFilter = state.tmdbTypeFilter || "all";
   root.innerHTML = `
-    <section class="tmdb-hero">
-      <div class="tmdb-hero-copy">
-        <span class="eyebrow">TMDB</span>
-        <h1>发现影视资源</h1>
-        <p>从榜单、搜索和订阅源里集中管理追新资源。</p>
-        <div class="hero-metrics">
-          <span><b>${activeSubscriptions}</b>订阅中</span>
-          <span><b>${completedSubscriptions}</b>已入库</span>
-          <span><b>${discoveredResources}</b>发现资源</span>
+    <div class="toolbar view-section">
+      <button class="btn ${typeFilter === "tv" ? "btn-primary" : "btn-secondary"}" data-tmdb-type="tv">热门剧集</button>
+      <button class="btn ${typeFilter === "movie" ? "btn-primary" : "btn-secondary"}" data-tmdb-type="movie">热门电影</button>
+      <button class="btn ${typeFilter === "all" ? "btn-primary" : "btn-ghost"}" data-tmdb-type="all">高分推荐</button>
+      <div class="toolbar-filters">
+        <div class="topbar-search" style="width:200px">
+          <span class="search-icon">⌕</span>
+          <input id="tmdbQuery" placeholder="搜索剧集或电影" value="${escapeHtml(state.tmdbSearchQuery)}" style="border:none;background:transparent;color:var(--ink);font-size:13px;outline:none;width:100%" />
         </div>
       </div>
-      <div class="tmdb-hero-panel">
-        <div class="hero-feature" id="heroFeature">
-          <div class="hero-feature-copy">
-            <span>正在读取榜单</span>
-            <strong>TMDB Trending</strong>
-            <small>热门内容同步中</small>
-          </div>
-        </div>
-        <div class="hero-quick-grid">
-          <span><b>剧集</b><small>热门榜</small></span>
-          <span><b>电影</b><small>新近热门</small></span>
-          <span><b>订阅</b><small>自动追新</small></span>
-        </div>
-        <div class="tmdb-search">
-          <input id="tmdbQuery" placeholder="搜索剧集或电影" value="${escapeHtml(state.tmdbSearchQuery)}" />
-          <button id="tmdbSearchBtn">搜索</button>
-        </div>
+    </div>
+    <div id="tmdbSearchResults" class="${isSearching ? "" : "hidden"}">
+      <div class="section-header view-section">
+        <h2>搜索结果</h2>
       </div>
-    </section>
-    <section class="section media-section ${isSearching ? "" : "hidden"}" id="searchSection">
-      ${isSearching ? `<h3>搜索结果</h3>${state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty">没有搜索到相关结果。</div>`}` : ""}
-    </section>
-    <section class="section media-section ${isSearching ? "hidden" : ""}" id="trendingSection"><div class="empty">正在读取 TMDB 榜单...</div></section>
+      <div class="media-grid view-section">${isSearching && state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>没有搜索到相关结果</h3></div>`}</div>
+    </div>
+    <div id="tmdbTrendingContent" class="${isSearching ? "hidden" : ""}">
+      <div class="section-header view-section">
+        <h2>热门剧集</h2>
+        <button class="section-action" data-more-type="tv">查看更多 →</button>
+      </div>
+      <div class="media-grid view-section" id="tmdbTvGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+      <div class="section-header view-section">
+        <h2>热门电影</h2>
+        <button class="section-action" data-more-type="movie">查看更多 →</button>
+      </div>
+      <div class="media-grid view-section" id="tmdbMovieGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+    </div>
   `;
-  $("#tmdbSearchBtn").addEventListener("click", () => searchTmdb());
+  root.querySelectorAll("[data-tmdb-type]").forEach((btn) => btn.addEventListener("click", () => {
+    state.tmdbTypeFilter = btn.dataset.tmdbType;
+    renderTmdb();
+  }));
+  root.querySelectorAll("[data-more-type]").forEach((btn) => btn.addEventListener("click", () => {
+    const type = btn.dataset.moreType;
+    const items = type === "tv" ? (state.tmdbTrending?.tv || []) : (state.tmdbTrending?.movie || []);
+    if (!items.length) return toast("暂无数据");
+    state.tmdbMore = { type, items, page: 1 };
+    renderTmdb();
+  }));
   const queryInput = $("#tmdbQuery");
-  queryInput.addEventListener("input", () => {
-    state.tmdbSearchQuery = queryInput.value;
-    if (!queryInput.value.trim()) clearTmdbSearch();
-  });
-  queryInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") searchTmdb();
-  });
+  if (queryInput) {
+    queryInput.addEventListener("input", () => {
+      state.tmdbSearchQuery = queryInput.value;
+      if (!queryInput.value.trim()) clearTmdbSearch();
+    });
+    queryInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") searchTmdb();
+    });
+  }
   if (isSearching) {
     stopTmdbHeroRotation();
-    bindMediaActions($("#searchSection"));
+    bindMediaActions($("#tmdbSearchResults"));
     return;
   }
   await renderTmdbTrending(root);
 }
 
 async function renderTmdbTrending(root = $("#view")) {
-  const section = $("#trendingSection");
-  if (!section || state.tmdbSearchQuery.trim()) return;
-  section.classList.remove("hidden");
-  if (!state.tmdbTrending) section.innerHTML = `<div class="empty">正在读取 TMDB 榜单...</div>`;
+  const tvGrid = root.querySelector("#tmdbTvGrid");
+  const movieGrid = root.querySelector("#tmdbMovieGrid");
+  if (!tvGrid || !movieGrid || state.tmdbSearchQuery.trim()) return;
   try {
     const data = await loadTmdbTrending(20);
     state.tmdbTrending = data;
-    if (!section.isConnected || state.tmdbSearchQuery.trim()) return;
+    if (state.tmdbSearchQuery.trim()) return;
     const tv = data.tv || [];
     const movie = data.movie || [];
-    const heroPool = buildTmdbHeroPool(tv, movie);
-    const featured = pickRandomTmdbHero(heroPool, state.tmdbHeroFeaturedKey) || tv[0] || movie[0];
-    if (featured) {
-      applyTmdbHero(featured);
-      startTmdbHeroRotation(heroPool);
-    } else {
-      stopTmdbHeroRotation();
-    }
-    section.innerHTML = `
-      <div class="tmdb-board">
-        <section class="section media-section tmdb-board-main">
-          <div class="section-heading"><h3>热门剧集</h3><span>${tv.length} 个</span></div>
-          ${mediaGrid(tv, "tv", { limit: 9, more: true })}
-        </section>
-        <aside class="section tmdb-rank-panel">
-          <div class="section-heading"><h3>榜单快览</h3><span>Top 18</span></div>
-          ${rankList([...tv.slice(0, 9), ...movie.slice(0, 9)])}
-        </aside>
-        <section class="section media-section tmdb-board-wide">
-          <div class="section-heading"><h3>热门电影</h3><span>${movie.length} 个</span></div>
-          ${mediaGrid(movie, "movie", { limit: 9, more: true })}
-        </section>
-      </div>
-    `;
+    tvGrid.innerHTML = tv.length ? mediaGrid(tv, "tv", { limit: 9, more: true }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+    movieGrid.innerHTML = movie.length ? mediaGrid(movie, "movie", { limit: 9, more: true }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
     bindMediaActions(root);
   } catch (error) {
-    if (!section.isConnected || state.tmdbSearchQuery.trim()) return;
-    section.innerHTML = `<div class="empty">TMDB 暂不可用。</div>`;
+    if (state.tmdbSearchQuery.trim()) return;
+    tvGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">◌</div><h3>TMDB 暂不可用。</h3></div>`;
+    movieGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">◌</div><h3>TMDB 暂不可用。</h3></div>`;
   }
 }
