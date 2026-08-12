@@ -206,7 +206,15 @@ document.body.appendChild(el);
 setTimeout(()=>el.remove(),2800);
 }
 function posterUrl(item){
-return item.poster_path?`https://image.tmdb.org/t/p/w500${item.poster_path}`:"https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80";
+if(item.poster_url)return item.poster_url;
+if(item.poster_path)return`https://image.tmdb.org/t/p/w500${item.poster_path}`;
+return"https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80";
+}
+const POSTER_FALLBACK="https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80";
+function posterImgTag(item,alt,extraClass=""){
+const src=item.poster_url||(item.poster_path?`https://image.tmdb.org/t/p/w500${item.poster_path}`:POSTER_FALLBACK);
+const cls=extraClass?` class="${extraClass}"`:"";
+return`<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${cls} loading="lazy" onerror="this.onerror=null;this.src='${POSTER_FALLBACK}'" />`;
 }
 function backdropUrl(item){
 return item.backdrop_path?`https://image.tmdb.org/t/p/w1280${item.backdrop_path}`:posterUrl(item);
@@ -1338,7 +1346,7 @@ const footerStatus=completed?"已完结":(item.status==="active"?"搜索中":"�
 const footerColor=completed?"var(--green)":(item.status==="active"?"var(--amber)":"var(--rose)");
 return`<div class="sub-card" data-sub-id="${item.id}">
       <div class="sub-card-header">
-        <div class="poster-sm">🎬</div>
+        <div class="poster-sm">${posterImgTag(item, item.title)}</div>
         <div class="info">
           <div class="title">${escapeHtml(item.title)}</div>
           <div class="desc">
