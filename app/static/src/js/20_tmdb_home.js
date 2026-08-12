@@ -96,7 +96,7 @@ async function renderTmdb() {
         <div class="toolbar-filters">${pager}</div>
         <button class="btn btn-ghost btn-sm" id="backToTmdb">返回</button>
       </div>
-      <div class="media-grid view-section">${mediaGrid(pageItems, state.tmdbMore.type, { limit: pageSize, more: false })}</div>
+      <div class="view-section">${mediaGrid(pageItems, state.tmdbMore.type, { limit: pageSize, more: false })}</div>
       <div class="tmdb-page-footer">${pager}</div>
     `;
     $("#backToTmdb").addEventListener("click", () => {
@@ -132,19 +132,19 @@ async function renderTmdb() {
       <div class="section-header view-section">
         <h2>搜索结果</h2>
       </div>
-      <div class="media-grid view-section">${isSearching && state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>没有搜索到相关结果</h3></div>`}</div>
+      <div class="view-section">${isSearching && state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>没有搜索到相关结果</h3></div>`}</div>
     </div>
     <div id="tmdbTrendingContent" class="${isSearching ? "hidden" : ""}">
       <div class="section-header view-section">
         <h2>热门剧集</h2>
         <button class="section-action" data-more-type="tv">查看更多 →</button>
       </div>
-      <div class="media-grid view-section" id="tmdbTvGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+      <div class="view-section" id="tmdbTvGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
       <div class="section-header view-section">
         <h2>热门电影</h2>
         <button class="section-action" data-more-type="movie">查看更多 →</button>
       </div>
-      <div class="media-grid view-section" id="tmdbMovieGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+      <div class="view-section" id="tmdbMovieGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
     </div>
   `;
   root.querySelectorAll("[data-tmdb-type]").forEach((btn) => btn.addEventListener("click", () => {

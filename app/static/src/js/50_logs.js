@@ -40,6 +40,7 @@ async function loadLogsPage() {
   const logs = await api(url);
   const seen = new Set(state.logs.map((log) => Number(log.id)));
   state.logs = [...state.logs, ...logs.filter((log) => !seen.has(Number(log.id)))];
+  if (state.logs.length > 1000) state.logs = state.logs.slice(0, 1000);
   state.logsHasMore = logs.length >= 100;
   renderLogRows(state.logs);
   if (button) {

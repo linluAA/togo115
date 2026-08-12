@@ -978,31 +978,25 @@
 .activity-item .a-text strong { color: var(--ink); font-weight: 600; }
 .activity-item .a-time { font-size: 11px; color: var(--dim); flex-shrink: 0; }
 
-/* ── Detail Panel (modal) ── */
-.detail-panel {
+/* ── Media Detail Modal ── */
+.modal-backdrop {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none;
-  transition: all .3s ease;
-}
-.detail-panel.open { opacity: 1; pointer-events: auto; }
-.detail-panel .backdrop {
-  position: absolute; inset: 0;
+  padding: 24px;
   background: rgba(7, 11, 14, .8);
   backdrop-filter: blur(6px);
+  opacity: 1; pointer-events: auto;
 }
-.detail-panel .panel-content {
-  position: relative; z-index: 1;
-  width: 90%; max-width: 780px;
-  max-height: 80vh; overflow-y: auto;
+.detail-panel {
+  position: relative;
+  width: min(920px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-xl);
-  padding: 32px;
-  transform: translateY(20px) scale(.96);
-  transition: transform .3s cubic-bezier(.22, .68, 0, 1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .5);
 }
-.detail-panel.open .panel-content { transform: translateY(0) scale(1); }
 
 /* ── Mobile Bottom Nav ── */
 .mobile-bottom-nav {

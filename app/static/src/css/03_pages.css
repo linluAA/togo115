@@ -80,8 +80,11 @@
 }
 
 .log-list {
-  height: 100%;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
   padding: 10px;
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 13px;
