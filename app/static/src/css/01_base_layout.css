@@ -612,38 +612,42 @@
   padding: 8px 0 2px;
 }
 
-/* ── More Section Button (查看更多) ── */
-.more-section-btn {
+/* ── More Overlay (贴在最后一张卡片顶部的查看更多) ── */
+.more-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 20px;
-  padding: 10px 16px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--muted);
+  padding: 10px 12px;
+  background: linear-gradient(to bottom, rgba(15, 23, 42, .58), rgba(15, 23, 42, .18) 80%, transparent);
+  color: #fff;
   cursor: pointer;
   transition: all .2s ease;
-  text-align: center;
+  z-index: 2;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
-.more-section-btn:hover {
-  border-color: rgba(255, 183, 77, .25);
-  background: rgba(255, 183, 77, .08);
-  color: var(--amber);
+.has-more {
+  position: relative;
 }
-.more-section-btn .more-text {
+.more-overlay:hover {
+  background: linear-gradient(to bottom, rgba(15, 23, 42, .72), rgba(15, 23, 42, .28) 80%, transparent);
+}
+.more-overlay .more-text {
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
+  letter-spacing: .3px;
 }
-.more-section-btn .more-arrow {
+.more-overlay .more-arrow {
   font-size: 15px;
   line-height: 1;
   transition: transform .2s;
 }
-.more-section-btn:hover .more-arrow {
+.more-overlay:hover .more-arrow {
   transform: translateX(3px);
 }
 

@@ -214,9 +214,9 @@ async def _search_one(subscription: dict, snapshot) -> tuple[int, int, int]:
     return (1, len(results), 0)
 
 
-async def _search_and_attach_resources_guarded(subscription_id: int, snapshot, *, incremental_telegram: bool = False):
+async def _search_and_attach_resources_guarded(subscription_id: int, snapshot, *, incremental_telegram: bool = False, mark_checked: bool = True):
     guarded = import_module("app.services.subscription.search.tasks")._search_and_attach_resources_guarded
-    return await guarded(subscription_id, snapshot, incremental_telegram=incremental_telegram)
+    return await guarded(subscription_id, snapshot, incremental_telegram=incremental_telegram, mark_checked=mark_checked)
 
 
 _pending_checked_ids: list[int] = []

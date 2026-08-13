@@ -49,7 +49,12 @@ function mediaGrid(items, type, options = {}) {
     state.mediaPayloads.set(payloadId, payload);
     const year = (item.first_air_date || item.release_date || "").slice(0, 4) || "未知";
     const rating = item.vote_average ? `★ ${Number(item.vote_average).toFixed(1)}` : "";
-    return `<article class="media-card">
+    const isLast = index === visibleItems.length - 1;
+    const moreOverlay = isLast && options.more ? `<div class="more-overlay" data-more="${type}">
+      <span class="more-text">查看更多</span>
+      <span class="more-arrow">→</span>
+    </div>` : "";
+    return `<article class="media-card${isLast && options.more ? " has-more" : ""}">
       <div class="poster" data-detail="${payloadId}" aria-label="查看 ${title} 详情" title="查看详情">
         <img src="${posterUrl(item)}" alt="${escapeHtml(title)}" loading="lazy" />
         <div class="overlay">
@@ -61,6 +66,7 @@ function mediaGrid(items, type, options = {}) {
         <div class="title">${escapeHtml(title)}</div>
         <div class="meta"><span>${mediaType === "tv" ? "剧集" : "电影"} · ${year}</span></div>
       </div>
+      ${moreOverlay}
     </article>`;
   }).join("");
   return `<div class="media-grid">${cards}</div>`;
@@ -113,7 +119,11 @@ async function searchTmdb() {
   const section = $("#tmdbSearchResults");
   const trending = $("#tmdbTrendingContent");
   if (trending) trending.classList.add("hidden");
-  if (section) section.classList.remove("hidden");
+  if (section) {
+    section.classList.remove("hidden");
+    const viewContent = section.querySelector(".view-section") || section;
+    viewContent.innerHTML = `<div class="empty">正在搜索...</div>`;
+  }
   const data = await api(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
   if (state.tmdbSearchQuery !== query) return;
   state.tmdbSearch = data.results || [];
