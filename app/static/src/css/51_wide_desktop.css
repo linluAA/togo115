@@ -628,7 +628,11 @@ html[data-theme="light"] .log-entry {
   border-color: var(--line);
 }
 html[data-theme="light"] .log-entry:hover {
+  border-color: rgba(255, 183, 77, .30);
   background: var(--surface-2);
+}
+html[data-theme="light"] .log-entry.expanded {
+  border-color: rgba(255, 183, 77, .25);
 }
 html[data-theme="light"] .log-level.info {
   background: rgba(38, 198, 176, .12);
@@ -648,7 +652,22 @@ html[data-theme="light"] .log-entry .log-time {
 html[data-theme="light"] .log-entry .log-msg {
   color: var(--ink-soft);
 }
-html[data-theme="light"] .log-entry .log-payload {
+html[data-theme="light"] .log-entry .log-expand-icon {
+  color: var(--muted);
+}
+html[data-theme="light"] .log-detail {
+  border-top-color: var(--line);
+}
+html[data-theme="light"] .log-detail-row + .log-detail-row {
+  border-top-color: rgba(15, 23, 42, .06);
+}
+html[data-theme="light"] .detail-label {
+  color: var(--muted);
+}
+html[data-theme="light"] .detail-value {
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .log-detail-payload {
   color: var(--ink-soft);
   background: rgba(15, 23, 42, .03);
   border-color: var(--line);
@@ -883,22 +902,6 @@ html[data-theme="light"] .resource-details > div {
 /* ── Log Terminal ── */
 html[data-theme="light"] .log-terminal {
   background: #f0f2f5;
-}
-html[data-theme="light"] .log-line {
-  border-bottom-color: rgba(15, 23, 42, .08);
-}
-html[data-theme="light"] .log-line[open] summary {
-  background: rgba(15, 23, 42, .04);
-}
-html[data-theme="light"] .log-line .line-no,
-html[data-theme="light"] .log-line .time,
-html[data-theme="light"] .log-line .scope {
-  color: #64748b;
-}
-html[data-theme="light"] .log-payload {
-  color: var(--ink-soft);
-  background: rgba(255, 255, 255, .72);
-  border-color: var(--line);
 }
 html[data-theme="light"] .log-status {
   color: var(--green);

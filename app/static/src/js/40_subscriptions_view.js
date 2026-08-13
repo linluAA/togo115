@@ -85,8 +85,9 @@ function bindSubscriptionEvents() {
   });
   $("#searchAllSubscriptions")?.addEventListener("click", async () => {
     const button = $("#searchAllSubscriptions");
+    toast("正在开始搜索全部订阅...");
     button.disabled = true;
-    button.textContent = "搜索中";
+    button.textContent = "搜索中...";
     try {
       const result = await api("/api/subscriptions/search-all", { method: "POST" });
       if (result.running) {

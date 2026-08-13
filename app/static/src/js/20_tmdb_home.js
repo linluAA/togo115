@@ -184,8 +184,8 @@ async function renderTmdbTrending(root = $("#view")) {
     if (state.tmdbSearchQuery.trim()) return;
     const tv = data.tv || [];
     const movie = data.movie || [];
-    tvGrid.innerHTML = tv.length ? mediaGrid(tv, "tv", { limit: 11, more: false }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
-    movieGrid.innerHTML = movie.length ? mediaGrid(movie, "movie", { limit: 11, more: false }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+    tvGrid.innerHTML = tv.length ? mediaGrid(tv, "tv", { limit: 10, more: true }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+    movieGrid.innerHTML = movie.length ? mediaGrid(movie, "movie", { limit: 10, more: true }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
     bindMediaActions(root);
   } catch (error) {
     if (state.tmdbSearchQuery.trim()) return;

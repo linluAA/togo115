@@ -59,14 +59,16 @@ def _episode_matches_subscription(subscription: dict, episode: dict, matched_ser
 
 def _episodes_for_subscription(subscription: dict, episodes: list[dict], matched_series_id: str = "") -> set[tuple[int, int]]:
     owned: set[tuple[int, int]] = set()
-    scoped = episodes
-    if matched_series_id:
-        series_key = str(matched_series_id)
-        scoped = [
-            episode
-            for episode in episodes
-            if str(episode.get("SeriesId") or episode.get("ParentId") or "") == series_key
-        ] or episodes
+    if not matched_series_id:
+        # No series matched in Emby — skip full episode scan (too slow for large libraries).
+        # The caller falls back to by_series_name count via _series_episode_count.
+        return owned
+    series_key = str(matched_series_id)
+    scoped = [
+        episode
+        for episode in episodes
+        if str(episode.get("SeriesId") or episode.get("ParentId") or "") == series_key
+    ] or episodes
     for episode in scoped:
         if not _episode_matches_subscription(subscription, episode, matched_series_id):
             continue

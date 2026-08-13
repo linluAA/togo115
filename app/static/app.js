@@ -876,8 +876,8 @@ state.tmdbTrending=data;
 if(state.tmdbSearchQuery.trim())return;
 const tv=data.tv||[];
 const movie=data.movie||[];
-tvGrid.innerHTML=tv.length?mediaGrid(tv,"tv",{limit:11,more:false}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
-movieGrid.innerHTML=movie.length?mediaGrid(movie,"movie",{limit:11,more:false}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+tvGrid.innerHTML=tv.length?mediaGrid(tv,"tv",{limit:10,more:true}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+movieGrid.innerHTML=movie.length?mediaGrid(movie,"movie",{limit:10,more:true}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
 bindMediaActions(root);
 } catch(error){
 if(state.tmdbSearchQuery.trim())return;
@@ -953,7 +953,10 @@ return`<article class="media-card">
       </div>
     </article>`;
 }).join("");
-const more=options.more?`<span class="more-text">查看更多</span>`:"";
+const more=options.more?`<span class="more-card" data-more="${type}">
+    <span class="arrow">→</span>
+    <span class="more-text">查看更多</span>
+  </span>`:"";
 return`<div class="media-grid">${cards}${more}</div>`;
 }
 function bindMediaActions(root=document){
@@ -1227,8 +1230,9 @@ function bindSubscriptionEvents() {
   });
   $("#searchAllSubscriptions")?.addEventListener("click", async () => {
     const button = $("#searchAllSubscriptions");
+    toast("正在开始搜索全部订阅...");
     button.disabled = true;
-    button.textContent = "搜索中";
+    button.textContent = "搜索中...";
     try {
       const result = await api("/api/subscriptions/search-all", { method: "POST" });
       if (result.running) {
@@ -1336,13 +1340,15 @@ const progressPercent=item.media_type==="movie"
 const completed=item.status==="completed"||(item.media_type==="movie"
 ?Boolean(item.in_library)
 :Boolean(tmdbTotal&&embyCount>=tmdbTotal));
-const statusText=completed?"已完成":(item.status==="active"?"活跃":"暂停");
+const statusText=completed?"已完成":(item.status==="active"?"":"暂停");
 const statusClass=completed?"status-completed":(item.status==="active"?"status-active":"status-paused");
 const libraryText=item.media_type==="movie"
 ?(item.in_library?"已入库":"未入库")
 :(tmdbTotal?`${embyCount}/${tmdbTotal} 集`:(embyCount?`${embyCount} 集`:(item.in_library?"已入库":"未入库")));
-const footerStatus=completed?"已完结":(item.status==="active"?"活跃":"已暂停");
+const footerStatus=completed?"已完结":(item.status==="active"?"":"已暂停");
 const footerColor=completed?"var(--green)":(item.status==="active"?"var(--amber)":"var(--rose)");
+const badgeHtml=statusText?`<span class="status-badge ${statusClass}">${statusText}</span>`:"";
+const footerHtml=footerStatus?`<span style="margin-left:auto;color:${footerColor}">${footerStatus}</span>`:"";
 return`<div class="sub-card" data-sub-id="${item.id}">
       <div class="sub-card-header">
         <div class="poster-sm">${posterImgTag(item, item.title)}</div>
@@ -1353,13 +1359,13 @@ return`<div class="sub-card" data-sub-id="${item.id}">
             ${item.year ? `<span class="tag">${escapeHtml(String(item.year))}</span>` : ""}
           </div>
         </div>
-        <span class="status-badge ${statusClass}">${statusText}</span>
+        ${badgeHtml}
       </div>
       <div class="sub-card-progress"><div class="bar" style="width:${progressPercent}%"></div></div>
       <div class="sub-card-footer">
         <span class="chip">TG 自动搜索</span>
         <span class="chip">${libraryText}</span>
-        <span style="margin-left:auto;color:${footerColor}">${footerStatus}</span>
+        ${footerHtml}
       </div>
     </div>`;
 }).join("");
@@ -1526,16 +1532,62 @@ const filtered=level==="all"?logs:logs.filter((log)=>log.level===level);
 const grouped=groupLogRows(filtered);
 const logList=$(".log-list");
 if(!logList)return;
+const oldHandler=logList._logClickHandler;
+if(oldHandler)logList.removeEventListener("click",oldHandler);
 logList.innerHTML=grouped.length?grouped.map((entry)=>{
 const log=entry.log;
 const time=new Date(log.created_at).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const fullTime=new Date(log.created_at).toLocaleString("zh-CN",{
+year:"numeric",month:"2-digit",day:"2-digit",
+hour:"2-digit",minute:"2-digit",second:"2-digit",
+});
 const repeat=entry.count>1?` <span class="repeat-badge">×${entry.count}</span>`:"";
-return`<div class="log-entry">
-      <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
-      <span class="log-time">${time}</span>
-      <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+const hasPayload=Boolean(log.payload);
+const payloadHtml=hasPayload?`<div class="log-detail-row">
+      <span class="detail-label">详情</span>
+      <pre class="detail-value log-detail-payload">${escapeHtml(formatLogPayload(log.payload))}</pre>
+    </div>`:"";
+return`<div class="log-entry${hasPayload ? " has-payload" : ""}">
+      <div class="log-entry-summary">
+        <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+        <span class="log-time">${time}</span>
+        <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+        <span class="log-expand-icon">▶</span>
+      </div>
+      <div class="log-detail">
+        <div class="log-detail-row">
+          <span class="detail-label">ID</span>
+          <span class="detail-value">${log.id}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">时间</span>
+          <span class="detail-value">${fullTime}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">级别</span>
+          <span class="detail-value">${log.level.toUpperCase()}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">范围</span>
+          <span class="detail-value">${escapeHtml(log.scope)}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">消息</span>
+          <span class="detail-value log-detail-msg">${escapeHtml(log.message)}</span>
+        </div>
+        ${payloadHtml}
+      </div>
     </div>`;
 }).join(""):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无日志</h3></div>`;
+const clickHandler=(e)=>{
+const entry=e.target.closest(".log-entry");
+if(!entry)return;
+entry.classList.toggle("expanded");
+const icon=entry.querySelector(".log-expand-icon");
+if(icon)icon.textContent=entry.classList.contains("expanded")?"▼":"▶";
+};
+logList.addEventListener("click",clickHandler);
+logList._logClickHandler=clickHandler;
 }
 function formatLogPayload(raw){
 if(!raw)return"";

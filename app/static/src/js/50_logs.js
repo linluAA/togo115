@@ -60,16 +60,68 @@ function renderLogRows(logs) {
   const grouped = groupLogRows(filtered);
   const logList = $(".log-list");
   if (!logList) return;
+
+  // 移除旧的点击监听，避免重复绑定
+  const oldHandler = logList._logClickHandler;
+  if (oldHandler) logList.removeEventListener("click", oldHandler);
+
   logList.innerHTML = grouped.length ? grouped.map((entry) => {
     const log = entry.log;
     const time = new Date(log.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const fullTime = new Date(log.created_at).toLocaleString("zh-CN", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
     const repeat = entry.count > 1 ? ` <span class="repeat-badge">×${entry.count}</span>` : "";
-    return `<div class="log-entry">
-      <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
-      <span class="log-time">${time}</span>
-      <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+    const hasPayload = Boolean(log.payload);
+    const payloadHtml = hasPayload ? `<div class="log-detail-row">
+      <span class="detail-label">详情</span>
+      <pre class="detail-value log-detail-payload">${escapeHtml(formatLogPayload(log.payload))}</pre>
+    </div>` : "";
+
+    return `<div class="log-entry${hasPayload ? " has-payload" : ""}">
+      <div class="log-entry-summary">
+        <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+        <span class="log-time">${time}</span>
+        <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+        <span class="log-expand-icon">▶</span>
+      </div>
+      <div class="log-detail">
+        <div class="log-detail-row">
+          <span class="detail-label">ID</span>
+          <span class="detail-value">${log.id}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">时间</span>
+          <span class="detail-value">${fullTime}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">级别</span>
+          <span class="detail-value">${log.level.toUpperCase()}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">范围</span>
+          <span class="detail-value">${escapeHtml(log.scope)}</span>
+        </div>
+        <div class="log-detail-row">
+          <span class="detail-label">消息</span>
+          <span class="detail-value log-detail-msg">${escapeHtml(log.message)}</span>
+        </div>
+        ${payloadHtml}
+      </div>
     </div>`;
   }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无日志</h3></div>`;
+
+  // 事件委托：点击 .log-entry 展开/折叠
+  const clickHandler = (e) => {
+    const entry = e.target.closest(".log-entry");
+    if (!entry) return;
+    entry.classList.toggle("expanded");
+    const icon = entry.querySelector(".log-expand-icon");
+    if (icon) icon.textContent = entry.classList.contains("expanded") ? "▼" : "▶";
+  };
+  logList.addEventListener("click", clickHandler);
+  logList._logClickHandler = clickHandler;
 }
 
 function formatLogPayload(raw) {

@@ -68,7 +68,10 @@ function mediaGrid(items, type, options = {}) {
       </div>
     </article>`;
   }).join("");
-  const more = options.more ? `<span class="more-text">查看更多</span>` : "";
+  const more = options.more ? `<span class="more-card" data-more="${type}">
+    <span class="arrow">→</span>
+    <span class="more-text">查看更多</span>
+  </span>` : "";
   return `<div class="media-grid">${cards}${more}</div>`;
 }
 

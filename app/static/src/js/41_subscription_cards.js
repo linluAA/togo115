@@ -10,13 +10,15 @@ function subscriptionCards(filtered) {
     const completed = item.status === "completed" || (item.media_type === "movie"
       ? Boolean(item.in_library)
       : Boolean(tmdbTotal && embyCount >= tmdbTotal));
-    const statusText = completed ? "已完成" : (item.status === "active" ? "活跃" : "暂停");
+    const statusText = completed ? "已完成" : (item.status === "active" ? "" : "暂停");
     const statusClass = completed ? "status-completed" : (item.status === "active" ? "status-active" : "status-paused");
     const libraryText = item.media_type === "movie"
       ? (item.in_library ? "已入库" : "未入库")
       : (tmdbTotal ? `${embyCount}/${tmdbTotal} 集` : (embyCount ? `${embyCount} 集` : (item.in_library ? "已入库" : "未入库")));
-    const footerStatus = completed ? "已完结" : (item.status === "active" ? "活跃" : "已暂停");
+    const footerStatus = completed ? "已完结" : (item.status === "active" ? "" : "已暂停");
     const footerColor = completed ? "var(--green)" : (item.status === "active" ? "var(--amber)" : "var(--rose)");
+    const badgeHtml = statusText ? `<span class="status-badge ${statusClass}">${statusText}</span>` : "";
+    const footerHtml = footerStatus ? `<span style="margin-left:auto;color:${footerColor}">${footerStatus}</span>` : "";
     return `<div class="sub-card" data-sub-id="${item.id}">
       <div class="sub-card-header">
         <div class="poster-sm">${posterImgTag(item, item.title)}</div>
@@ -27,13 +29,13 @@ function subscriptionCards(filtered) {
             ${item.year ? `<span class="tag">${escapeHtml(String(item.year))}</span>` : ""}
           </div>
         </div>
-        <span class="status-badge ${statusClass}">${statusText}</span>
+        ${badgeHtml}
       </div>
       <div class="sub-card-progress"><div class="bar" style="width:${progressPercent}%"></div></div>
       <div class="sub-card-footer">
         <span class="chip">TG 自动搜索</span>
         <span class="chip">${libraryText}</span>
-        <span style="margin-left:auto;color:${footerColor}">${footerStatus}</span>
+        ${footerHtml}
       </div>
     </div>`;
   }).join("");

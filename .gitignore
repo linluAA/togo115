@@ -10,6 +10,10 @@ __pycache__/
 *.err.log
 *.out.log
 data/*.sqlite3
+data/*.sqlite3-shm
+data/*.sqlite3-wal
+*.txt
+ui_preview*.html
 # local agent temp scripts / logs
 .tools/_*.py
 .tools/_*.txt
