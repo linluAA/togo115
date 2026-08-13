@@ -962,19 +962,16 @@ html[data-theme="light"] .rank-item small {
   color: var(--muted);
 }
 
-/* ── More Overlay ── */
-html[data-theme="light"] .more-overlay {
-  background: rgba(255, 255, 255, .82);
-  backdrop-filter: blur(8px);
+/* ── More Section Button ── */
+html[data-theme="light"] .more-section-btn {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+  color: var(--muted);
 }
-html[data-theme="light"] .more-overlay:hover {
-  background: rgba(255, 183, 77, .85);
-}
-html[data-theme="light"] .more-overlay .more-text {
-  color: #1a110a;
-}
-html[data-theme="light"] .more-overlay .more-arrow {
-  color: #1a110a;
+html[data-theme="light"] .more-section-btn:hover {
+  border-color: rgba(255, 183, 77, .35);
+  background: rgba(255, 183, 77, .10);
+  color: var(--amber);
 }
 
 /* ── Emby Components ── */

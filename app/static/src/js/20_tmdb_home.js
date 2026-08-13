@@ -132,7 +132,7 @@ async function renderTmdb() {
       <div class="section-header view-section">
         <h2>搜索结果</h2>
       </div>
-      <div class="view-section">${isSearching && state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>没有搜索到相关结果</h3></div>`}</div>
+      <div class="view-section">${isSearching && state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : isSearching ? `<div class="empty">正在搜索...</div>` : ``}</div>
     </div>
     <div id="tmdbTrendingContent" class="${isSearching ? "hidden" : ""}">
       <div class="section-header view-section">
@@ -184,8 +184,12 @@ async function renderTmdbTrending(root = $("#view")) {
     if (state.tmdbSearchQuery.trim()) return;
     const tv = data.tv || [];
     const movie = data.movie || [];
-    tvGrid.innerHTML = tv.length ? mediaGrid(tv, "tv", { limit: 10, more: true }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
-    movieGrid.innerHTML = movie.length ? mediaGrid(movie, "movie", { limit: 10, more: true }) : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+    tvGrid.innerHTML = tv.length
+      ? mediaGrid(tv, "tv", { limit: 10 }) + `<div class="more-section-btn" data-more="tv"><span class="more-text">查看更多</span><span class="more-arrow">→</span></div>`
+      : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+    movieGrid.innerHTML = movie.length
+      ? mediaGrid(movie, "movie", { limit: 10 }) + `<div class="more-section-btn" data-more="movie"><span class="more-text">查看更多</span><span class="more-arrow">→</span></div>`
+      : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
     bindMediaActions(root);
   } catch (error) {
     if (state.tmdbSearchQuery.trim()) return;

@@ -612,41 +612,38 @@
   padding: 8px 0 2px;
 }
 
-/* ── More Overlay (查看全部) ── */
-.media-card.has-more {
-  position: relative;
-}
-.more-overlay {
-  position: absolute;
-  top: 8px; right: 8px;
+/* ── More Section Button (查看更多) ── */
+.more-section-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px 4px 12px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, .65);
-  backdrop-filter: blur(8px);
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
   cursor: pointer;
-  z-index: 2;
-  transition: background .2s;
-  white-space: nowrap;
+  transition: all .2s ease;
+  text-align: center;
 }
-.more-overlay:hover {
-  background: rgba(255, 183, 77, .85);
+.more-section-btn:hover {
+  border-color: rgba(255, 183, 77, .25);
+  background: rgba(255, 183, 77, .08);
+  color: var(--amber);
 }
-.more-overlay .more-text {
-  color: #fff;
-  font-size: 12px;
+.more-section-btn .more-text {
+  font-size: 13px;
   font-weight: 600;
   line-height: 1;
 }
-.more-overlay .more-arrow {
-  color: #fff;
-  font-size: 14px;
+.more-section-btn .more-arrow {
+  font-size: 15px;
   line-height: 1;
   transition: transform .2s;
 }
-.more-overlay:hover .more-arrow {
+.more-section-btn:hover .more-arrow {
   transform: translateX(3px);
 }
 

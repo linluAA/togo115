@@ -70,7 +70,7 @@ function renderApp() {
           </div>
           <div class="topbar-spacer"></div>
           <div class="topbar-actions">
-            <div class="topbar-search">
+            <div class="topbar-search${state.view === "tmdb" ? " hidden" : ""}">
               <span class="search-icon">⌕</span>
               <input type="text" placeholder="搜索片名、关键词..." id="globalSearch">
             </div>
