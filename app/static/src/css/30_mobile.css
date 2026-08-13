@@ -253,16 +253,8 @@
   }
 
   .emby-library-grid {
-    display: flex;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 10px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-  }
-
-  .emby-library-grid::-webkit-scrollbar {
-    display: none;
   }
 
   .emby-library-card {

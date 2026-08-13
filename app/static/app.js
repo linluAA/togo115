@@ -830,12 +830,10 @@ root.innerHTML=`
     <div id="tmdbTrendingContent" class="${isSearching ? "hidden" : ""}">
       <div class="section-header view-section">
         <h2>热门剧集</h2>
-        <button class="section-action" data-more-type="tv">查看更多 →</button>
       </div>
       <div class="view-section" id="tmdbTvGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
       <div class="section-header view-section">
         <h2>热门电影</h2>
-        <button class="section-action" data-more-type="movie">查看更多 →</button>
       </div>
       <div class="view-section" id="tmdbMovieGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
     </div>
@@ -878,8 +876,8 @@ state.tmdbTrending=data;
 if(state.tmdbSearchQuery.trim())return;
 const tv=data.tv||[];
 const movie=data.movie||[];
-tvGrid.innerHTML=tv.length?mediaGrid(tv,"tv",{limit:9,more:true}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
-movieGrid.innerHTML=movie.length?mediaGrid(movie,"movie",{limit:9,more:true}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+tvGrid.innerHTML=tv.length?mediaGrid(tv,"tv",{limit:11,more:false}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
+movieGrid.innerHTML=movie.length?mediaGrid(movie,"movie",{limit:11,more:false}):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
 bindMediaActions(root);
 } catch(error){
 if(state.tmdbSearchQuery.trim())return;
@@ -1090,53 +1088,54 @@ root.innerHTML=`
           <h2>媒体库</h2>
           <button class="btn btn-secondary btn-sm" id="syncEmbyLibrary">同步</button>
         </div>
-        <div class="emby-library-grid">
+        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:24px">
           ${libraries.length ? libraries.map((item) => {
-            const initial = escapeHtml((item.name || "📁").charAt(0));
+            const name = escapeHtml(item.name || "媒体库");
+            const count = item.child_count || 0;
+            const type = escapeHtml(item.collection_type || "媒体库");
             const image = item.image_url
-              ? `<img class="library-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" onerror="this.style.visibility='hidden'" />`
-              : `<div class="emby-placeholder">${initial}</div>`;
-            return `<div class="emby-card emby-library-card">
-              ${image}
-              <div class="emby-library-meta">
-                <h3>${escapeHtml(item.name || "媒体库")}</h3>
-                <p>${escapeHtml(item.collection_type || "媒体库")} · ${item.child_count || 0} 部</p>
+              ? `<img src="${escapeHtml(item.image_url)}" alt="${name}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" />`
+              : `<div style="font-size:32px;color:var(--dim)">📁</div>`;
+            return `<div class="media-card" title="${name}">
+              <div class="poster">${image}</div>
+              <div class="card-body">
+                <div class="title">${name}</div>
+                <div class="meta"><span>${count} 部</span><span class="badge">${type}</span></div>
               </div>
             </div>`;
-          }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无媒体库数据</h3></div>`}
+          }).join("") : `<div class="empty-state"style="grid-column:1/-1"><div class="empty-icon">◌</div><h3>暂无媒体库数据</h3></div>`}
         </div>
 </div>
       <div class="emby-side-section">
         <div class="section-header"><h2>历史记录</h2></div>
-        <div class="emby-history-list">
-          ${history.length ? history.slice(0, 6).map((item) => {
+        <div class="activity-feed" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:12px 16px">
+          ${history.length ? history.slice(0, 5).map((item) => {
             const title = escapeHtml(item.name || item.title || "项目");
-            const date = item.date_played || "";
-            const thumb = item.image_url
-              ? `<img src="${escapeHtml(item.image_url)}" alt="" onerror="this.style.display='none'" />`
-              : `<div class="emby-history-thumb">🎬</div>`;
-            return `<div class="emby-history-item">${thumb}<div><h3>${title}</h3><p>${date?escapeHtml(date):"已播放"}</p></div></div>`;
-          }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无观看历史</h3></div>`}
+            const date = item.date_played || "已播放";
+            const status = item.status === "downloading" ? "var(--amber)" : "var(--green)";
+            const statusText = item.status === "downloading" ? "下载中" : "已播放";
+            return `<div class="activity-item"><span class="a-dot" style="background:${status}"></span><span class="a-text"><strong>${title}</strong> ${statusText}</span><span class="a-time">${escapeHtml(date)}</span></div>`;
+          }).join("") : `<div class="empty-state"style="margin:0;padding:16px 0"><div class="empty-icon">◌</div><h3>暂无观看历史</h3></div>`}
         </div>
-        <div class="section-header" style="margin-top:16px"><h2>用户</h2></div>
-        <div class="emby-grid">
-          ${users.length ? users.slice(0, 3).map((user) => {
-            const name = escapeHtml(user.name || user.username || "用户");
-            const initial = name.charAt(0).toUpperCase();
-            return `<div class="emby-card"><div class="emby-placeholder">${initial}</div><div><div style="font-weight:600;font-size:14px">${name}</div><div style="font-size:12px;color:var(--dim)">管理员</div></div></div>`;
-          }).join("") : `<div class="emby-card"><div class="emby-placeholder">A</div><div><div style="font-weight:600;font-size:14px">Admin</div><div style="font-size:12px;color:var(--dim)">管理员</div></div></div>`}
-          <div style="display:flex;gap:12px;font-size:12px;color:var(--dim);margin-top:8px;grid-column:1 /-1">
+<div class="section-header"style="margin-top:16px"><h2>用户</h2></div>
+<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117">${users.length?escapeHtml((users[0].name||users[0].username||"U").charAt(0).toUpperCase()):"A"}</div>
+            <div><div style="font-weight:600;font-size:14px">${users.length ? escapeHtml(users[0].name || users[0].username || "用户") : "Admin"}</div><div style="font-size:12px;color:var(--dim)">管理员</div></div>
+</div>
+          <div style="display:flex;gap:12px;font-size:12px;color:var(--dim)">
             <span>📺 ${movieCount + seriesCount} 部</span>
-            <span>📀 ${data.media_count || 0} 集</span>
-          </div>
+<span>📀${data.media_count||0} 集</span>
+            <span>💾 ${data.storage_used || "-"}</span>
+</div>
         </div>
-      </div>
+</div>
     </div>
-  `;
+`;
   $("#syncEmbyLibrary")?.addEventListener("click", async () => {
     try {
       const res = await api("/api/emby/sync", { method: "POST" });
-      toast(res.ok ? "媒体库同步已启动" : `同步失败：${res.error || "未知错误"}`);
+      toast(res.ok ? "媒体库同步已启动" : `同步失败：${res.error||"未知错误"}`);
     } catch (error) {
       toast(`同步失败：${error.message}`);
     }
@@ -1333,7 +1332,7 @@ const embyCount=item.emby_count||0;
 const tmdbTotal=item.tmdb_total_count||0;
 const progressPercent=item.media_type==="movie"
 ?(item.in_library?100:0)
-:(tmdbTotal?Math.min(100,Math.round((embyCount/tmdbTotal)*100)):(item.in_library?100:0));
+:(tmdbTotal?Math.min(100,Math.round((embyCount/tmdbTotal)*100)):(embyCount?100:(item.in_library?100:0)));
 const completed=item.status==="completed"||(item.media_type==="movie"
 ?Boolean(item.in_library)
 :Boolean(tmdbTotal&&embyCount>=tmdbTotal));
@@ -1341,8 +1340,8 @@ const statusText=completed?"已完成":(item.status==="active"?"活跃":"暂停"
 const statusClass=completed?"status-completed":(item.status==="active"?"status-active":"status-paused");
 const libraryText=item.media_type==="movie"
 ?(item.in_library?"已入库":"未入库")
-:(tmdbTotal?`${embyCount}/${tmdbTotal} 集`:(item.in_library?"已入库":"未入库"));
-const footerStatus=completed?"已完结":(item.status==="active"?"搜索中":"已暂停");
+:(tmdbTotal?`${embyCount}/${tmdbTotal} 集`:(embyCount?`${embyCount} 集`:(item.in_library?"已入库":"未入库")));
+const footerStatus=completed?"已完结":(item.status==="active"?"活跃":"已暂停");
 const footerColor=completed?"var(--green)":(item.status==="active"?"var(--amber)":"var(--rose)");
 return`<div class="sub-card" data-sub-id="${item.id}">
       <div class="sub-card-header">
@@ -1530,12 +1529,16 @@ if(!logList)return;
 logList.innerHTML=grouped.length?grouped.map((entry)=>{
 const log=entry.log;
 const time=new Date(log.created_at).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-const repeat=entry.count>1?` <span style="color:var(--amber);font-size:10px;font-weight:700">×${entry.count}</span>`:"";
-return`<div class="log-entry">
-      <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
-      <span class="log-time">${time}</span>
-      <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
-    </div>`;
+const repeat=entry.count>1?` <span class="repeat-badge">×${entry.count}</span>`:"";
+const payloadHtml=log.payload?`<div class="log-payload">${escapeHtml(formatLogPayload(log.payload))}</div>`:"";
+return`<details class="log-entry">
+      <summary>
+        <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+        <span class="log-time">${time}</span>
+        <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+      </summary>
+      ${payloadHtml}
+    </details>`;
 }).join(""):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无日志</h3></div>`;
 }
 function formatLogPayload(raw){

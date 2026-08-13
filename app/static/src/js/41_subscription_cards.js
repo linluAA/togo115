@@ -6,7 +6,7 @@ function subscriptionCards(filtered) {
     const tmdbTotal = item.tmdb_total_count || 0;
     const progressPercent = item.media_type === "movie"
       ? (item.in_library ? 100 : 0)
-      : (tmdbTotal ? Math.min(100, Math.round((embyCount / tmdbTotal) * 100)) : (item.in_library ? 100 : 0));
+      : (tmdbTotal ? Math.min(100, Math.round((embyCount / tmdbTotal) * 100)) : (embyCount ? 100 : (item.in_library ? 100 : 0)));
     const completed = item.status === "completed" || (item.media_type === "movie"
       ? Boolean(item.in_library)
       : Boolean(tmdbTotal && embyCount >= tmdbTotal));
@@ -14,8 +14,8 @@ function subscriptionCards(filtered) {
     const statusClass = completed ? "status-completed" : (item.status === "active" ? "status-active" : "status-paused");
     const libraryText = item.media_type === "movie"
       ? (item.in_library ? "已入库" : "未入库")
-      : (tmdbTotal ? `${embyCount}/${tmdbTotal} 集` : (item.in_library ? "已入库" : "未入库"));
-    const footerStatus = completed ? "已完结" : (item.status === "active" ? "搜索中" : "已暂停");
+      : (tmdbTotal ? `${embyCount}/${tmdbTotal} 集` : (embyCount ? `${embyCount} 集` : (item.in_library ? "已入库" : "未入库")));
+    const footerStatus = completed ? "已完结" : (item.status === "active" ? "活跃" : "已暂停");
     const footerColor = completed ? "var(--green)" : (item.status === "active" ? "var(--amber)" : "var(--rose)");
     return `<div class="sub-card" data-sub-id="${item.id}">
       <div class="sub-card-header">

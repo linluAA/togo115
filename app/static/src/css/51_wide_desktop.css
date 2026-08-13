@@ -271,12 +271,21 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT THEME · "Depth & Lumina" 浅色适配
+   按 ui_preview.html 的 UI 风格重新适配
+   ═══════════════════════════════════════════════════════════════ */
+
 html[data-theme="light"] {
   --bg: #f4f7f8;
   --bg-2: #edf3f5;
+  --bg-deep: #eef2f5;
+  --bg-elevated: #f0f4f5;
   --surface: #ffffff;
   --surface-2: #f8fbfc;
   --surface-3: #edf4f5;
+  --glass: rgba(255, 255, 255, .72);
+  --glass-2: rgba(248, 251, 252, .68);
   --line: rgba(15, 23, 42, .12);
   --line-strong: rgba(15, 23, 42, .20);
   --ink: #111827;
@@ -287,10 +296,12 @@ html[data-theme="light"] {
   color-scheme: light;
 }
 
+/* ── Scrollbar ── */
 html[data-theme="light"] * {
   scrollbar-color: rgba(15, 23, 42, .26) rgba(15, 23, 42, .06);
 }
 
+/* ── Body & Background ── */
 html[data-theme="light"],
 html[data-theme="light"] body {
   background: var(--bg);
@@ -304,10 +315,37 @@ html[data-theme="light"] body {
     linear-gradient(135deg, #f8fbfc 0%, #f0f2ee 50%, #f5f7f5 100%);
 }
 
+html[data-theme="light"] body::after {
+  background: #f0f2ee;
+}
+
 html[data-theme="light"] select {
   color-scheme: light;
 }
 
+/* ── Background Atmosphere ── */
+html[data-theme="light"] .bg-atmosphere {
+  background:
+    radial-gradient(ellipse 75% 55% at 15% 10%, rgba(255, 183, 77, .10), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 85% 85%, rgba(38, 198, 176, .06), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 50% 50%, rgba(124, 109, 214, .04), transparent 50%),
+    var(--bg-deep);
+}
+
+/* ── Login ── */
+html[data-theme="light"] .login {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 183, 77, .12), transparent 40%),
+    radial-gradient(ellipse at 70% 80%, rgba(38, 198, 176, .10), transparent 40%),
+    var(--bg-deep);
+}
+
+html[data-theme="light"] .login-card {
+  background: rgba(255, 255, 255, .88);
+  border-color: rgba(15, 23, 42, .10);
+}
+
+/* ── Inputs ── */
 html[data-theme="light"] input,
 html[data-theme="light"] select,
 html[data-theme="light"] textarea {
@@ -326,18 +364,7 @@ html[data-theme="light"] textarea::placeholder {
   color: rgba(100, 116, 139, .66);
 }
 
-html[data-theme="light"] button.secondary {
-  color: var(--ink);
-  border-color: var(--line);
-  background: rgba(255, 255, 255, .72);
-}
-
-html[data-theme="light"] button.secondary:hover {
-  color: var(--ink);
-  background: rgba(244, 182, 63, .16);
-}
-
-html[data-theme="light"] .login-card,
+/* ── Glass Surface Panels ── */
 html[data-theme="light"] .sidebar,
 html[data-theme="light"] .topbar,
 html[data-theme="light"] .card,
@@ -364,83 +391,98 @@ html[data-theme="light"] .sidebar {
   background: rgba(255, 255, 255, .86);
 }
 
-html[data-theme="light"] body::after {
-  background: #f0f2ee;
-}
-
 html[data-theme="light"] .topbar {
   background: rgba(255, 255, 255, .78);
 }
 
-html[data-theme="light"] .brand-mark,
-html[data-theme="light"] .avatar-btn,
-html[data-theme="light"] .user-menu-avatar,
-html[data-theme="light"] .more-card .arrow {
+/* ── Sidebar Navigation ── */
+html[data-theme="light"] .nav-item {
+  color: var(--muted);
+}
+html[data-theme="light"] .nav-item:hover {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .04);
+}
+html[data-theme="light"] .nav-item.active {
   color: #1a110a;
+  background: rgba(255, 183, 77, .18);
+}
+html[data-theme="light"] .nav-item .nav-icon {
+  background: rgba(15, 23, 42, .04);
+}
+html[data-theme="light"] .nav-item.active .nav-icon {
+  background: linear-gradient(135deg, var(--amber), var(--coral));
+  color: #0b1117;
 }
 
+/* ── Theme Toggle ── */
+html[data-theme="light"] .theme-toggle {
+  color: var(--muted);
+}
+html[data-theme="light"] .theme-toggle:hover {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .04);
+}
+
+/* ── Top Bar ── */
+html[data-theme="light"] .topbar-search {
+  background: var(--surface);
+  border-color: var(--line);
+}
+html[data-theme="light"] .topbar-search input {
+  color: var(--ink);
+}
+html[data-theme="light"] .topbar-search input::placeholder {
+  color: var(--muted);
+}
+html[data-theme="light"] .topbar-avatar {
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, .06);
+}
+html[data-theme="light"] .topbar-avatar:hover {
+  box-shadow: 0 0 0 3px rgba(255, 183, 77, .25);
+}
+
+/* ── User Menu ── */
 html[data-theme="light"] .user-menu-head,
 html[data-theme="light"] .user-menu-action {
   border-color: rgba(15, 23, 42, .08);
   background: rgba(15, 23, 42, .035);
 }
-
 html[data-theme="light"] .user-menu-action span {
   color: #9a6a06;
   background: rgba(244, 182, 63, .16);
 }
-
 html[data-theme="light"] .user-menu-action.danger {
   color: #b42323;
   border-color: rgba(239, 91, 91, .18);
   background: rgba(239, 91, 91, .08);
 }
-
 html[data-theme="light"] .user-menu-action.danger span {
   color: #b42323;
   background: rgba(239, 91, 91, .13);
 }
-
-html[data-theme="light"] .nav button {
-  color: var(--ink-soft);
-}
-
-html[data-theme="light"] .nav button:hover,
-html[data-theme="light"] .user-menu-panel button:hover,
-html[data-theme="light"] .rank-item:hover,
-html[data-theme="light"] .folder-row:hover {
+html[data-theme="light"] .user-menu-panel button:hover {
   background: rgba(15, 23, 42, .045);
 }
 
-html[data-theme="light"] .nav button.active {
-  color: #1a110a;
-  background: rgba(255, 183, 77, .18);
+/* ── Hero Banner ── */
+html[data-theme="light"] .hero-banner {
+  background: linear-gradient(160deg, #fff, var(--bg-elevated));
+  border-color: var(--line);
+}
+html[data-theme="light"] .hero-banner .hero-bg {
+  background:
+    radial-gradient(ellipse 60% 50% at 70% 40%, rgba(255, 183, 77, .15), transparent 60%),
+    radial-gradient(ellipse 40% 40% at 30% 70%, rgba(38, 198, 176, .10), transparent 50%);
+}
+html[data-theme="light"] .hero-banner .hero-dots span {
+  background: rgba(15, 23, 42, .12);
+}
+html[data-theme="light"] .hero-banner .hero-dots span.active {
+  background: var(--amber);
 }
 
-html[data-theme="light"] .nav-icon,
-html[data-theme="light"] .icon-action,
-html[data-theme="light"] .dialog-list label,
-html[data-theme="light"] .folder-row,
-html[data-theme="light"] .rss-source-item,
-html[data-theme="light"] .rss-source-test-result,
-html[data-theme="light"] .proxy-test-result .latency-row,
-html[data-theme="light"] .stat,
-html[data-theme="light"] .emby-card,
-html[data-theme="light"] .emby-history-item,
-html[data-theme="light"] .media-card,
-html[data-theme="light"] .subscription-card,
-html[data-theme="light"] .more-card,
-html[data-theme="light"] .rank-item,
-html[data-theme="light"] .empty,
-html[data-theme="light"] .failed-task-item,
-html[data-theme="light"] .folder-current {
-  background: rgba(255, 255, 255, .72);
-}
-
-html[data-theme="light"] .settings-single > .card {
-  background: rgba(255, 255, 255, .56);
-}
-
+/* ── Page Headers ── */
 html[data-theme="light"] .tmdb-hero,
 html[data-theme="light"] .page-heading,
 html[data-theme="light"] .subscription-toolbar {
@@ -449,86 +491,718 @@ html[data-theme="light"] .subscription-toolbar {
     rgba(255, 255, 255, .78);
 }
 
+/* ── Stat Cards ── */
+html[data-theme="light"] .stat-card {
+  background: #fff;
+  border-color: var(--line);
+}
+html[data-theme="light"] .stat-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-soft);
+}
+html[data-theme="light"] .stat-card .stat-value {
+  color: var(--ink);
+}
+
+/* ── Section Headers ── */
+html[data-theme="light"] .section-header h2 {
+  color: var(--ink);
+}
+html[data-theme="light"] .section-header .section-action {
+  color: var(--amber);
+}
+
+/* ── Media Cards ── */
+html[data-theme="light"] .media-card {
+  background: #fff;
+  border-color: var(--line);
+}
+html[data-theme="light"] .media-card:hover {
+  border-color: rgba(255, 183, 77, .35);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, .12), 0 0 0 1px rgba(255, 183, 77, .15);
+}
+html[data-theme="light"] .media-card .poster {
+  background: linear-gradient(160deg, var(--surface-2), var(--surface-3));
+}
+html[data-theme="light"] .media-card .poster .overlay {
+  background: linear-gradient(to top, rgba(15, 23, 42, .85) 0%, transparent 50%);
+}
+html[data-theme="light"] .media-card .card-body .meta .badge {
+  background: rgba(255, 183, 77, .15);
+  color: var(--amber);
+}
+
+/* ── Subscription Cards (ui_preview style) ── */
+html[data-theme="light"] .sub-card {
+  background: #fff;
+  border-color: var(--line);
+}
+html[data-theme="light"] .sub-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-soft);
+}
+html[data-theme="light"] .sub-card-header .poster-sm {
+  background: linear-gradient(160deg, var(--surface-2), var(--surface-3));
+}
+html[data-theme="light"] .sub-card-header .info .title {
+  color: var(--ink);
+}
+html[data-theme="light"] .sub-card-header .info .desc {
+  color: var(--muted);
+}
+html[data-theme="light"] .sub-card-header .info .desc .tag {
+  background: rgba(15, 23, 42, .04);
+  color: var(--muted);
+}
+html[data-theme="light"] .sub-card-progress {
+  background: var(--surface-2);
+}
+html[data-theme="light"] .sub-card-footer {
+  border-top-color: var(--line);
+  color: var(--muted);
+}
+html[data-theme="light"] .sub-card-footer .chip {
+  background: rgba(15, 23, 42, .04);
+  color: var(--muted);
+}
+html[data-theme="light"] .status-active {
+  background: rgba(38, 198, 176, .12);
+  color: var(--teal);
+}
+html[data-theme="light"] .status-completed {
+  background: rgba(76, 206, 122, .12);
+  color: var(--green);
+}
+html[data-theme="light"] .status-paused {
+  background: rgba(255, 183, 77, .15);
+  color: var(--amber);
+}
+html[data-theme="light"] .status-finished {
+  background: rgba(15, 23, 42, .06);
+  color: var(--muted);
+}
+
+/* ── Resource Items ── */
+html[data-theme="light"] .resource-item {
+  background: #fff;
+  border-color: var(--line);
+}
+html[data-theme="light"] .resource-item:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+html[data-theme="light"] .resource-item .r-title {
+  color: var(--ink);
+}
+html[data-theme="light"] .resource-item .r-meta {
+  color: var(--muted);
+}
+html[data-theme="light"] .r-icon.telegram {
+  background: rgba(38, 198, 176, .12);
+  color: var(--teal);
+}
+html[data-theme="light"] .r-icon.magnet {
+  background: rgba(255, 183, 77, .15);
+  color: var(--amber);
+}
+html[data-theme="light"] .r-icon.rss {
+  background: rgba(124, 109, 214, .12);
+  color: var(--purple);
+}
+html[data-theme="light"] .r-status.delivered {
+  background: rgba(76, 206, 122, .12);
+  color: var(--green);
+}
+html[data-theme="light"] .r-status.pending {
+  background: rgba(255, 183, 77, .15);
+  color: var(--amber);
+}
+html[data-theme="light"] .r-status.failed {
+  background: rgba(232, 93, 117, .12);
+  color: var(--rose);
+}
+
+/* ── Log Entries ── */
+html[data-theme="light"] .log-entry {
+  background: #fff;
+  border-color: var(--line);
+}
+html[data-theme="light"] .log-entry[open] {
+  background: var(--surface-2);
+}
+html[data-theme="light"] .log-entry[open] summary {
+  border-bottom-color: var(--line);
+}
+html[data-theme="light"] .log-level.info {
+  background: rgba(38, 198, 176, .12);
+  color: var(--teal);
+}
+html[data-theme="light"] .log-level.warn {
+  background: rgba(255, 183, 77, .15);
+  color: var(--amber);
+}
+html[data-theme="light"] .log-level.error {
+  background: rgba(232, 93, 117, .12);
+  color: var(--rose);
+}
+html[data-theme="light"] .log-entry .log-time {
+  color: var(--muted);
+}
+html[data-theme="light"] .log-entry .log-msg {
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .log-entry .log-payload {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .03);
+  border-color: var(--line);
+}
+
+/* ── Settings ── */
+html[data-theme="light"] .settings-tab {
+  color: var(--muted);
+}
+html[data-theme="light"] .settings-tab:hover {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .04);
+}
+html[data-theme="light"] .settings-tab.active {
+  color: #1a110a;
+  background: rgba(255, 183, 77, .18);
+  font-weight: 600;
+}
+html[data-theme="light"] .settings-row label {
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .settings-single > .card {
+  background: rgba(255, 255, 255, .56);
+}
+html[data-theme="light"] .settings-group h3 {
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+
+/* ── Buttons ── */
+html[data-theme="light"] button.secondary,
+html[data-theme="light"] .btn-secondary {
+  color: var(--ink);
+  border-color: var(--line);
+  background: #fff;
+}
+html[data-theme="light"] button.secondary:hover,
+html[data-theme="light"] .btn-secondary:hover {
+  color: var(--ink);
+  background: rgba(255, 183, 77, .10);
+  border-color: rgba(255, 183, 77, .25);
+}
+html[data-theme="light"] .btn-ghost {
+  color: var(--muted);
+}
+html[data-theme="light"] .btn-ghost:hover {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .04);
+}
+
+/* ── Toast ── */
+html[data-theme="light"] .toast {
+  background: #fff;
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── Empty State ── */
+html[data-theme="light"] .empty-state h3 {
+  color: var(--muted);
+}
+html[data-theme="light"] .empty-state p {
+  color: var(--muted);
+}
+
+/* ── Activity Feed ── */
+html[data-theme="light"] .activity-item {
+  border-bottom-color: var(--line);
+}
+html[data-theme="light"] .activity-item .a-text {
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .activity-item .a-text strong {
+  color: var(--ink);
+}
+html[data-theme="light"] .activity-item .a-time {
+  color: var(--muted);
+}
+
+/* ── Detail / Modal ── */
+html[data-theme="light"] .detail-panel {
+  background: var(--surface);
+}
+html[data-theme="light"] .modal-backdrop {
+  background: rgba(15, 23, 42, .42);
+}
+html[data-theme="light"] .detail-close {
+  color: var(--ink);
+  background: rgba(255, 255, 255, .78);
+}
+html[data-theme="light"] .detail-hero p {
+  color: var(--ink-soft);
+}
+
+/* ── Chips & Pills ── */
+html[data-theme="light"] .pill,
+html[data-theme="light"] .keyword-chip,
+html[data-theme="light"] .detail-facts span,
+html[data-theme="light"] .subscription-badge,
+html[data-theme="light"] .subscription-keywords span,
+html[data-theme="light"] .subscription-rules span,
+html[data-theme="light"] .rss-source-chips span,
+html[data-theme="light"] .source-chip {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .04);
+  border-color: var(--line);
+}
+
+/* ── Subscription Card (app style) ── */
+html[data-theme="light"] .subscription-card {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .subscription-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-soft);
+}
+html[data-theme="light"] .subscription-card h3 {
+  color: var(--ink);
+}
+html[data-theme="light"] .subscription-poster {
+  background: var(--surface-2);
+}
+html[data-theme="light"] .subscription-progress {
+  background: rgba(15, 23, 42, .08);
+}
+html[data-theme="light"] .subscription-health {
+  background: rgba(255, 255, 255, .72);
+}
+html[data-theme="light"] .subscription-health.danger {
+  border-color: rgba(239, 91, 91, .25);
+}
+html[data-theme="light"] .subscription-health span {
+  color: var(--muted);
+}
+html[data-theme="light"] .subscription-meta-row > span {
+  color: var(--muted);
+}
+html[data-theme="light"] .subscription-meta-row > span.subscription-badge {
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .subscription-status-chip.active {
+  color: #281606;
+}
+html[data-theme="light"] .subscription-status-chip.completed {
+  color: #0e2416;
+}
+html[data-theme="light"] .subscription-status-chip.paused {
+  color: #281606;
+}
+html[data-theme="light"] .subscription-status-dropdown {
+  background: rgba(255, 255, 255, .98);
+  border-color: var(--line);
+  box-shadow: var(--shadow-lg);
+}
+html[data-theme="light"] .subscription-status-option {
+  color: var(--ink);
+}
+html[data-theme="light"] .subscription-status-option:hover,
+html[data-theme="light"] .subscription-status-option.is-current {
+  background: rgba(15, 23, 42, .06);
+}
 html[data-theme="light"] .subscription-controls {
   border-color: rgba(15, 23, 42, .10);
   background: rgba(255, 255, 255, .72);
 }
-
 html[data-theme="light"] .subscription-control-grid select.control-cell,
 html[data-theme="light"] .subscription-controls .compact-tool {
   color: var(--ink-soft);
   background: rgba(15, 23, 42, .06);
 }
-
 html[data-theme="light"] .subscription-controls .compact-tool:hover {
   color: var(--ink);
   background: rgba(15, 23, 42, .10);
 }
-
-html[data-theme="light"] .hero-metrics span,
-html[data-theme="light"] .hero-feature {
-  background: rgba(255, 255, 255, .64);
+html[data-theme="light"] .subscription-controls .danger.compact-tool {
+  color: #fff;
+  background: rgba(239, 91, 91, .82);
+}
+html[data-theme="light"] .subscription-select span {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line-strong);
 }
 
+/* ── Failed Tasks ── */
+html[data-theme="light"] .failed-task-item {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .failed-task-item span {
+  color: var(--muted);
+}
+html[data-theme="light"] .failed-task-panel {
+  background: rgba(239, 91, 91, .06);
+  border-color: rgba(239, 91, 91, .18);
+}
+
+/* ── Resource Status ── */
+html[data-theme="light"] .resource-status {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .06);
+}
+html[data-theme="light"] .resource-status.ok {
+  color: #0e2416;
+  background: var(--green);
+}
+html[data-theme="light"] .resource-status.danger {
+  color: #fff;
+  background: rgba(239, 91, 91, .82);
+}
+html[data-theme="light"] .resource-source-id {
+  border-color: rgba(15, 23, 42, .10);
+  color: #52646c;
+  background: rgba(15, 23, 42, .045);
+}
+html[data-theme="light"] .resource-source-name {
+  color: #334155;
+}
+html[data-theme="light"] .resource-group-count {
+  background: rgba(15, 23, 42, .08);
+  color: var(--muted);
+}
+html[data-theme="light"] .resource-select span {
+  border-color: rgba(15, 23, 42, .18);
+  background: rgba(255, 255, 255, .72);
+}
+html[data-theme="light"] .resource-details > div {
+  border-top-color: rgba(15, 23, 42, .06);
+}
+
+/* ── Log Terminal ── */
+html[data-theme="light"] .log-terminal {
+  background: #f0f2f5;
+}
+html[data-theme="light"] .log-line {
+  border-bottom-color: rgba(15, 23, 42, .08);
+}
+html[data-theme="light"] .log-line[open] summary {
+  background: rgba(15, 23, 42, .04);
+}
+html[data-theme="light"] .log-line .line-no,
+html[data-theme="light"] .log-line .time,
+html[data-theme="light"] .log-line .scope {
+  color: #64748b;
+}
+html[data-theme="light"] .log-payload {
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .log-status {
+  color: var(--green);
+}
+
+/* ── TMDB Components ── */
 html[data-theme="light"] .tmdb-hero-panel {
   border-color: rgba(15, 23, 42, .10);
   background:
     linear-gradient(145deg, rgba(255, 183, 77, .10), rgba(239, 122, 94, .06)),
     rgba(255, 255, 255, .58);
 }
-
+html[data-theme="light"] .hero-metrics span,
+html[data-theme="light"] .hero-feature {
+  background: rgba(255, 255, 255, .64);
+  border-color: rgba(15, 23, 42, .10);
+}
+html[data-theme="light"] .hero-feature:hover {
+  background: rgba(255, 255, 255, .85);
+}
+html[data-theme="light"] .hero-feature strong {
+  color: var(--ink);
+}
+html[data-theme="light"] .hero-feature span,
+html[data-theme="light"] .hero-feature small {
+  color: var(--muted);
+}
+html[data-theme="light"] .hero-metrics b {
+  color: var(--ink);
+}
 html[data-theme="light"] .hero-quick-grid span {
   border-color: rgba(15, 23, 42, .10);
   background: rgba(255, 255, 255, .62);
 }
+html[data-theme="light"] .hero-quick-grid b {
+  color: var(--ink);
+}
+html[data-theme="light"] .hero-quick-grid small {
+  color: var(--muted);
+}
+html[data-theme="light"] .tmdb-hero-copy p {
+  color: var(--ink-soft);
+}
 
-html[data-theme="light"] .resource-source-id {
-  border-color: rgba(15, 23, 42, .10);
-  color: #52646c;
+/* ── Rank Items ── */
+html[data-theme="light"] .rank-item {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .rank-item:hover {
+  background: rgba(255, 183, 77, .08);
+  border-color: rgba(255, 183, 77, .38);
+}
+html[data-theme="light"] .rank-item strong {
+  color: var(--ink);
+}
+html[data-theme="light"] .rank-item small {
+  color: var(--muted);
+}
+
+/* ── More Card ── */
+html[data-theme="light"] .more-card {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+html[data-theme="light"] .more-card:hover {
+  border-color: rgba(255, 183, 77, .5);
+  background: rgba(255, 183, 77, .10);
+}
+html[data-theme="light"] .more-card .arrow {
+  color: #1a110a;
+}
+html[data-theme="light"] .more-card .more-text {
+  color: var(--muted);
+}
+
+/* ── Emby Components ── */
+html[data-theme="light"] .emby-card {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .emby-card:hover {
+  border-color: rgba(255, 183, 77, .35);
+}
+html[data-theme="light"] .emby-card h3 {
+  color: var(--ink);
+}
+html[data-theme="light"] .emby-card p {
+  color: var(--muted);
+}
+html[data-theme="light"] .emby-history-item {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .emby-history-item:hover {
+  border-color: rgba(255, 183, 77, .3);
+}
+html[data-theme="light"] .emby-history-item h3 {
+  color: var(--ink);
+}
+html[data-theme="light"] .emby-history-item p {
+  color: var(--muted);
+}
+html[data-theme="light"] .emby-placeholder,
+html[data-theme="light"] .emby-history-thumb {
   background: rgba(15, 23, 42, .045);
 }
 
-html[data-theme="light"] .resource-source-name {
-  color: #334155;
+/* ── Section ── */
+html[data-theme="light"] .section-heading h3 {
+  color: var(--ink);
+}
+html[data-theme="light"] .section-heading span {
+  color: var(--muted);
+}
+html[data-theme="light"] .section-heading span:hover {
+  color: var(--amber);
 }
 
+/* ── Stat ── */
+html[data-theme="light"] .stat {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .stat:hover {
+  background: rgba(255, 255, 255, .85);
+  border-color: var(--line-strong);
+}
+html[data-theme="light"] .stat span {
+  color: var(--muted);
+}
+html[data-theme="light"] .stat b {
+  color: var(--ink);
+}
+
+/* ── Dialog List / Folder ── */
+html[data-theme="light"] .dialog-list label,
+html[data-theme="light"] .folder-row {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .folder-row:hover {
+  background: rgba(15, 23, 42, .045);
+}
+html[data-theme="light"] .folder-current {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .dialog-list small {
+  color: var(--muted);
+}
+
+/* ── RSS Sources ── */
+html[data-theme="light"] .rss-source-item {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .rss-source-item:hover {
+  border-color: var(--line-strong);
+}
+html[data-theme="light"] .rss-source-test-result {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .rss-source-url-text {
+  color: var(--muted);
+}
+html[data-theme="light"] .rss-source-sample-item {
+  border-color: var(--line);
+}
+html[data-theme="light"] .rss-source-sample-item span {
+  color: var(--muted);
+}
+html[data-theme="light"] .rss-source-diagnostic span {
+  color: var(--muted);
+}
+html[data-theme="light"] .builtin-source-panel {
+  border-color: rgba(255, 183, 77, .22);
+  background:
+    linear-gradient(135deg, rgba(255, 183, 77, .08), rgba(239, 122, 94, .05)),
+    rgba(255, 255, 255, .72);
+}
+html[data-theme="light"] .builtin-source-panel span:not(.source-chip) {
+  color: var(--muted);
+}
+html[data-theme="light"] .builtin-source-chip {
+  color: var(--ink-soft);
+  background: rgba(15, 23, 42, .04);
+  border-color: rgba(15, 23, 42, .10);
+}
+html[data-theme="light"] .builtin-source-chip:hover,
+html[data-theme="light"] .builtin-source-chip.active {
+  color: #1a110a;
+  background: var(--amber);
+  border-color: rgba(255, 183, 77, .6);
+}
+html[data-theme="light"] .builtin-source-item {
+  background: rgba(255, 255, 255, .72);
+}
+html[data-theme="light"] .rss-source-chips .source-chip-ok {
+  border-color: rgba(34, 197, 94, .28);
+  color: var(--green);
+  background: rgba(34, 197, 94, .09);
+}
+html[data-theme="light"] .rss-source-chips .source-chip-warning {
+  border-color: rgba(255, 183, 77, .34);
+  color: var(--amber);
+  background: rgba(255, 183, 77, .10);
+}
+
+/* ── Proxy Test ── */
+html[data-theme="light"] .proxy-test-result .latency-row {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+}
+html[data-theme="light"] .proxy-test-result .latency-row span {
+  color: var(--ink-soft);
+}
+
+/* ── QR Box ── */
+html[data-theme="light"] .qr-box {
+  background: rgba(15, 23, 42, .045);
+  border-color: var(--line-strong);
+  color: var(--muted);
+}
+
+/* ── Empty ── */
+html[data-theme="light"] .empty {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+/* ── Poster Overlay ── */
 html[data-theme="light"] .poster-overlay {
   background: linear-gradient(180deg, transparent, rgba(15, 23, 42, .72));
 }
 
-html[data-theme="light"] .detail-panel {
-  background: var(--surface);
+/* ── Skeleton ── */
+html[data-theme="light"] .skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
 }
 
-html[data-theme="light"] .modal-backdrop {
-  background: rgba(15, 23, 42, .42);
+/* ── Repeat Badge ── */
+html[data-theme="light"] .repeat-badge {
+  border-color: rgba(255, 183, 77, .34);
+  color: var(--amber);
+  background: rgba(255, 183, 77, .10);
 }
 
-html[data-theme="light"] .detail-close {
-  color: var(--ink);
-  background: rgba(255, 255, 255, .78);
+/* ── Fieldset ── */
+html[data-theme="light"] fieldset {
+  border-color: var(--line);
+}
+html[data-theme="light"] legend {
+  color: var(--ink-soft);
 }
 
-html[data-theme="light"] .log-line {
-  border-bottom-color: rgba(15, 23, 42, .08);
+/* ── Mobile Bottom Nav ── */
+html[data-theme="light"] .mobile-bottom-nav button {
+  color: var(--muted);
+}
+html[data-theme="light"] .mobile-bottom-nav button:hover {
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .mobile-bottom-nav button.active {
+  color: var(--amber);
 }
 
-html[data-theme="light"] .log-terminal {
-  background: #f0f2f5;
+/* ── Brand Mark ── */
+html[data-theme="light"] .brand-mark,
+html[data-theme="light"] .avatar-btn,
+html[data-theme="light"] .user-menu-avatar {
+  color: #1a110a;
 }
 
-html[data-theme="light"] .log-line[open] summary {
+/* ── Nav Icon ── */
+html[data-theme="light"] .nav-icon,
+html[data-theme="light"] .icon-action {
   background: rgba(15, 23, 42, .04);
 }
 
-html[data-theme="light"] .log-line .line-no,
-html[data-theme="light"] .log-line .time,
-html[data-theme="light"] .log-line .scope {
-  color: #64748b;
+/* ── Subscription Select ── */
+html[data-theme="light"] .subscription-select span {
+  background: rgba(15, 23, 42, .045);
+  border-color: var(--line-strong);
+}
+html[data-theme="light"] .subscription-select input:checked + span {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  border-color: rgba(255, 183, 77, .8);
 }
 
-html[data-theme="light"] .qr-box,
-html[data-theme="light"] .emby-placeholder,
-html[data-theme="light"] .emby-history-thumb {
-  background: rgba(15, 23, 42, .045);
+/* ── Subscription Progress ── */
+html[data-theme="light"] .subscription-progress {
+  background: rgba(15, 23, 42, .08);
+}
+
+/* ── Folder Current ── */
+html[data-theme="light"] .folder-current {
+  background: rgba(255, 255, 255, .72);
+  border-color: var(--line);
 }
