@@ -141,6 +141,30 @@
   min-width: 0;
 }
 
+/* ── Emby Library Horizontal Scroll ── */
+.emby-library-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.emby-library-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.emby-library-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.emby-library-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+.emby-library-scroll > .emby-library-card {
+  flex: 0 0 220px;
+  scroll-snap-align: start;
+}
+
 .emby-card {
   min-width: 0;
   overflow: hidden;

@@ -962,21 +962,19 @@ html[data-theme="light"] .rank-item small {
   color: var(--muted);
 }
 
-/* ── More Card ── */
-html[data-theme="light"] .more-card {
-  background: rgba(255, 255, 255, .72);
-  border-color: var(--line-strong);
-  color: var(--ink);
+/* ── More Overlay ── */
+html[data-theme="light"] .more-overlay {
+  background: rgba(255, 255, 255, .82);
+  backdrop-filter: blur(8px);
 }
-html[data-theme="light"] .more-card:hover {
-  border-color: rgba(255, 183, 77, .5);
-  background: rgba(255, 183, 77, .10);
+html[data-theme="light"] .more-overlay:hover {
+  background: rgba(255, 183, 77, .85);
 }
-html[data-theme="light"] .more-card .arrow {
+html[data-theme="light"] .more-overlay .more-text {
   color: #1a110a;
 }
-html[data-theme="light"] .more-card .more-text {
-  color: var(--muted);
+html[data-theme="light"] .more-overlay .more-arrow {
+  color: #1a110a;
 }
 
 /* ── Emby Components ── */

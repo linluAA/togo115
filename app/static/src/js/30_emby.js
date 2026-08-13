@@ -18,19 +18,24 @@ async function renderEmby() {
           <h2>媒体库</h2>
           <button class="btn btn-secondary btn-sm" id="syncEmbyLibrary">同步</button>
         </div>
-        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:24px">
+        <div class="emby-library-scroll">
           ${libraries.length ? libraries.map((item) => {
             const name = escapeHtml(item.name || "媒体库");
-            const count = item.child_count || 0;
             const type = escapeHtml(item.collection_type || "媒体库");
             const image = item.image_url
-              ? `<img src="${escapeHtml(item.image_url)}" alt="${name}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" />`
-              : `<div style="font-size:32px;color:var(--dim)">📁</div>`;
-            return `<div class="media-card" title="${name}">
-              <div class="poster">${image}</div>
-              <div class="card-body">
+              ? `<img src="${escapeHtml(item.image_url)}" alt="${name}" class="library-image" onerror="this.style.display='none'" />`
+              : `<div class="emby-placeholder" style="aspect-ratio:16/9;font-size:32px;color:var(--dim)">📁</div>`;
+            const movieCnt = item.movie_count || 0;
+            const seriesCnt = item.series_count || 0;
+            return `<div class="emby-library-card" title="${name}">
+              ${image}
+              <div class="emby-library-meta">
                 <div class="title">${name}</div>
-                <div class="meta"><span>${count} 部</span><span class="badge">${type}</span></div>
+                <div class="meta">
+                  ${movieCnt > 0 ? `<span class="badge">🎬 ${movieCnt} 部电影</span>` : ""}
+                  ${seriesCnt > 0 ? `<span class="badge">📺 ${seriesCnt} 部剧集</span>` : ""}
+                  ${movieCnt === 0 && seriesCnt === 0 ? `<span class="badge">${type}</span>` : ""}
+                </div>
               </div>
             </div>`;
           }).join("") : `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">◌</div><h3>暂无媒体库数据</h3></div>`}
@@ -55,7 +60,6 @@ async function renderEmby() {
           </div>
           <div style="display:flex;gap:12px;font-size:12px;color:var(--dim)">
             <span>📺 ${movieCount + seriesCount} 部</span>
-            <span>📀 ${data.media_count || 0} 集</span>
             <span>💾 ${data.storage_used || "-"}</span>
           </div>
         </div>

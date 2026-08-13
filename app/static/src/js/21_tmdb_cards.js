@@ -25,19 +25,14 @@ function rankList(items) {
 function clearTmdbSearch() {
   state.tmdbSearchQuery = "";
   state.tmdbSearch = [];
-  const section = $("#searchSection");
-  if (section) {
-    section.innerHTML = "";
-    section.classList.add("hidden");
-  }
-  renderTmdbTrending();
+  if (state.view === "tmdb") renderTmdb();
 }
 
 function mediaGrid(items, type, options = {}) {
   if (!items.length) return `<div class="empty">暂无数据。</div>`;
   const limit = options.limit || 20;
   const visibleItems = items.slice(0, limit);
-  const cards = visibleItems.map((item) => {
+  const cards = visibleItems.map((item, index) => {
     const title = item.name || item.title || "未命名";
     const mediaType = item.media_type === "movie" || item.media_type === "tv" ? item.media_type : type;
     const releaseYear = Number.parseInt((item.first_air_date || item.release_date || "").slice(0, 4), 10) || null;
@@ -54,7 +49,12 @@ function mediaGrid(items, type, options = {}) {
     state.mediaPayloads.set(payloadId, payload);
     const year = (item.first_air_date || item.release_date || "").slice(0, 4) || "未知";
     const rating = item.vote_average ? `★ ${Number(item.vote_average).toFixed(1)}` : "";
-    return `<article class="media-card">
+    const isLast = index === visibleItems.length - 1;
+    const moreOverlay = isLast && options.more ? `<div class="more-overlay" data-more="${type}">
+      <span class="more-text">查看更多</span>
+      <span class="more-arrow">→</span>
+    </div>` : "";
+    return `<article class="media-card${isLast && options.more ? " has-more" : ""}">
       <div class="poster" data-detail="${payloadId}" aria-label="查看 ${title} 详情" title="查看详情">
         <img src="${posterUrl(item)}" alt="${escapeHtml(title)}" loading="lazy" />
         <div class="overlay">
@@ -66,30 +66,29 @@ function mediaGrid(items, type, options = {}) {
         <div class="title">${escapeHtml(title)}</div>
         <div class="meta"><span>${mediaType === "tv" ? "剧集" : "电影"} · ${year}</span></div>
       </div>
+      ${moreOverlay}
     </article>`;
   }).join("");
-  const more = options.more ? `<span class="more-card" data-more="${type}">
-    <span class="arrow">→</span>
-    <span class="more-text">查看更多</span>
-  </span>` : "";
-  return `<div class="media-grid">${cards}${more}</div>`;
+  return `<div class="media-grid">${cards}</div>`;
 }
 
 function bindMediaActions(root = document) {
   root.querySelectorAll("[data-detail]").forEach((btn) => btn.addEventListener("click", () => showMediaDetail(btn.dataset.detail)));
   root.querySelectorAll("[data-more]").forEach((btn) => btn.addEventListener("click", async () => {
     const type = btn.dataset.more;
-    btn.disabled = true;
-    const originalText = btn.querySelector(".more-text")?.textContent || "查看更多";
-    if (btn.querySelector(".more-text")) btn.querySelector(".more-text").textContent = "加载中";
+    if (btn.classList.contains("loading")) return;
+    btn.classList.add("loading");
+    const textEl = btn.querySelector(".more-text");
+    const originalText = textEl?.textContent || "查看更多";
+    if (textEl) textEl.textContent = "加载中";
     try {
       const data = await loadTmdbTrending(300);
       state.tmdbMore = { type, items: data[type] || [], page: 1 };
       renderTmdb();
     } catch (error) {
       toast(`榜单加载失败：${error.message}`);
-      btn.disabled = false;
-      if (btn.querySelector(".more-text")) btn.querySelector(".more-text").textContent = originalText;
+      btn.classList.remove("loading");
+      if (textEl) textEl.textContent = originalText;
     }
   }));
 }
@@ -117,14 +116,16 @@ async function searchTmdb() {
     return;
   }
   state.tmdbSearchQuery = query;
-  const section = $("#searchSection");
-  const trending = $("#trendingSection");
+  const section = $("#tmdbSearchResults");
+  const trending = $("#tmdbTrendingContent");
   if (trending) trending.classList.add("hidden");
-  section.classList.remove("hidden");
-  section.innerHTML = `<div class="empty">正在搜索...</div>`;
+  if (section) {
+    section.classList.remove("hidden");
+    const content = section.querySelector(".view-section") || section;
+    content.innerHTML = `<div class="empty">正在搜索...</div>`;
+  }
   const data = await api(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
-  if (!section.isConnected || state.tmdbSearchQuery !== query) return;
+  if (state.tmdbSearchQuery !== query) return;
   state.tmdbSearch = data.results || [];
-  section.innerHTML = `<h3>搜索结果</h3>${state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty">没有搜索到相关结果。</div>`}`;
-  bindMediaActions(section);
+  renderTmdb();
 }

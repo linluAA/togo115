@@ -47,6 +47,7 @@ class EmbyDashboardMixin:
                 self._get(client, base_url, "/Users", api_key),
             )
             libraries = self._libraries(folders)
+            libraries = await self._enrich_library_counts(client, base_url, api_key, libraries)
             users = self._users(users_raw)
             history = await self._history(client, base_url, api_key, users)
         media_count = sum(int(counts.get(key) or 0) for key in ("MovieCount", "SeriesCount", "EpisodeCount", "SongCount", "AlbumCount"))
@@ -72,9 +73,35 @@ class EmbyDashboardMixin:
                     "collection_type": folder.get("CollectionType") or "",
                     "description": folder.get("CollectionType") or "",
                     "image_url": f"/api/emby/image/{item_id}" if item_id else "",
+                    "movie_count": 0,
+                    "series_count": 0,
                 }
             )
         return libraries
+
+    async def _enrich_library_counts(
+        self,
+        client: httpx.AsyncClient,
+        base_url: str,
+        api_key: str,
+        libraries: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        async def _count_lib(lib: dict[str, Any]) -> dict[str, Any]:
+            lib_id = lib.get("id")
+            if not lib_id:
+                return lib
+            movie_task = self._get(client, base_url, "/Items", api_key, {
+                "ParentId": lib_id, "Recursive": "true", "Limit": 0, "IncludeItemTypes": "Movie",
+            })
+            series_task = self._get(client, base_url, "/Items", api_key, {
+                "ParentId": lib_id, "Recursive": "true", "Limit": 0, "IncludeItemTypes": "Series",
+            })
+            movie_resp, series_resp = await asyncio.gather(movie_task, series_task, return_exceptions=True)
+            lib["movie_count"] = movie_resp.get("TotalRecordCount", 0) if not isinstance(movie_resp, Exception) else 0
+            lib["series_count"] = series_resp.get("TotalRecordCount", 0) if not isinstance(series_resp, Exception) else 0
+            return lib
+
+        return await asyncio.gather(*[_count_lib(lib) for lib in libraries])
 
     def _users(self, users_raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [

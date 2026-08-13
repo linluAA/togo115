@@ -686,7 +686,7 @@ function dashboardStatsGrid(){
 const stats=dashboardStats();
 const cards=[
 {label:"订阅中",value:String(stats.active),change:`↑ ${stats.active + stats.completed} 个订阅`,color:"var(--green)",target:"subscriptions"},
-{label:"已入库",value:String(stats.completed),change:`共 ${stats.totalEpisodes} 集`,color:"var(--muted)",target:"emby"},
+{label:"已入库",value:String(stats.completed),change:`${stats.totalEpisodes} 个媒体`,color:"var(--muted)",target:"emby"},
 {label:"待发现",value:String(stats.pendingResources),change:`${stats.resourcesTotal} 条资源`,color:"var(--amber)",target:"subscriptions"},
 {label:"健康度",value:`${stats.health}%`,change:stats.failedTasks?`${stats.failedTasks} 个来源待处理`:"一切正常",color:stats.failedTasks?"var(--amber)":"var(--green)",target:"logs"},
 ];
@@ -911,18 +911,13 @@ return`<div class="rank-list">${items.map((item, index) => {
 function clearTmdbSearch(){
 state.tmdbSearchQuery="";
 state.tmdbSearch=[];
-const section=$("#searchSection");
-if(section){
-section.innerHTML="";
-section.classList.add("hidden");
-}
-renderTmdbTrending();
+if(state.view==="tmdb")renderTmdb();
 }
 function mediaGrid(items,type,options={}){
 if(!items.length)return`<div class="empty">暂无数据。</div>`;
 const limit=options.limit||20;
 const visibleItems=items.slice(0,limit);
-const cards=visibleItems.map((item)=>{
+const cards=visibleItems.map((item,index)=>{
 const title=item.name||item.title||"未命名";
 const mediaType=item.media_type==="movie"||item.media_type==="tv"?item.media_type:type;
 const releaseYear=Number.parseInt((item.first_air_date||item.release_date||"").slice(0,4),10)||null;
@@ -939,7 +934,12 @@ keywords:[title],
 state.mediaPayloads.set(payloadId,payload);
 const year=(item.first_air_date||item.release_date||"").slice(0,4)||"未知";
 const rating=item.vote_average?`★ ${Number(item.vote_average).toFixed(1)}`:"";
-return`<article class="media-card">
+const isLast=index===visibleItems.length-1;
+const moreOverlay=isLast&&options.more?`<div class="more-overlay" data-more="${type}">
+      <span class="more-text">查看更多</span>
+      <span class="more-arrow">→</span>
+    </div>`:"";
+return`<article class="media-card${isLast && options.more ? " has-more" : ""}">
       <div class="poster" data-detail="${payloadId}" aria-label="查看 ${title} 详情" title="查看详情">
         <img src="${posterUrl(item)}" alt="${escapeHtml(title)}" loading="lazy" />
         <div class="overlay">
@@ -951,29 +951,28 @@ return`<article class="media-card">
         <div class="title">${escapeHtml(title)}</div>
         <div class="meta"><span>${mediaType === "tv" ? "剧集" : "电影"} · ${year}</span></div>
       </div>
+      ${moreOverlay}
     </article>`;
 }).join("");
-const more=options.more?`<span class="more-card" data-more="${type}">
-    <span class="arrow">→</span>
-    <span class="more-text">查看更多</span>
-  </span>`:"";
-return`<div class="media-grid">${cards}${more}</div>`;
+return`<div class="media-grid">${cards}</div>`;
 }
 function bindMediaActions(root=document){
 root.querySelectorAll("[data-detail]").forEach((btn)=>btn.addEventListener("click",()=>showMediaDetail(btn.dataset.detail)));
 root.querySelectorAll("[data-more]").forEach((btn)=>btn.addEventListener("click",async()=>{
 const type=btn.dataset.more;
-btn.disabled=true;
-const originalText=btn.querySelector(".more-text")?.textContent||"查看更多";
-if(btn.querySelector(".more-text"))btn.querySelector(".more-text").textContent="加载中";
+if(btn.classList.contains("loading"))return;
+btn.classList.add("loading");
+const textEl=btn.querySelector(".more-text");
+const originalText=textEl?.textContent||"查看更多";
+if(textEl)textEl.textContent="加载中";
 try{
 const data=await loadTmdbTrending(300);
 state.tmdbMore={type,items:data[type]||[],page:1};
 renderTmdb();
 } catch(error){
 toast(`榜单加载失败：${error.message}`);
-btn.disabled=false;
-if(btn.querySelector(".more-text"))btn.querySelector(".more-text").textContent=originalText;
+btn.classList.remove("loading");
+if(textEl)textEl.textContent=originalText;
 }
 }));
 }
@@ -998,16 +997,18 @@ clearTmdbSearch();
 return;
 }
 state.tmdbSearchQuery=query;
-const section=$("#searchSection");
-const trending=$("#trendingSection");
+const section=$("#tmdbSearchResults");
+const trending=$("#tmdbTrendingContent");
 if(trending)trending.classList.add("hidden");
+if(section){
 section.classList.remove("hidden");
-section.innerHTML=`<div class="empty">正在搜索...</div>`;
+const content=section.querySelector(".view-section")||section;
+content.innerHTML=`<div class="empty">正在搜索...</div>`;
+}
 const data=await api(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
-if(!section.isConnected||state.tmdbSearchQuery!==query)return;
+if(state.tmdbSearchQuery!==query)return;
 state.tmdbSearch=data.results||[];
-section.innerHTML=`<h3>搜索结果</h3>${state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : `<div class="empty">没有搜索到相关结果。</div>`}`;
-bindMediaActions(section);
+renderTmdb();
 }
 
 async function showMediaDetail(payloadId){
@@ -1091,19 +1092,24 @@ root.innerHTML=`
           <h2>媒体库</h2>
           <button class="btn btn-secondary btn-sm" id="syncEmbyLibrary">同步</button>
         </div>
-        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:24px">
+        <div class="emby-library-scroll">
           ${libraries.length ? libraries.map((item) => {
             const name = escapeHtml(item.name || "媒体库");
-            const count = item.child_count || 0;
             const type = escapeHtml(item.collection_type || "媒体库");
             const image = item.image_url
-              ? `<img src="${escapeHtml(item.image_url)}" alt="${name}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" />`
-              : `<div style="font-size:32px;color:var(--dim)">📁</div>`;
-            return `<div class="media-card" title="${name}">
-              <div class="poster">${image}</div>
-              <div class="card-body">
+              ? `<img src="${escapeHtml(item.image_url)}" alt="${name}" class="library-image" onerror="this.style.display='none'" />`
+              : `<div class="emby-placeholder" style="aspect-ratio:16/9;font-size:32px;color:var(--dim)">📁</div>`;
+            const movieCnt = item.movie_count || 0;
+            const seriesCnt = item.series_count || 0;
+            return `<div class="emby-library-card" title="${name}">
+              ${image}
+              <div class="emby-library-meta">
                 <div class="title">${name}</div>
-                <div class="meta"><span>${count} 部</span><span class="badge">${type}</span></div>
+                <div class="meta">
+                  ${movieCnt > 0 ? `<span class="badge">🎬 ${movieCnt} 部电影</span>` : ""}
+                  ${seriesCnt > 0 ? `<span class="badge">📺 ${seriesCnt} 部剧集</span>` : ""}
+                  ${movieCnt === 0 && seriesCnt === 0 ? `<span class="badge">${type}</span>` : ""}
+                </div>
               </div>
             </div>`;
           }).join("") : `<div class="empty-state"style="grid-column:1/-1"><div class="empty-icon">◌</div><h3>暂无媒体库数据</h3></div>`}
@@ -1128,17 +1134,16 @@ root.innerHTML=`
 </div>
           <div style="display:flex;gap:12px;font-size:12px;color:var(--dim)">
             <span>📺 ${movieCount + seriesCount} 部</span>
-<span>📀${data.media_count||0} 集</span>
-            <span>💾 ${data.storage_used || "-"}</span>
+<span>💾${data.storage_used||"-"}</span>
+          </div>
 </div>
-        </div>
+      </div>
 </div>
-    </div>
-`;
+  `;
   $("#syncEmbyLibrary")?.addEventListener("click", async () => {
     try {
       const res = await api("/api/emby/sync", { method: "POST" });
-      toast(res.ok ? "媒体库同步已启动" : `同步失败：${res.error||"未知错误"}`);
+      toast(res.ok ? "媒体库同步已启动" : `同步失败：${res.error || "未知错误"}`);
     } catch (error) {
       toast(`同步失败：${error.message}`);
     }

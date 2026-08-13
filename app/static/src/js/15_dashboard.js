@@ -217,7 +217,7 @@ function dashboardStatsGrid() {
   const stats = dashboardStats();
   const cards = [
     { label: "订阅中", value: String(stats.active), change: `↑ ${stats.active + stats.completed} 个订阅`, color: "var(--green)", target: "subscriptions" },
-    { label: "已入库", value: String(stats.completed), change: `共 ${stats.totalEpisodes} 集`, color: "var(--muted)", target: "emby" },
+    { label: "已入库", value: String(stats.completed), change: `${stats.totalEpisodes} 个媒体`, color: "var(--muted)", target: "emby" },
     { label: "待发现", value: String(stats.pendingResources), change: `${stats.resourcesTotal} 条资源`, color: "var(--amber)", target: "subscriptions" },
     { label: "健康度", value: `${stats.health}%`, change: stats.failedTasks ? `${stats.failedTasks} 个来源待处理` : "一切正常", color: stats.failedTasks ? "var(--amber)" : "var(--green)", target: "logs" },
   ];

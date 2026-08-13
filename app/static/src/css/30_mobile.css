@@ -183,9 +183,13 @@
   }
 
   .emby-library-grid,
+  .emby-library-scroll,
   .emby-grid,
   .emby-history-list {
     grid-template-columns: 1fr;
+  }
+  .emby-library-scroll > .emby-library-card {
+    flex: 0 0 160px;
   }
 
   .emby-console {
