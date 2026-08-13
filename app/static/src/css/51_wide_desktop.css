@@ -627,11 +627,8 @@ html[data-theme="light"] .log-entry {
   background: #fff;
   border-color: var(--line);
 }
-html[data-theme="light"] .log-entry[open] {
+html[data-theme="light"] .log-entry:hover {
   background: var(--surface-2);
-}
-html[data-theme="light"] .log-entry[open] summary {
-  border-bottom-color: var(--line);
 }
 html[data-theme="light"] .log-level.info {
   background: rgba(38, 198, 176, .12);

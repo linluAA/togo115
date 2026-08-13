@@ -64,15 +64,11 @@ function renderLogRows(logs) {
     const log = entry.log;
     const time = new Date(log.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     const repeat = entry.count > 1 ? ` <span class="repeat-badge">×${entry.count}</span>` : "";
-    const payloadHtml = log.payload ? `<div class="log-payload">${escapeHtml(formatLogPayload(log.payload))}</div>` : "";
-    return `<details class="log-entry">
-      <summary>
-        <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
-        <span class="log-time">${time}</span>
-        <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
-      </summary>
-      ${payloadHtml}
-    </details>`;
+    return `<div class="log-entry">
+      <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+      <span class="log-time">${time}</span>
+      <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+    </div>`;
   }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无日志</h3></div>`;
 }
 

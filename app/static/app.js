@@ -1088,7 +1088,7 @@ root.innerHTML=`
           <h2>媒体库</h2>
           <button class="btn btn-secondary btn-sm" id="syncEmbyLibrary">同步</button>
         </div>
-        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:24px">
+        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:24px">
           ${libraries.length ? libraries.map((item) => {
             const name = escapeHtml(item.name || "媒体库");
             const count = item.child_count || 0;
@@ -1530,15 +1530,11 @@ logList.innerHTML=grouped.length?grouped.map((entry)=>{
 const log=entry.log;
 const time=new Date(log.created_at).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 const repeat=entry.count>1?` <span class="repeat-badge">×${entry.count}</span>`:"";
-const payloadHtml=log.payload?`<div class="log-payload">${escapeHtml(formatLogPayload(log.payload))}</div>`:"";
-return`<details class="log-entry">
-      <summary>
-        <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
-        <span class="log-time">${time}</span>
-        <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
-      </summary>
-      ${payloadHtml}
-    </details>`;
+return`<div class="log-entry">
+      <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+      <span class="log-time">${time}</span>
+      <span class="log-msg">${escapeHtml(log.message)}${repeat}</span>
+    </div>`;
 }).join(""):`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无日志</h3></div>`;
 }
 function formatLogPayload(raw){

@@ -18,7 +18,7 @@ async function renderEmby() {
           <h2>媒体库</h2>
           <button class="btn btn-secondary btn-sm" id="syncEmbyLibrary">同步</button>
         </div>
-        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:24px">
+        <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:24px">
           ${libraries.length ? libraries.map((item) => {
             const name = escapeHtml(item.name || "媒体库");
             const count = item.child_count || 0;
