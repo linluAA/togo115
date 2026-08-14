@@ -613,13 +613,18 @@
 }
 
 /* ── TMDB Loading (居中加载动画) ── */
+#tmdbLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
 .tmdb-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 80px 20px;
   text-align: center;
   color: var(--muted);
 }
@@ -640,44 +645,46 @@
   to { transform: rotate(360deg); }
 }
 
-/* ── More Section (最后一张卡片上方独立查看更多) ── */
-.last-card-wrap {
-  position: relative;
+/* ── More Section (最后一张卡片上方独立查看更多条) ── */
+.last-card-section {
   margin-bottom: 32px;
 }
-.more-section {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
+.last-card-section .more-section-strip {
+  margin-bottom: 0;
+}
+.last-card-section .media-grid {
+  margin: 0;
+}
+.more-section-strip {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 12px;
-  background: linear-gradient(to bottom, rgba(15, 23, 42, .58), rgba(15, 23, 42, .18) 80%, transparent);
-  color: #fff;
+  padding: 14px 12px;
+  margin: 0 0 20px;
+  background: linear-gradient(to bottom, rgba(15, 23, 42, .06), rgba(15, 23, 42, .03) 80%, transparent);
+  border-radius: var(--radius);
   cursor: pointer;
   transition: all .2s ease;
-  border-radius: var(--radius) var(--radius) 0 0;
-  pointer-events: auto;
+  color: var(--ink-soft);
+  user-select: none;
 }
-.more-section:hover {
-  background: linear-gradient(to bottom, rgba(15, 23, 42, .72), rgba(15, 23, 42, .28) 80%, transparent);
+.more-section-strip:hover {
+  background: linear-gradient(to bottom, rgba(15, 23, 42, .10), rgba(15, 23, 42, .05) 80%, transparent);
+  color: var(--ink);
 }
-.more-section .more-text {
+.more-section-strip .more-text {
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: .3px;
 }
-.more-section .more-arrow {
+.more-section-strip .more-arrow {
   font-size: 15px;
   line-height: 1;
   transition: transform .2s;
 }
-.more-section:hover .more-arrow {
+.more-section-strip:hover .more-arrow {
   transform: translateX(3px);
 }
 

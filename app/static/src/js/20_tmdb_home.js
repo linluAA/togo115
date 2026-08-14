@@ -141,14 +141,16 @@ async function renderTmdb() {
           <p>正在读取 TMDB 榜单...</p>
         </div>
       </div>
-      <div class="section-header view-section">
-        <h2>热门剧集</h2>
+      <div id="tmdbTrendingBody" class="hidden">
+        <div class="section-header view-section">
+          <h2>热门剧集</h2>
+        </div>
+        <div class="view-section" id="tmdbTvGrid"></div>
+        <div class="section-header view-section">
+          <h2>热门电影</h2>
+        </div>
+        <div class="view-section" id="tmdbMovieGrid"></div>
       </div>
-      <div class="view-section" id="tmdbTvGrid"></div>
-      <div class="section-header view-section">
-        <h2>热门电影</h2>
-      </div>
-      <div class="view-section" id="tmdbMovieGrid"></div>
     </div>
   `;
   root.querySelectorAll("[data-tmdb-type]").forEach((btn) => btn.addEventListener("click", () => {
@@ -184,12 +186,14 @@ async function renderTmdbTrending(root = $("#view")) {
   const tvGrid = root.querySelector("#tmdbTvGrid");
   const movieGrid = root.querySelector("#tmdbMovieGrid");
   const loading = root.querySelector("#tmdbLoading");
+  const trendingBody = root.querySelector("#tmdbTrendingBody");
   if (!tvGrid || !movieGrid || state.tmdbSearchQuery.trim()) return;
   try {
     const data = await loadTmdbTrending(20);
     state.tmdbTrending = data;
     if (state.tmdbSearchQuery.trim()) return;
     if (loading) loading.remove();
+    if (trendingBody) trendingBody.classList.remove("hidden");
     const tv = data.tv || [];
     const movie = data.movie || [];
     tvGrid.innerHTML = tv.length
@@ -201,6 +205,8 @@ async function renderTmdbTrending(root = $("#view")) {
     bindMediaActions(root);
   } catch (error) {
     if (state.tmdbSearchQuery.trim()) return;
+    if (loading) loading.remove();
+    if (trendingBody) trendingBody.classList.remove("hidden");
     tvGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">◌</div><h3>TMDB 暂不可用。</h3></div>`;
     movieGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">◌</div><h3>TMDB 暂不可用。</h3></div>`;
   }

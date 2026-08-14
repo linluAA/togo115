@@ -67,12 +67,12 @@ function mediaGrid(items, type, options = {}) {
   if (cardHtmlList.length > 0 && options.more) {
     html += cardHtmlList.slice(0, -1).join("");
     html += '</div>';
-    html += `<div class="last-card-wrap">
-      <div class="more-section" data-more="${type}">
+    html += `<div class="last-card-section">
+      <div class="more-section-strip" data-more="${type}">
         <span class="more-text">查看更多</span>
         <span class="more-arrow">→</span>
       </div>
-      ${cardHtmlList[cardHtmlList.length - 1]}
+      <div class="media-grid">${cardHtmlList[cardHtmlList.length - 1]}</div>
     </div>`;
   } else {
     html += cardHtmlList.join("");
