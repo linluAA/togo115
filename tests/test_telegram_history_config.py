@@ -21,9 +21,9 @@ class TelegramHistoryConfigTest(unittest.TestCase):
         self.assertEqual(options.history_limit, 500)
         self.assertEqual(options.fallback_scan_limit, 20)
         self.assertEqual(options.messages_per_query, 500)
-        self.assertEqual(options.total_budget, 18.0)
-        self.assertEqual(options.query_budget, 2.0)
-        self.assertEqual(options.recent_budget, 4.0)
+        self.assertEqual(options.total_budget, 70.0)
+        self.assertEqual(options.query_budget, 4.0)
+        self.assertEqual(options.recent_budget, 12.0)
 
     def test_server_search_queries_prefers_year_query(self) -> None:
         queries = server_search_queries(["将夜 2026", "将夜", " 将夜 ", "Jiang Ye 2026", ""])
