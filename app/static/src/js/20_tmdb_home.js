@@ -144,10 +144,18 @@ async function renderTmdb() {
       <div id="tmdbTrendingBody" class="hidden">
         <div class="section-header view-section">
           <h2>热门剧集</h2>
+          <div class="more-section-strip" data-more="tv">
+            <span class="more-text">查看更多</span>
+            <span class="more-arrow">→</span>
+          </div>
         </div>
         <div class="view-section" id="tmdbTvGrid"></div>
         <div class="section-header view-section">
           <h2>热门电影</h2>
+          <div class="more-section-strip" data-more="movie">
+            <span class="more-text">查看更多</span>
+            <span class="more-arrow">→</span>
+          </div>
         </div>
         <div class="view-section" id="tmdbMovieGrid"></div>
       </div>
@@ -197,10 +205,10 @@ async function renderTmdbTrending(root = $("#view")) {
     const tv = data.tv || [];
     const movie = data.movie || [];
     tvGrid.innerHTML = tv.length
-      ? mediaGrid(tv, "tv", { limit: 10, more: true })
+      ? mediaGrid(tv, "tv", { limit: 10 })
       : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
     movieGrid.innerHTML = movie.length
-      ? mediaGrid(movie, "movie", { limit: 10, more: true })
+      ? mediaGrid(movie, "movie", { limit: 10 })
       : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
     bindMediaActions(root);
   } catch (error) {

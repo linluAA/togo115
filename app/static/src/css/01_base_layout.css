@@ -645,46 +645,27 @@
   to { transform: rotate(360deg); }
 }
 
-/* ── More Section (最后一张卡片上方独立查看更多条) ── */
-.last-card-section {
-  margin-bottom: 32px;
-}
-.last-card-section .more-section-strip {
-  margin-bottom: 0;
-}
-.last-card-section .media-grid {
-  margin: 0;
-}
-.more-section-strip {
-  display: flex;
+/* ── More Section Header Button ── */
+.section-header .more-section-strip {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 14px 12px;
-  margin: 0 0 20px;
-  background: linear-gradient(to bottom, rgba(15, 23, 42, .06), rgba(15, 23, 42, .03) 80%, transparent);
-  border-radius: var(--radius);
   cursor: pointer;
-  transition: all .2s ease;
-  color: var(--ink-soft);
-  user-select: none;
-}
-.more-section-strip:hover {
-  background: linear-gradient(to bottom, rgba(15, 23, 42, .10), rgba(15, 23, 42, .05) 80%, transparent);
-  color: var(--ink);
-}
-.more-section-strip .more-text {
-  font-size: 13px;
+  color: var(--amber);
   font-weight: 600;
-  line-height: 1;
-  letter-spacing: .3px;
+  font-size: 13px;
+  opacity: .7;
+  transition: opacity .2s ease, transform .2s ease;
+  user-select: none;
+  flex-shrink: 0;
 }
-.more-section-strip .more-arrow {
-  font-size: 15px;
-  line-height: 1;
+.section-header .more-section-strip:hover {
+  opacity: 1;
+}
+.section-header .more-section-strip .more-arrow {
   transition: transform .2s;
 }
-.more-section-strip:hover .more-arrow {
+.section-header .more-section-strip:hover .more-arrow {
   transform: translateX(3px);
 }
 

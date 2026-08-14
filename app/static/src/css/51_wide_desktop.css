@@ -962,14 +962,12 @@ html[data-theme="light"] .rank-item small {
   color: var(--muted);
 }
 
-/* ── More Section (light theme) ── */
-html[data-theme="light"] .more-section-strip {
-  background: linear-gradient(to bottom, var(--bg), rgba(15, 23, 42, .03) 80%, transparent);
-  color: var(--ink-soft);
+/* ── More Section Header Button (light theme) ── */
+html[data-theme="light"] .section-header .more-section-strip {
+  color: var(--amber);
 }
-html[data-theme="light"] .more-section-strip:hover {
-  background: linear-gradient(to bottom, rgba(15, 23, 42, .06), rgba(15, 23, 42, .03) 80%, transparent);
-  color: var(--ink);
+html[data-theme="light"] .section-header .more-section-strip:hover {
+  opacity: 1;
 }
 
 /* ── Emby Components ── */

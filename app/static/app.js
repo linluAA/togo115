@@ -841,10 +841,18 @@ root.innerHTML=`
       <div id="tmdbTrendingBody" class="hidden">
         <div class="section-header view-section">
           <h2>热门剧集</h2>
+          <div class="more-section-strip" data-more="tv">
+            <span class="more-text">查看更多</span>
+            <span class="more-arrow">→</span>
+          </div>
         </div>
         <div class="view-section" id="tmdbTvGrid"></div>
         <div class="section-header view-section">
           <h2>热门电影</h2>
+          <div class="more-section-strip" data-more="movie">
+            <span class="more-text">查看更多</span>
+            <span class="more-arrow">→</span>
+          </div>
         </div>
         <div class="view-section" id="tmdbMovieGrid"></div>
       </div>
@@ -893,10 +901,10 @@ if(trendingBody)trendingBody.classList.remove("hidden");
 const tv=data.tv||[];
 const movie=data.movie||[];
 tvGrid.innerHTML=tv.length
-?mediaGrid(tv,"tv",{limit:10,more:true})
+?mediaGrid(tv,"tv",{limit:10})
 :`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
 movieGrid.innerHTML=movie.length
-?mediaGrid(movie,"movie",{limit:10,more:true})
+?mediaGrid(movie,"movie",{limit:10})
 :`<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无数据。</h3></div>`;
 bindMediaActions(root);
 } catch(error){
@@ -971,20 +979,8 @@ return`<article class="media-card">
     </article>`;
 });
 let html='<div class="media-grid">';
-if(cardHtmlList.length>0&&options.more){
-html+=cardHtmlList.slice(0,-1).join("");
-html+='</div>';
-html+=`<div class="last-card-section">
-      <div class="more-section-strip" data-more="${type}">
-        <span class="more-text">查看更多</span>
-        <span class="more-arrow">→</span>
-      </div>
-      <div class="media-grid">${cardHtmlList[cardHtmlList.length - 1]}</div>
-    </div>`;
-} else{
 html+=cardHtmlList.join("");
 html+='</div>';
-}
 return html;
 }
 function bindMediaActions(root=document){
