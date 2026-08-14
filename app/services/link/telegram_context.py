@@ -11,7 +11,7 @@ from app.services.link.telegram_context_segments import (
 )
 
 METADATA_FIELD_LINE_RE = re.compile(
-    r"^\s*(?:[#*\-\s\u3010\[\uff08(])*"
+    r"^\s*(?:[#*\-\s\u3010\[\uff08(\W])*"
     r"(?:\u5730\u533a|\u56fd\u5bb6|\u8bed\u8a00|\u5b57\u5e55|\u6807\u7b7e|\u7b80\u4ecb|\u4e3b\u6f14|\u5bfc\u6f14|\u8bc4\u5206|\u7c7b\u578b|\u5206\u7c7b|\u5e74\u4efd|\u5e74\u4ee3|\u5b63\u96c6|\u96c6\u6570|\u66f4\u65b0|\u5927\u5c0f|\u8d28\u91cf|TMDB\s*ID)"
     r"\s*(?:\*\*)?\s*[:\uff1a]\s*",
     re.I,
