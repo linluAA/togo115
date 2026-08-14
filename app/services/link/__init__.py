@@ -11,6 +11,7 @@ from app.services.adapters.pan115 import PAN115_URL_RE
 from app.services.link.downloads import (
     extract_115_links,
     extract_download_links,
+    extract_ed2k_links,
     is_115_share_link,
     is_valid_download_link,
     _clean_download_link,
@@ -61,6 +62,7 @@ from app.services.link.telegram import (
     _nearby_recent_messages_have_button_hint,
     _text_has_external_resource_page_hint,
     context_for_115_link,
+    context_for_ed2k_link,
     telegram_message_text,
 )
 
@@ -103,10 +105,12 @@ __all__ = [
     "HTML_HREF_RE",
     "extract_115_links",
     "extract_download_links",
+    "extract_ed2k_links",
     "is_115_share_link",
     "is_valid_download_link",
     "years_from_text",
     "context_for_115_link",
+    "context_for_ed2k_link",
     "telegram_message_text",
     "download_link_key",
     "clean_download_link",

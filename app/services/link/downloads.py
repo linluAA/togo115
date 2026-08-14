@@ -27,6 +27,8 @@ INVISIBLE_URL_CHARS_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\ufeff]")
 MAGNET_URL_RE = re.compile(r"magnet:\?[^\n\"'<>)]+", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
 BTIH_HASH_RE = re.compile(r"(?:种子哈希|信息哈希|info\s*hash|btih|hash)\s*[：:]\s*([A-Fa-f0-9]{32,40})", re.I)
+# ed2k link format: ed2k://|file|filename|size|hash|/
+ED2K_URL_RE = re.compile(r"ed2k://\|file\|[^\r\n\"'<>|]+\|\d+\|[A-Fa-f0-9]{32}\|(?:/[^\r\n\"'<>]*)?", re.I)
 # Match bare BTIH hash (without label prefix) for standalone hash extraction.
 BARE_BTIH_HASH_RE = re.compile(r"(?<![A-Za-z0-9])([A-Fa-f0-9]{40})(?![A-Za-z0-9])")
 PAN115_RECEIVE_CODE_RE = re.compile(
@@ -76,6 +78,8 @@ def is_valid_download_link(link: str | None) -> bool:
         return False
     if value.casefold().startswith("magnet:?"):
         return True
+    if value.casefold().startswith("ed2k://"):
+        return True
     if re.match(r"(?i)^https?://[^\s\"'<>)]+\.torrent(?:\?[^\s\"'<>)]+)?$", value):
         return True
     parsed = urlparse(value)
@@ -113,10 +117,13 @@ def _append_115_receive_code(link: str, text: str, match_end: int) -> str:
 
 
 def _download_link_key(link: str | None) -> tuple[str, str]:
-    magnet_match = re.search(r"(?i)(?:xt=urn:btih:|btih:)([a-f0-9]{32,40})", str(link or ""))
+    value = str(link or "").strip()
+    if value.casefold().startswith("ed2k://"):
+        return ("ed2k", value.casefold())
+    magnet_match = re.search(r"(?i)(?:xt=urn:btih:|btih:)([a-f0-9]{32,40})", value)
     if magnet_match:
         return ("magnet", magnet_match.group(1).casefold())
-    return ("url", str(link or "").strip())
+    return ("url", value)
 
 
 def _loose_115_link(match: re.Match[str]) -> str:
@@ -153,6 +160,20 @@ def extract_115_links(text: str | None) -> list[str]:
     return links
 
 
+def extract_ed2k_links(text: str | None) -> list[str]:
+    if not text:
+        return []
+    text = unescape(text)
+    seen: set[str] = set()
+    links: list[str] = []
+    for match in ED2K_URL_RE.finditer(text):
+        link = _clean_download_link(match.group(0))
+        if link not in seen:
+            seen.add(link)
+            links.append(link)
+    return links
+
+
 def extract_download_links(text: str | None) -> list[str]:
     if not text:
         return []
@@ -166,7 +187,7 @@ def extract_download_links(text: str | None) -> list[str]:
         if key not in seen:
             seen.add(key)
             links.append(link)
-    for pattern in (MAGNET_URL_RE, TORRENT_URL_RE):
+    for pattern in (MAGNET_URL_RE, TORRENT_URL_RE, ED2K_URL_RE):
         for match in pattern.findall(text):
             link = _clean_download_link(match)
             if not is_valid_download_link(link):

@@ -6,7 +6,9 @@ from app.services.link import (
     looks_like_context_message,
     looks_like_link_only_message,
     context_for_115_link,
+    context_for_ed2k_link,
     extract_115_links,
+    extract_ed2k_links,
     telegram_message_text,
 )
 
@@ -18,13 +20,15 @@ def telegram_candidate_link_contexts(messages: list[Any], extra_texts: list[str]
 
     for message in ordered:
         text = telegram_message_text(message)
-        if not extract_115_links(text):
+        has_115 = bool(extract_115_links(text))
+        has_ed2k = bool(extract_ed2k_links(text))
+        if not has_115 and not has_ed2k:
             continue
         block = telegram_candidate_context_text(message, ordered, extra_texts)
         _merge_link_contexts(contexts, block)
 
     extra_block = "\n".join(text for text in extra_texts or [] if text)
-    if extract_115_links(extra_block):
+    if extract_115_links(extra_block) or extract_ed2k_links(extra_block):
         anchor = messages[0] if messages else None
         block = telegram_candidate_context_text(anchor, ordered, extra_texts) if anchor else extra_block
         _merge_link_contexts(contexts, block)
@@ -84,9 +88,10 @@ def telegram_candidate_context_text(
 
 
 def _merge_link_contexts(contexts: dict[str, str], text: str) -> None:
-    links = extract_115_links(text)
-    for link in links:
-        contexts.setdefault(link, context_for_115_link(text, link, len(links)))
+    for link in extract_115_links(text):
+        contexts.setdefault(link, context_for_115_link(text, link, len(extract_115_links(text))))
+    for link in extract_ed2k_links(text):
+        contexts.setdefault(link, context_for_ed2k_link(text, link))
 
 
 def _ordered_messages(messages: list[Any]) -> list[Any]:
@@ -162,7 +167,10 @@ def _title_first_context_block(contexts: dict[str, str], extra_texts: list[str] 
             improved[link] = context
             continue
         combined = _combined_text([*title_extras, context], None)
-        improved[link] = context_for_115_link(combined, link, max(len(contexts), 1)) or combined
+        if link.casefold().startswith("ed2k://"):
+            improved[link] = context_for_ed2k_link(combined, link) or combined
+        else:
+            improved[link] = context_for_115_link(combined, link, max(len(contexts), 1)) or combined
     return improved
 
 

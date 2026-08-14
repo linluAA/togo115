@@ -119,6 +119,31 @@ def _metadata_field_line(line: str | None) -> bool:
     return bool(METADATA_FIELD_LINE_RE.search(str(line or "").strip()))
 
 
+def context_for_ed2k_link(text: str | None, link: str) -> str:
+    """Return the text segment around an ed2k link for title extraction.
+
+    ed2k links typically appear one per line in Telegraph pages.
+    Returns the link line plus one preceding line (which often carries
+    the episode/title info).
+    """
+    message = text or ""
+    if not message:
+        return message
+    lines = message.splitlines()
+    for i, line in enumerate(lines):
+        if link in line:
+            start = max(0, i - 1)
+            end = min(len(lines), i + 2)
+            return "\n".join(lines[start:end])
+    # Fallback: return surrounding text
+    position = message.find(link)
+    if position < 0:
+        return message[:500]
+    start = max(0, position - 160)
+    end = min(len(message), position + len(link) + 160)
+    return message[start:end]
+
+
 
 
 

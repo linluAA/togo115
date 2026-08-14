@@ -10,7 +10,7 @@ from app.services.adapters.telegram.scan.message_candidates import (
     telegram_candidate_context_text,
     telegram_candidate_link_contexts,
 )
-from app.services.link import context_for_115_link, extract_115_links, telegram_message_text
+from app.services.link import context_for_115_link, context_for_ed2k_link, extract_115_links, extract_ed2k_links, telegram_message_text
 from app.services.types import SearchResult
 
 
@@ -54,12 +54,15 @@ class TelegramMessageLinkExtractMixin:
             button_links += len(expanded_links)
             for link, button_text in expanded_links:
                 context_source = "\n".join(part for part in (telegram_candidate_context_text(related, related_messages, extra_texts), button_text) if part)
-                link_contexts.setdefault(link, context_for_115_link(context_source, link, len(link_contexts) + 1))
+                if link.casefold().startswith("ed2k://"):
+                    link_contexts.setdefault(link, context_for_ed2k_link(context_source, link))
+                else:
+                    link_contexts.setdefault(link, context_for_115_link(context_source, link, len(link_contexts) + 1))
         return _elapsed_ms(started), button_links
 
     async def _messages_for_link_extraction(self, client: TelegramClient | None, message: Any, entity: Any = None, match_queries: list[str] | None = None, extra_texts: list[str] | None = None) -> list[Any]:
         extra_text_block = "\n".join(extra_texts or [])
-        if extra_text_block and extract_115_links(extra_text_block):
+        if extra_text_block and (extract_115_links(extra_text_block) or extract_ed2k_links(extra_text_block)):
             return [message]
         return await self._related_messages_for_link_scan(client, message, entity, match_queries)
 
@@ -70,16 +73,21 @@ class TelegramMessageLinkExtractMixin:
         return "\n".join(dict.fromkeys(parts))
 
     def _extract_link_contexts(self, text: str) -> dict[str, str]:
+        contexts: dict[str, str] = {}
         links = extract_115_links(text)
-        return {link: context_for_115_link(text, link, len(links)) for link in links}
+        for link in links:
+            contexts[link] = context_for_115_link(text, link, len(links))
+        for link in extract_ed2k_links(text):
+            contexts.setdefault(link, context_for_ed2k_link(text, link))
+        return contexts
 
     async def _collect_text_external_page_contexts(self, message_text: str, link_contexts: dict[str, str]) -> None:
         # Only fetch third-party resource pages. Skip URLs that already resolved as 115 shares.
-        known_links = set(link_contexts) | set(extract_115_links(message_text))
+        known_links = set(link_contexts) | set(extract_115_links(message_text)) | set(extract_ed2k_links(message_text))
         external_pages = [
             (page_url, "消息外链")
             for page_url in self._external_resource_page_urls(message_text)
-            if page_url not in known_links and not extract_115_links(page_url)
+            if page_url not in known_links and not extract_115_links(page_url) and not extract_ed2k_links(page_url)
         ]
         if not external_pages:
             return
@@ -88,6 +96,8 @@ class TelegramMessageLinkExtractMixin:
             context_source = "\n".join(part for part in (message_text, label, str(value or "")) if part)
             for link in extract_115_links(value):
                 link_contexts.setdefault(link, context_for_115_link(context_source, link, len(link_contexts) + 1))
+            for link in extract_ed2k_links(value):
+                link_contexts.setdefault(link, context_for_ed2k_link(context_source, link))
 
         await self._collect_external_page_links(external_pages, collect)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from app.services.link.telegram_context import _resource_title_line_score, context_for_115_link
+from app.services.link.telegram_context import _resource_title_line_score, context_for_115_link, context_for_ed2k_link
 from app.services.link.telegram_hints import (
     TELEGRAM_LINK_BUTTON_WORDS,
     _looks_like_context_message,

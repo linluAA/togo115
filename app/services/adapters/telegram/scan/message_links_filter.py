@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from app.services.adapters.telegram.scan.extract_cache import set_cached_message_extract
-from app.services.link import context_for_115_link, extract_115_links, local_text_matches_query
+from app.services.link import context_for_115_link, context_for_ed2k_link, extract_115_links, local_text_matches_query
 from app.services.types import SearchResult
 from app.services.adapters.telegram.scan.message_titles import (
     _enrich_title_with_episode_marker,
@@ -40,7 +40,10 @@ class TelegramMessageLinkFilterMixin:
             return link_contexts
         filtered: dict[str, str] = {}
         for link, context in link_contexts.items():
-            scoped = context_for_115_link(context, link, max(len(link_contexts), 2)) or context
+            if link.casefold().startswith("ed2k://"):
+                scoped = context_for_ed2k_link(context, link) or context
+            else:
+                scoped = context_for_115_link(context, link, max(len(link_contexts), 2)) or context
             scoped = _restore_query_title_context(context, scoped, match_queries)
             title = _telegram_resource_title(scoped)
             if not any(local_text_matches_query(scoped, query) for query in match_queries):
