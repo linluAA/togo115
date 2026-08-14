@@ -53,15 +53,15 @@ async function renderEmby() {
           }).join("") : `<div class="empty-state" style="margin:0;padding:16px 0"><div class="empty-icon">◌</div><h3>暂无观看历史</h3></div>`}
         </div>
         <div class="section-header" style="margin-top:16px"><h2>用户</h2></div>
-        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117">${users.length ? escapeHtml((users[0].name || users[0].username || "U").charAt(0).toUpperCase()) : "A"}</div>
-            <div><div style="font-weight:600;font-size:14px">${users.length ? escapeHtml(users[0].name || users[0].username || "用户") : "Admin"}</div><div style="font-size:12px;color:var(--dim)">管理员</div></div>
-          </div>
-          <div style="display:flex;gap:12px;font-size:12px;color:var(--dim)">
-            <span>📺 ${movieCount + seriesCount} 部</span>
-            <span>💾 ${data.storage_used || "-"}</span>
-          </div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px;display:flex;flex-direction:column;gap:10px">
+          ${users.length ? users.map((u) => {
+            const userName = escapeHtml(u.name || u.username || "用户");
+            const initial = userName.charAt(0).toUpperCase();
+            return `<div style="display:flex;align-items:center;gap:12px">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117;flex-shrink:0">${escapeHtml(initial)}</div>
+              <div><div style="font-weight:600;font-size:14px">${userName}</div><div style="font-size:12px;color:var(--dim)">${escapeHtml(u.role || "用户")}</div></div>
+            </div>`;
+          }).join("") : `<div style="text-align:center;padding:8px 0;color:var(--dim);font-size:13px">暂无用户</div>`}
         </div>
       </div>
     </div>

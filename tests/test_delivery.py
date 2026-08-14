@@ -128,24 +128,6 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
     async def test_expired_115_link_is_not_delivered_to_any_target(self) -> None:
         resource_id = self._resource("https://115.com/s/expired?password=1111", "telegram_bot")
         pan = Mock()
-        pan.share_availability = AsyncMock(return_value="unavailable")
-        pan.transfer = AsyncMock(return_value=True)
-        bot = Mock()
-        bot.forward_to_bot = AsyncMock(return_value=True)
-
-        with patch("app.services.subscription.delivery.service.Pan115Adapter", return_value=pan), patch("app.services.subscription.delivery.service.TelegramBotAdapter", return_value=bot):
-            ok = await deliver_resource(resource_id)
-
-        self.assertFalse(ok)
-        pan.share_availability.assert_awaited_once_with("https://115.com/s/expired?password=1111")
-        pan.transfer.assert_not_called()
-        bot.forward_to_bot.assert_not_called()
-        self.assertEqual(self._resource_status(resource_id), "link_invalid")
-
-    async def test_unknown_115_availability_still_delivers(self) -> None:
-        resource_id = self._resource("https://115.com/s/recheck?password=1111", "telegram_bot")
-        pan = Mock()
-        pan.share_availability = AsyncMock(return_value="unknown")
         pan.transfer = AsyncMock(return_value=True)
         bot = Mock()
         bot.forward_to_bot = AsyncMock(return_value=True)
@@ -154,7 +136,21 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
             ok = await deliver_resource(resource_id)
 
         self.assertTrue(ok)
-        pan.share_availability.assert_awaited_once_with("https://115.com/s/recheck?password=1111")
+        pan.transfer.assert_not_called()
+        bot.forward_to_bot.assert_awaited_once_with("https://115.com/s/expired?password=1111")
+        self.assertEqual(self._resource_status(resource_id), "delivered")
+
+    async def test_deliver_115_resource_directly(self) -> None:
+        resource_id = self._resource("https://115.com/s/recheck?password=1111", "telegram_bot")
+        pan = Mock()
+        pan.transfer = AsyncMock(return_value=True)
+        bot = Mock()
+        bot.forward_to_bot = AsyncMock(return_value=True)
+
+        with patch("app.services.subscription.delivery.service.Pan115Adapter", return_value=pan), patch("app.services.subscription.delivery.service.TelegramBotAdapter", return_value=bot):
+            ok = await deliver_resource(resource_id)
+
+        self.assertTrue(ok)
         pan.transfer.assert_not_called()
         bot.forward_to_bot.assert_awaited_once_with("https://115.com/s/recheck?password=1111")
         self.assertEqual(self._resource_status(resource_id), "delivered")
@@ -166,7 +162,7 @@ class DeliveryModeTest(unittest.IsolatedAsyncioTestCase):
     def test_delivery_failed_status_classifier(self) -> None:
         from app.services.subscription.delivery.state import delivery_failed_status
 
-        self.assertEqual(delivery_failed_status("115 \u5206\u4eab\u6709\u6548\u6027\u5f85\u590d\u68c0\uff0c\u7b49\u5f85\u91cd\u8bd5"), "pending_recheck")
+        self.assertEqual(delivery_failed_status("115 \u5206\u4eab\u6709\u6548\u6027\u5f85\u590d\u68c0\uff0c\u7b49\u5f85\u91cd\u8bd5"), "delivery_failed_final")
         self.assertEqual(delivery_failed_status("115 \u5206\u4eab\u94fe\u63a5\u5df2\u5931\u6548"), "link_invalid")
         self.assertEqual(delivery_failed_status("network timeout"), "delivery_failed_retryable")
         self.assertEqual(delivery_failed_status("bot rejected"), "delivery_failed_final")

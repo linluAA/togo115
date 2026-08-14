@@ -203,7 +203,11 @@ const el=document.createElement("div");
 el.className="toast";
 el.textContent=message;
 document.body.appendChild(el);
-setTimeout(()=>el.remove(),2800);
+requestAnimationFrame(()=>el.classList.add("show"));
+setTimeout(()=>{
+el.classList.remove("show");
+setTimeout(()=>el.remove(),400);
+},2800);
 }
 function posterUrl(item){
 if(item.poster_url)return item.poster_url;
@@ -608,7 +612,7 @@ push(`<strong>${dashboardEscapeHtml(task.subscription_title || task.title || "�
 const recent=[...resources].sort((a,b)=>Number(b.id||0)-Number(a.id||0));
 for(const resource of recent.slice(0,3)){
 const status=String(resource.status||"pending").toLowerCase();
-const statusText=status==="delivered"?"已入库":(status==="failed"?"下载失败":"新资源待确认");
+const statusText=status==="delivered"?"已投递":(status==="failed"?"下载失败":"新资源待确认");
 const color=status==="delivered"?"var(--green)":(status==="failed"?"var(--rose)":"var(--amber)");
 push(`<strong>${dashboardEscapeHtml(resource.display_title || resource.subscription_title || resource.title || "资源")}</strong> ${statusText}`,"最近",color);
 }
@@ -828,14 +832,20 @@ root.innerHTML=`
       <div class="view-section">${isSearching && state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : isSearching ? `<div class="empty">正在搜索...</div>` : ``}</div>
     </div>
     <div id="tmdbTrendingContent" class="${isSearching ? "hidden" : ""}">
+      <div class="view-section" id="tmdbLoading">
+        <div class="tmdb-loading">
+          <div class="tmdb-spinner"></div>
+          <p>正在读取 TMDB 榜单...</p>
+        </div>
+      </div>
       <div class="section-header view-section">
         <h2>热门剧集</h2>
       </div>
-      <div class="view-section" id="tmdbTvGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+      <div class="view-section" id="tmdbTvGrid"></div>
       <div class="section-header view-section">
         <h2>热门电影</h2>
       </div>
-      <div class="view-section" id="tmdbMovieGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+      <div class="view-section" id="tmdbMovieGrid"></div>
     </div>
   `;
 root.querySelectorAll("[data-tmdb-type]").forEach((btn)=>btn.addEventListener("click",()=>{
@@ -869,11 +879,13 @@ await renderTmdbTrending(root);
 async function renderTmdbTrending(root=$("#view")){
 const tvGrid=root.querySelector("#tmdbTvGrid");
 const movieGrid=root.querySelector("#tmdbMovieGrid");
+const loading=root.querySelector("#tmdbLoading");
 if(!tvGrid||!movieGrid||state.tmdbSearchQuery.trim())return;
 try{
 const data=await loadTmdbTrending(20);
 state.tmdbTrending=data;
 if(state.tmdbSearchQuery.trim())return;
+if(loading)loading.remove();
 const tv=data.tv||[];
 const movie=data.movie||[];
 tvGrid.innerHTML=tv.length
@@ -921,7 +933,7 @@ function mediaGrid(items,type,options={}){
 if(!items.length)return`<div class="empty">暂无数据。</div>`;
 const limit=options.limit||20;
 const visibleItems=items.slice(0,limit);
-const cards=visibleItems.map((item,index)=>{
+const cardHtmlList=visibleItems.map((item,index)=>{
 const title=item.name||item.title||"未命名";
 const mediaType=item.media_type==="movie"||item.media_type==="tv"?item.media_type:type;
 const releaseYear=Number.parseInt((item.first_air_date||item.release_date||"").slice(0,4),10)||null;
@@ -938,12 +950,7 @@ keywords:[title],
 state.mediaPayloads.set(payloadId,payload);
 const year=(item.first_air_date||item.release_date||"").slice(0,4)||"未知";
 const rating=item.vote_average?`★ ${Number(item.vote_average).toFixed(1)}`:"";
-const isLast=index===visibleItems.length-1;
-const moreOverlay=isLast&&options.more?`<div class="more-overlay" data-more="${type}">
-      <span class="more-text">查看更多</span>
-      <span class="more-arrow">→</span>
-    </div>`:"";
-return`<article class="media-card${isLast && options.more ? " has-more" : ""}">
+return`<article class="media-card">
       <div class="poster" data-detail="${payloadId}" aria-label="查看 ${title} 详情" title="查看详情">
         <img src="${posterUrl(item)}" alt="${escapeHtml(title)}" loading="lazy" />
         <div class="overlay">
@@ -955,10 +962,24 @@ return`<article class="media-card${isLast && options.more ? " has-more" : ""}">
         <div class="title">${escapeHtml(title)}</div>
         <div class="meta"><span>${mediaType === "tv" ? "剧集" : "电影"} · ${year}</span></div>
       </div>
-      ${moreOverlay}
     </article>`;
-}).join("");
-return`<div class="media-grid">${cards}</div>`;
+});
+let html='<div class="media-grid">';
+if(cardHtmlList.length>0&&options.more){
+html+=cardHtmlList.slice(0,-1).join("");
+html+='</div>';
+html+=`<div class="last-card-wrap">
+      <div class="more-section" data-more="${type}">
+        <span class="more-text">查看更多</span>
+        <span class="more-arrow">→</span>
+      </div>
+      ${cardHtmlList[cardHtmlList.length - 1]}
+    </div>`;
+} else{
+html+=cardHtmlList.join("");
+html+='</div>';
+}
+return html;
 }
 function bindMediaActions(root=document){
 root.querySelectorAll("[data-detail]").forEach((btn)=>btn.addEventListener("click",()=>showMediaDetail(btn.dataset.detail)));
@@ -1131,15 +1152,15 @@ root.innerHTML=`
           }).join("") : `<div class="empty-state"style="margin:0;padding:16px 0"><div class="empty-icon">◌</div><h3>暂无观看历史</h3></div>`}
         </div>
 <div class="section-header"style="margin-top:16px"><h2>用户</h2></div>
-<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px">
-<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117">${users.length?escapeHtml((users[0].name||users[0].username||"U").charAt(0).toUpperCase()):"A"}</div>
-            <div><div style="font-weight:600;font-size:14px">${users.length ? escapeHtml(users[0].name || users[0].username || "用户") : "Admin"}</div><div style="font-size:12px;color:var(--dim)">管理员</div></div>
-</div>
-          <div style="display:flex;gap:12px;font-size:12px;color:var(--dim)">
-            <span>📺 ${movieCount + seriesCount} 部</span>
-<span>💾${data.storage_used||"-"}</span>
-          </div>
+<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px;display:flex;flex-direction:column;gap:10px">
+${users.length?users.map((u)=>{
+const userName=escapeHtml(u.name||u.username||"用户");
+const initial=userName.charAt(0).toUpperCase();
+return`<div style="display:flex;align-items:center;gap:12px">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--coral));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1117;flex-shrink:0">${escapeHtml(initial)}</div>
+              <div><div style="font-weight:600;font-size:14px">${userName}</div><div style="font-size:12px;color:var(--dim)">${escapeHtml(u.role || "用户")}</div></div>
+            </div>`;
+}).join(""):`<div style="text-align:center;padding:8px 0;color:var(--dim);font-size:13px">暂无用户</div>`}
 </div>
       </div>
 </div>

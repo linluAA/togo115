@@ -21,3 +21,4 @@ ui_preview*.html
 .tools/*.out.log
 tools/
 .coverage
+NUL

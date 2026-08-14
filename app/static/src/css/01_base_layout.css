@@ -612,12 +612,45 @@
   padding: 8px 0 2px;
 }
 
-/* ── More Overlay (贴在最后一张卡片顶部的查看更多) ── */
-.more-overlay {
+/* ── TMDB Loading (居中加载动画) ── */
+.tmdb-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 80px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+.tmdb-loading p {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+}
+.tmdb-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--line-strong);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: tmdb-spin .8s linear infinite;
+}
+@keyframes tmdb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── More Section (最后一张卡片上方独立查看更多) ── */
+.last-card-wrap {
+  position: relative;
+  margin-bottom: 32px;
+}
+.more-section {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -627,27 +660,24 @@
   color: #fff;
   cursor: pointer;
   transition: all .2s ease;
-  z-index: 2;
   border-radius: var(--radius) var(--radius) 0 0;
+  pointer-events: auto;
 }
-.has-more {
-  position: relative;
-}
-.more-overlay:hover {
+.more-section:hover {
   background: linear-gradient(to bottom, rgba(15, 23, 42, .72), rgba(15, 23, 42, .28) 80%, transparent);
 }
-.more-overlay .more-text {
+.more-section .more-text {
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: .3px;
 }
-.more-overlay .more-arrow {
+.more-section .more-arrow {
   font-size: 15px;
   line-height: 1;
   transition: transform .2s;
 }
-.more-overlay:hover .more-arrow {
+.more-section:hover .more-arrow {
   transform: translateX(3px);
 }
 

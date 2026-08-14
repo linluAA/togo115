@@ -3,7 +3,6 @@ from __future__ import annotations
 """Runtime search/job metrics package."""
 
 from app.services.metrics.record import (
-    record_115_validation,
     record_attach_outcome,
     record_index_query,
     record_job_event,
@@ -16,7 +15,6 @@ from app.services.metrics.store import _COUNTERS, _EVENTS, _LOCK, _SAMPLES, _per
 
 __all__ = [
     "record_telegram_search",
-    "record_115_validation",
     "record_attach_outcome",
     "record_prewarm",
     "record_job_event",

@@ -136,7 +136,7 @@ function dashboardActivityItems() {
   const recent = [...resources].sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
   for (const resource of recent.slice(0, 3)) {
     const status = String(resource.status || "pending").toLowerCase();
-    const statusText = status === "delivered" ? "已入库" : (status === "failed" ? "下载失败" : "新资源待确认");
+    const statusText = status === "delivered" ? "已投递" : (status === "failed" ? "下载失败" : "新资源待确认");
     const color = status === "delivered" ? "var(--green)" : (status === "failed" ? "var(--rose)" : "var(--amber)");
     push(`<strong>${dashboardEscapeHtml(resource.display_title || resource.subscription_title || resource.title || "资源")}</strong> ${statusText}`, "最近", color);
   }

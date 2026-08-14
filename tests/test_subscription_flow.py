@@ -12,7 +12,6 @@ from app.services.integrations import SearchResult, TelegramClientAdapter
 from app.services.subscription.library import snapshot as snapshot_module
 import app.services.subscription.runtime as runtime_module
 from app.services.subscription.search import tasks as subscription_tasks
-from app.services.subscription.search.share115_cache import reset_process_115_cache
 from app.services.subscription.search.service import search_and_attach_resources
 from app.services.subscription.search.all import search_all_active_subscriptions
 from app.services.subscription.match.matching import result_matches_subscription
@@ -26,10 +25,8 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         settings.data_dir = Path(self.temp_dir.name)
         settings.database_path = settings.data_dir / "togo115-test.sqlite3"
         init_db()
-        reset_process_115_cache()
 
     def tearDown(self) -> None:
-        reset_process_115_cache()
         settings.data_dir = self.old_data_dir
         settings.database_path = self.old_database_path
         close_connection_pool()
@@ -90,7 +87,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter") as pan_cls, patch(
+        ) as rss_cls, patch("app.services.adapters.pan115.Pan115Adapter") as pan_cls, patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             pan_cls.return_value.share_availability = AsyncMock(return_value="available")
@@ -193,7 +190,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter") as pan_cls, patch(
+        ) as rss_cls, patch("app.services.adapters.pan115.Pan115Adapter") as pan_cls, patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             pan_cls.return_value.share_availability = AsyncMock(return_value="available")
@@ -265,46 +262,39 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(results), 1)
 
-    async def test_expired_115_link_is_skipped_and_next_link_is_delivered(self) -> None:
+    async def test_multiple_telegram_115_links_saves_first_matching(self) -> None:
+        """多个115链接不再检测有效性，直接取第一个匹配结果保存"""
         subscription_id = self._drama_subscription()
         with db() as conn:
             conn.execute("UPDATE subscriptions SET tmdb_id = ? WHERE id = ?", (12345, subscription_id))
 
-        expired = SearchResult(
-            title="Drama 1080p expired",
-            url="https://115.com/s/expired?password=1111",
+        first = SearchResult(
+            title="Drama 1080p first",
+            url="https://115.com/s/first?password=1111",
             source="-100123",
-            context="Drama 1080p\nhttps://115.com/s/expired?password=1111",
+            context="Drama 1080p\nhttps://115.com/s/first?password=1111",
         )
-        valid = SearchResult(
-            title="Drama 1080p valid",
-            url="https://115.com/s/valid?password=2222",
+        second = SearchResult(
+            title="Drama 1080p second",
+            url="https://115.com/s/second?password=2222",
             source="-100123",
-            context="Drama 1080p\nhttps://115.com/s/valid?password=2222",
+            context="Drama 1080p\nhttps://115.com/s/second?password=2222",
         )
-        pan = AsyncMock()
-
-        async def share_side(url: str) -> str:
-            return "unavailable" if "expired" in str(url) else "available"
-
-        pan.share_availability = AsyncMock(side_effect=share_side)
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
-            telegram_cls.return_value.search_history = AsyncMock(return_value=[expired, valid])
-            rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
+            telegram_cls.return_value.search_history = AsyncMock(return_value=[first, second])
 
             results = await search_and_attach_resources(subscription_id)
 
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["url"], "https://115.com/s/valid?password=2222")
+        self.assertEqual(results[0]["url"], first.url)
         deliver.assert_awaited_once()
         with db() as conn:
             rows = conn.execute("SELECT url FROM resources ORDER BY id").fetchall()
-        self.assertEqual([row["url"] for row in rows], ["https://115.com/s/valid?password=2222"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["url"], first.url)
 
     async def test_multiple_valid_telegram_hits_only_deliver_best_candidate(self) -> None:
         subscription_id = self._drama_subscription()
@@ -330,7 +320,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.adapters.pan115.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[lower, better])
@@ -407,15 +397,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             source="-1001",
             context="Drama S01E07 1080p\nTMDB ID: 12345",
         )
-        pan_cache = type("C", (), {})()
-        async def availability(url):
-            return "available"
-        async def availability_many(urls):
-            return {url: "available" for url in urls}
-        pan_cache.availability = availability
-        pan_cache.availability_many = availability_many
-        with patch("app.services.subscription.search.selection.process_115_cache", return_value=pan_cache):
-            created, matched, summary = await attach_telegram_results(None, subscription, [first, second])
+        created, matched, summary = await attach_telegram_results(None, subscription, [first, second])
         self.assertEqual(summary.get("created"), 2)
         self.assertEqual({item["url"] for item in created}, {first.url, second.url})
 
@@ -453,7 +435,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.adapters.pan115.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
@@ -490,7 +472,7 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch("app.services.adapters.pan115.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])
@@ -502,40 +484,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
         deliver.assert_not_awaited()
         rss_cls.return_value.search_history_by_priority_until_match.assert_awaited()
 
-    async def test_unknown_telegram_115_link_is_saved_for_recheck_and_falls_back(self) -> None:
-        subscription_id = self._drama_subscription()
-        with db() as conn:
-            conn.execute("UPDATE subscriptions SET tmdb_id = ? WHERE id = ?", (12345, subscription_id))
+    
 
-        recheck = SearchResult(
-            title="Drama S01E06 1080p recheck",
-            url="https://115.com/s/recheck?password=1111",
-            source="-100123",
-            context="Drama S01E06 1080p\nTMDB ID: 12345\nhttps://115.com/s/recheck?password=1111",
-        )
-        pan = AsyncMock()
-        pan.share_availability = AsyncMock(return_value="unknown")
-
-        with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
-            "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
-        ) as deliver:
-            telegram_cls.return_value.search_history = AsyncMock(return_value=[recheck])
-            rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=[])
-
-            results = await search_and_attach_resources(subscription_id)
-
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["url"], "https://115.com/s/recheck?password=1111")
-        deliver.assert_awaited_once()
-        rss_cls.return_value.search_history_by_priority_until_match.assert_not_awaited()
-        with db() as conn:
-            rows = conn.execute("SELECT url FROM resources ORDER BY id").fetchall()
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["url"], "https://115.com/s/recheck?password=1111")
-
-    async def test_expired_telegram_115_link_falls_back_to_magnet_source(self) -> None:
+    async def test_telegram_115_link_is_saved_without_validity_check(self) -> None:
+        """115 链接不再检测有效性，直接保存为资源"""
         subscription_id = self._drama_subscription()
         with db() as conn:
             conn.execute("UPDATE subscriptions SET tmdb_id = ? WHERE id = ?", (12345, subscription_id))
@@ -546,39 +498,20 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
             source="-100123",
             context="Drama 1080p\nhttps://115.com/s/expired?password=1111",
         )
-        magnet = SearchResult(
-            title="Drama S01E06 1080p magnet",
-            url="magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
-            source="site_plugin:test",
-            context="Drama S01E06 1080p magnet\nTMDB ID: 12345",
-        )
-        pan = AsyncMock()
-        pan.share_availability = AsyncMock(return_value="unavailable")
-        fallback_groups = [
-            {
-                "priority": 1,
-                "source": {"name": "test-magnet", "type": "site_plugin"},
-                "results": [magnet],
-            }
-        ]
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
-            "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(return_value=True)
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[expired])
-            rss_cls.return_value.search_history_by_priority_until_match = AsyncMock(return_value=fallback_groups)
 
             results = await search_and_attach_resources(subscription_id)
 
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["url"], magnet.url)
+        self.assertEqual(results[0]["url"], expired.url)
         deliver.assert_awaited_once()
-        rss_cls.return_value.search_history_by_priority_until_match.assert_awaited_once()
         with db() as conn:
             rows = conn.execute("SELECT url FROM resources ORDER BY id").fetchall()
-        self.assertEqual([row["url"] for row in rows], [magnet.url])
+        self.assertEqual([row["url"] for row in rows], [expired.url])
 
     async def test_telegram_delivery_failure_falls_back_to_magnet_source(self) -> None:
         subscription_id = self._drama_subscription()
@@ -604,12 +537,10 @@ class SubscriptionSearchFlowTest(unittest.IsolatedAsyncioTestCase):
                 "results": [magnet],
             }
         ]
-        pan = AsyncMock()
-        pan.share_availability = AsyncMock(return_value="available")
 
         with patch("app.services.subscription.search.discovery.TelegramClientAdapter") as telegram_cls, patch(
             "app.services.subscription.search.discovery.RssTorznabAdapter"
-        ) as rss_cls, patch("app.services.subscription.search.share115_cache.Pan115Adapter", return_value=pan), patch(
+        ) as rss_cls, patch(
             "app.services.subscription.search.service.deliver_resource", AsyncMock(side_effect=[False, True])
         ) as deliver:
             telegram_cls.return_value.search_history = AsyncMock(return_value=[telegram_result])

@@ -38,7 +38,6 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
                     "title": subscription.get("title"),
                     "raw_matched": summary.get("raw_matched", 0),
                     "duplicates": summary.get("duplicates", 0),
-                    "expired_115": summary.get("expired_115", 0),
                     "from_index": summary.get("from_index", False),
                 },
             )
@@ -109,10 +108,6 @@ def _telegram_should_skip_full_after_fast(summary: dict[str, Any], subscription:
     """
     if int(summary.get("created") or 0) > 0:
         return True
-    if int(summary.get("expired_115") or 0) > 0:
-        return False
-    if int(summary.get("recheck_115") or 0) > 0:
-        return False
     if int(summary.get("save_failed") or 0) > 0:
         return False
     available = int(summary.get("available_matched") or 0)
@@ -160,7 +155,7 @@ def _telegram_summary_needs_full_retry(summary: dict[str, Any], subscription: di
         if _telegram_should_skip_full_after_fast(summary, subscription):
             return False
         return True
-    return bool(summary.get("expired_115") or summary.get("recheck_115") or summary.get("save_failed"))
+    return bool(summary.get("save_failed"))
 
 
 def _log_telegram_stage_result(
@@ -200,8 +195,6 @@ def _telegram_should_skip_fallback(summary: dict[str, Any], subscription: dict |
         return False
     if int(summary.get("created") or 0) > 0:
         return True
-    if int(summary.get("expired_115") or 0) > 0:
-        return False
     if int(summary.get("save_failed") or 0) > 0:
         return False
     if int(summary.get("duplicates") or 0) != available:

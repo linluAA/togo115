@@ -27,14 +27,12 @@ SUPPORTED_KINDS = (
     "subscription_search",
     "subscription_search_all",
     "emby_subscription_sync",
-    "recheck_pending_115",
     "retry_failed_resources",
 )
 
 # Non-Telegram jobs can overlap; TG search kinds stay exclusive.
 NON_TG_KINDS = (
     "emby_subscription_sync",
-    "recheck_pending_115",
     "retry_failed_resources",
 )
 TG_KINDS = (
@@ -193,11 +191,6 @@ class JobWorker:
                 await asyncio.sleep(delay)
             result = await _default_emby_sync()
             return result if isinstance(result, dict) else {"ok": True}
-        if kind == "recheck_pending_115":
-            from app.services.subscription import recheck_pending_115_resources
-
-            result = await recheck_pending_115_resources()
-            return result if isinstance(result, dict) else {"ok": True, "result": result}
         if kind == "retry_failed_resources":
             from app.services.subscription import retry_failed_resources
 

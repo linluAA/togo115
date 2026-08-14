@@ -13,7 +13,6 @@ def metrics_snapshot() -> dict[str, Any]:
 
     with _LOCK:
         searches = max(1, int(_COUNTERS["telegram_searches"]))
-        checked = max(1, int(_COUNTERS["115_checks"]))
         recent = list(_EVENTS)[:30]
         counters = dict(_COUNTERS)
         latency = {
@@ -21,7 +20,6 @@ def metrics_snapshot() -> dict[str, Any]:
             "search_ms": _sample_stats("search_ms"),
             "extract_ms": _sample_stats("extract_ms"),
             "total_ms": _sample_stats("total_ms"),
-            "115_ms": _sample_stats("115_ms"),
         }
     try:
         desired_concurrency = runtime.desired_search_concurrency()
@@ -74,22 +72,12 @@ def metrics_snapshot() -> dict[str, Any]:
             "remote_hits": int(counters["remote_hits"]),
             "cancelled": int(counters["cancelled"]),
         },
-        "share_115": {
-            "checks": int(counters["115_checks"]),
-            "avg_ms": round(int(counters["115_ms_sum"]) / checked, 1) if int(counters["115_checks"]) else 0,
-            "p50_ms": latency["115_ms"]["p50"],
-            "p95_ms": latency["115_ms"]["p95"],
-            "expired": int(counters["115_expired"]),
-            "recheck": int(counters["115_recheck"]),
-        },
         "attach": {
             "runs": int(counters["attach_runs"]),
             "created": int(counters["attach_created"]),
             "duplicates": int(counters["attach_duplicates"]),
-            "expired": int(counters["attach_expired"]),
             "save_failed": int(counters["attach_save_failed"]),
             "mismatch": int(counters["attach_mismatch"]),
-            "recheck": int(counters["attach_recheck"]),
         },
         "latency": latency,
         "cache": extract_cache_stats(),

@@ -135,14 +135,20 @@ async function renderTmdb() {
       <div class="view-section">${isSearching && state.tmdbSearch.length ? mediaGrid(state.tmdbSearch, "tv") : isSearching ? `<div class="empty">正在搜索...</div>` : ``}</div>
     </div>
     <div id="tmdbTrendingContent" class="${isSearching ? "hidden" : ""}">
+      <div class="view-section" id="tmdbLoading">
+        <div class="tmdb-loading">
+          <div class="tmdb-spinner"></div>
+          <p>正在读取 TMDB 榜单...</p>
+        </div>
+      </div>
       <div class="section-header view-section">
         <h2>热门剧集</h2>
       </div>
-      <div class="view-section" id="tmdbTvGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+      <div class="view-section" id="tmdbTvGrid"></div>
       <div class="section-header view-section">
         <h2>热门电影</h2>
       </div>
-      <div class="view-section" id="tmdbMovieGrid"><div class="empty-state"><div class="empty-icon">◌</div><h3>正在读取 TMDB 榜单...</h3></div></div>
+      <div class="view-section" id="tmdbMovieGrid"></div>
     </div>
   `;
   root.querySelectorAll("[data-tmdb-type]").forEach((btn) => btn.addEventListener("click", () => {
@@ -177,11 +183,13 @@ async function renderTmdb() {
 async function renderTmdbTrending(root = $("#view")) {
   const tvGrid = root.querySelector("#tmdbTvGrid");
   const movieGrid = root.querySelector("#tmdbMovieGrid");
+  const loading = root.querySelector("#tmdbLoading");
   if (!tvGrid || !movieGrid || state.tmdbSearchQuery.trim()) return;
   try {
     const data = await loadTmdbTrending(20);
     state.tmdbTrending = data;
     if (state.tmdbSearchQuery.trim()) return;
+    if (loading) loading.remove();
     const tv = data.tv || [];
     const movie = data.movie || [];
     tvGrid.innerHTML = tv.length

@@ -37,33 +37,11 @@ def record_telegram_search(payload: dict[str, Any]) -> None:
         _SAMPLES["extract_ms"].append(event["extract_ms"])
         _SAMPLES["total_ms"].append(event["total_ms"])
 
-def record_115_validation(payload: dict[str, Any]) -> None:
-    event = {
-        "ts": time.time(),
-        "kind": "115_validation",
-        "subscription_id": payload.get("id"),
-        "115_ms": int(payload.get("115_ms") or 0),
-        "checked_115": int(payload.get("checked_115") or 0),
-        "expired_115": int(payload.get("expired_115") or 0),
-        "recheck_115": int(payload.get("recheck_115") or 0),
-        "created": int(payload.get("created") or 0),
-        "from_index": bool(payload.get("from_index") or False),
-    }
-    with _LOCK:
-        _EVENTS.appendleft(event)
-        _COUNTERS["115_checks"] = int(_COUNTERS["115_checks"]) + event["checked_115"]
-        _COUNTERS["115_ms_sum"] = int(_COUNTERS["115_ms_sum"]) + event["115_ms"]
-        _COUNTERS["115_expired"] = int(_COUNTERS["115_expired"]) + event["expired_115"]
-        _COUNTERS["115_recheck"] = int(_COUNTERS["115_recheck"]) + event["recheck_115"]
-        _SAMPLES["115_ms"].append(event["115_ms"])
-
 def record_attach_outcome(payload: dict[str, Any]) -> None:
     """Track why TG attach did or did not create a deliverable resource."""
     created = int(payload.get("created") or 0)
     duplicates = int(payload.get("duplicates") or 0)
-    expired = int(payload.get("expired_115") or 0)
     save_failed = int(payload.get("save_failed") or 0)
-    recheck = int(payload.get("recheck_115") or 0)
     raw_matched = int(payload.get("raw_matched") or 0)
     candidates = int(payload.get("candidates") or 0)
     mismatch = 1 if candidates > 0 and raw_matched == 0 and created == 0 else 0
@@ -73,9 +51,7 @@ def record_attach_outcome(payload: dict[str, Any]) -> None:
         "subscription_id": payload.get("id"),
         "created": created,
         "duplicates": duplicates,
-        "expired_115": expired,
         "save_failed": save_failed,
-        "recheck_115": recheck,
         "raw_matched": raw_matched,
         "candidates": candidates,
         "mismatch": mismatch,
@@ -86,10 +62,8 @@ def record_attach_outcome(payload: dict[str, Any]) -> None:
         _COUNTERS["attach_runs"] = int(_COUNTERS["attach_runs"]) + 1
         _COUNTERS["attach_created"] = int(_COUNTERS["attach_created"]) + created
         _COUNTERS["attach_duplicates"] = int(_COUNTERS["attach_duplicates"]) + duplicates
-        _COUNTERS["attach_expired"] = int(_COUNTERS["attach_expired"]) + expired
         _COUNTERS["attach_save_failed"] = int(_COUNTERS["attach_save_failed"]) + save_failed
         _COUNTERS["attach_mismatch"] = int(_COUNTERS["attach_mismatch"]) + mismatch
-        _COUNTERS["attach_recheck"] = int(_COUNTERS["attach_recheck"]) + recheck
 
 def record_prewarm(payload: dict[str, Any]) -> None:
     with _LOCK:

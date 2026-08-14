@@ -223,23 +223,6 @@ class HaisouShareFallbackProbeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(info.reason, "haisou_valid")
         fallback.assert_awaited_once()
 
-    async def test_hard_unavailable_becomes_recheck_when_haisou_is_unknown(self) -> None:
-        client = FakeClient(FakeResponse({"state": False, "errno": 4100001, "message": "share not found"}))
-        with patch(
-            "app.services.adapters.pan115_share._fallback_with_haisou",
-            new=AsyncMock(return_value=__import__("app.services.adapters.pan115_share_status", fromlist=["ShareAvailability"]).ShareAvailability(SHARE_UNKNOWN, "haisou_unknown", message="unknown")),
-        ):
-            info = await probe_share_availability(
-                link="https://115.com/s/fb5?password=5555",
-                share_code="fb5",
-                receive_code="5555",
-                cookie="UID=1",
-                client_factory=lambda: client,
-                normalize_link=normalize_115_share_link,
-            )
-        self.assertEqual(info.status, SHARE_UNKNOWN)
-        self.assertEqual(info.reason, "haisou_unknown")
-
     async def test_cookie_missing_without_fallback_keeps_auth_required(self) -> None:
         with patch("app.services.adapters.pan115_share._fallback_with_haisou", new=AsyncMock(return_value=None)):
             info = await probe_share_availability(

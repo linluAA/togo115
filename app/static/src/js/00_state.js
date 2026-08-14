@@ -228,7 +228,11 @@ function toast(message) {
   el.className = "toast";
   el.textContent = message;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2800);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 400);
+  }, 2800);
 }
 
 function posterUrl(item) {

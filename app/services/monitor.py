@@ -8,7 +8,6 @@ from app.services.adapters.telegram import TelegramBotAdapter, TelegramClientAda
 from app.services.job_worker import job_worker
 from app.services.subscription import (
     schedule_emby_subscription_sync,
-    schedule_recheck_pending_115,
     schedule_retry_failed_resources,
     schedule_search_all_active_subscriptions,
 )
@@ -19,7 +18,6 @@ class MonitorService:
         self._task: asyncio.Task | None = None
         self._stopping = asyncio.Event()
         self._last_emby_sync = 0.0
-        self._last_recheck = 0.0
         self._last_index_prewarm = 0.0
         self._last_subscription_rescan = 0.0
         self._last_failed_retry = 0.0
@@ -51,9 +49,6 @@ class MonitorService:
                 await telegram.ensure_monitoring()
                 await self._bot.ensure_polling()
                 now = time.monotonic()
-                if now - self._last_recheck > 120:
-                    schedule_recheck_pending_115()
-                    self._last_recheck = now
                 if now - self._last_failed_retry > 300:
                     schedule_retry_failed_resources(12)
                     self._last_failed_retry = now

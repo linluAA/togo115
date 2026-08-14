@@ -36,15 +36,10 @@ from app.services.subscription.delivery.service import (
 )
 from app.services.subscription.library.service import sync_subscription_list_with_emby
 from app.services.subscription.library.snapshot import library_snapshot_or_none
-from app.services.subscription.delivery.recheck import (
-    list_due_recheck_resources,
-    recheck_pending_115_resources,
-)
 from app.services.subscription.search.service import search_and_attach_resources
 from app.services.subscription.search.all import search_all_active_subscriptions
 from app.services.subscription.search.tasks import (
     schedule_emby_subscription_sync,
-    schedule_recheck_pending_115,
     schedule_retry_failed_resources,
     schedule_search_all_active_subscriptions,
     schedule_subscription_search,
@@ -75,15 +70,12 @@ __all__ = [
     "delete_subscriptions",
     "deliver_resource",
     "get_subscription",
-    "list_due_recheck_resources",
     "list_failed_resources",
     "list_subscriptions",
     "normalize_subscription",
-    "recheck_pending_115_resources",
     "refresh_rss_sources",
     "retry_failed_resources",
     "schedule_emby_subscription_sync",
-    "schedule_recheck_pending_115",
     "schedule_retry_failed_resources",
     "schedule_search_all_active_subscriptions",
     "schedule_subscription_search",

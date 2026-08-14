@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, patch
 
 from app.services.adapters.telegram.history.search import TelegramHistorySearchMixin
 from app.services.adapters.telegram.models import TelegramHistoryOptions, TelegramSearchBudget
-from app.services.subscription.delivery.link_validation import pick_first_available_115_result
 from app.services.types import SearchResult
 
 
@@ -74,40 +73,6 @@ class TelegramSearchPerfTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(harness.calls, ["server", "recent"])
         self.assertEqual(results[0].url, "https://115.com/s/recent?password=1111")
-
-    async def test_pick_first_available_stops_after_first_ok(self) -> None:
-        calls: list[str] = []
-
-        class FakePan:
-            async def share_availability(self, url: str) -> str:
-                calls.append(url)
-                if "bad" in url:
-                    return "unavailable"
-                return "available"
-
-        results = [
-            SearchResult(title="bad", url="https://115.com/s/bad?password=1", source="tg"),
-            SearchResult(title="ok", url="https://115.com/s/ok?password=1", source="tg"),
-            SearchResult(title="later", url="https://115.com/s/later?password=1", source="tg"),
-        ]
-        import app.services.subscription.delivery.link_validation as module
-
-        old = module.Pan115Adapter
-        module.Pan115Adapter = FakePan
-        try:
-            first, recheck, report, first_is_recheck = await pick_first_available_115_result(results)
-        finally:
-            module.Pan115Adapter = old
-
-        self.assertIsNotNone(first)
-        self.assertEqual(first.url, "https://115.com/s/ok?password=1")
-        self.assertEqual(calls, [
-            "https://115.com/s/bad?password=1",
-            "https://115.com/s/ok?password=1",
-        ])
-        self.assertEqual(report["checked_115"], 2)
-        self.assertEqual(report["expired_115"], 1)
-        self.assertEqual(recheck, [])
 
     async def test_full_search_uses_global_fallback_when_dialogs_miss(self) -> None:
         class Message:
@@ -341,8 +306,6 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
             "raw_matched": 2,
             "available_matched": 0,
             "duplicates": 2,
-            "expired_115": 0,
-            "recheck_115": 0,
             "save_failed": 0,
             "from_index": True,
         }
@@ -372,8 +335,6 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
             "raw_matched": 0,
             "available_matched": 0,
             "duplicates": 0,
-            "expired_115": 0,
-            "recheck_115": 0,
             "save_failed": 0,
             "from_index": True,
         }
@@ -392,8 +353,6 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
                 "raw_matched": 1,
                 "available_matched": 0,
                 "duplicates": 1,
-                "expired_115": 0,
-                "recheck_115": 0,
                 "save_failed": 0,
                 "from_index": True,
             }
@@ -445,8 +404,6 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
                     "raw_matched": 0,
                     "available_matched": 0,
                     "duplicates": 0,
-                    "expired_115": 1,
-                    "recheck_115": 0,
                     "save_failed": 0,
                     "from_index": True,
                 }
@@ -467,7 +424,6 @@ class FlowEarlyStopTest(unittest.IsolatedAsyncioTestCase):
             "created": 0,
             "available_matched": 2,
             "duplicates": 2,
-            "expired_115": 0,
             "save_failed": 0,
         }
         complete = {

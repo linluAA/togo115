@@ -12,7 +12,6 @@ from app.services.sources.haisou.budget import (
     search_cache_key,
     set_cached_haisou_search,
 )
-from app.services.subscription.delivery.link_validation import _share_probe_plan
 from app.services.subscription.search.schedule import (
     filter_subscriptions_for_search_all,
     prioritize_subscriptions_for_search,
@@ -81,20 +80,6 @@ class HaisouBudgetTest(unittest.TestCase):
         note_haisou_search()
         snap = haisou_budget_snapshot()
         self.assertGreaterEqual(int(snap["search_calls"]), 1)
-
-
-class ShareProbePlanTest(unittest.TestCase):
-    def test_same_share_code_collapsed(self) -> None:
-        urls = [
-            "https://115.com/s/abc123?password=11",
-            "https://www.115.com/s/abc123?password=11",
-            "https://115.com/s/xyz999?password=22",
-        ]
-        reps, mapping = _share_probe_plan(urls)
-        self.assertEqual(len(reps), 2)
-        self.assertEqual(mapping[urls[0]], mapping[urls[1]])
-        self.assertNotEqual(mapping[urls[0]], mapping[urls[2]])
-
 
 
 class ActiveSearchCooldownTest(unittest.TestCase):

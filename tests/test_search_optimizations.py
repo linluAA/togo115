@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import app.services.concurrency as concurrency_runtime
 import app.services.subscription.runtime as runtime
 from app.services.adapters.telegram.rate_limit import TelegramRequestGate
-from app.services.search_metrics import clear_metrics, metrics_snapshot, record_telegram_search, record_115_validation, record_attach_outcome
+from app.services.search_metrics import clear_metrics, metrics_snapshot, record_telegram_search, record_attach_outcome
 from app.services.subscription.search import all as search_all_module
 
 
@@ -27,10 +27,8 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
     def test_metrics_snapshot_aggregates(self) -> None:
         clear_metrics()
         record_telegram_search({"title": "a", "resolve_ms": 10, "search_ms": 20, "extract_ms": 5, "total_ms": 40, "index_hits": 1})
-        record_115_validation({"id": 1, "115_ms": 12, "checked_115": 2, "expired_115": 1, "recheck_115": 0})
         snap = metrics_snapshot()
         self.assertEqual(snap["telegram"]["searches"], 1)
-        self.assertEqual(snap["share_115"]["checks"], 2)
         self.assertEqual(snap["concurrency"], 4)
         clear_metrics()
 
@@ -131,20 +129,15 @@ class SearchOptimizationTest(unittest.IsolatedAsyncioTestCase):
                 "total_ms": total,
                 "index_hits": 1,
             })
-        record_115_validation({"id": 1, "115_ms": 12, "checked_115": 2, "expired_115": 1, "recheck_115": 0})
-        record_115_validation({"id": 2, "115_ms": 80, "checked_115": 1, "expired_115": 0, "recheck_115": 1})
-        record_attach_outcome({"id": 1, "created": 1, "duplicates": 0, "expired_115": 0, "save_failed": 0, "raw_matched": 1, "candidates": 2})
-        record_attach_outcome({"id": 2, "created": 0, "duplicates": 2, "expired_115": 1, "save_failed": 0, "raw_matched": 2, "candidates": 3})
-        record_attach_outcome({"id": 3, "created": 0, "duplicates": 0, "expired_115": 0, "save_failed": 0, "raw_matched": 0, "candidates": 4})
+        record_attach_outcome({"id": 1, "created": 1, "duplicates": 0, "save_failed": 0, "raw_matched": 1, "candidates": 2})
+        record_attach_outcome({"id": 2, "created": 0, "duplicates": 2, "save_failed": 0, "raw_matched": 2, "candidates": 3})
+        record_attach_outcome({"id": 3, "created": 0, "duplicates": 0, "save_failed": 0, "raw_matched": 0, "candidates": 4})
         snap = metrics_snapshot()
         self.assertEqual(snap["telegram"]["searches"], 5)
         self.assertGreaterEqual(snap["telegram"]["p95_total_ms"], snap["telegram"]["p50_total_ms"])
         self.assertEqual(snap["telegram"]["p95_total_ms"], 100.0)
-        self.assertEqual(snap["share_115"]["checks"], 3)
-        self.assertGreaterEqual(snap["share_115"]["p95_ms"], snap["share_115"]["p50_ms"])
         self.assertEqual(snap["attach"]["created"], 1)
         self.assertEqual(snap["attach"]["duplicates"], 2)
-        self.assertEqual(snap["attach"]["expired"], 1)
         self.assertEqual(snap["attach"]["mismatch"], 1)
         clear_metrics()
 

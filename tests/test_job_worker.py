@@ -69,15 +69,6 @@ class JobWorkerTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(done["value"])
 
 
-    def test_schedule_recheck_enqueues(self) -> None:
-        from app.services.subscription.search import tasks as subscription_tasks
-
-        first = subscription_tasks.schedule_recheck_pending_115()
-        second = subscription_tasks.schedule_recheck_pending_115()
-        self.assertEqual(first.get("job_id"), second.get("job_id"))
-        jobs = [j for j in list_jobs() if j.get("kind") == "recheck_pending_115"]
-        self.assertEqual(len(jobs), 1)
-
     def test_schedule_retry_failed_enqueues(self) -> None:
         from app.services.subscription.search import tasks as subscription_tasks
 

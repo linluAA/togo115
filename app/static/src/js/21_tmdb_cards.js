@@ -32,7 +32,7 @@ function mediaGrid(items, type, options = {}) {
   if (!items.length) return `<div class="empty">暂无数据。</div>`;
   const limit = options.limit || 20;
   const visibleItems = items.slice(0, limit);
-  const cards = visibleItems.map((item, index) => {
+  const cardHtmlList = visibleItems.map((item, index) => {
     const title = item.name || item.title || "未命名";
     const mediaType = item.media_type === "movie" || item.media_type === "tv" ? item.media_type : type;
     const releaseYear = Number.parseInt((item.first_air_date || item.release_date || "").slice(0, 4), 10) || null;
@@ -49,12 +49,7 @@ function mediaGrid(items, type, options = {}) {
     state.mediaPayloads.set(payloadId, payload);
     const year = (item.first_air_date || item.release_date || "").slice(0, 4) || "未知";
     const rating = item.vote_average ? `★ ${Number(item.vote_average).toFixed(1)}` : "";
-    const isLast = index === visibleItems.length - 1;
-    const moreOverlay = isLast && options.more ? `<div class="more-overlay" data-more="${type}">
-      <span class="more-text">查看更多</span>
-      <span class="more-arrow">→</span>
-    </div>` : "";
-    return `<article class="media-card${isLast && options.more ? " has-more" : ""}">
+    return `<article class="media-card">
       <div class="poster" data-detail="${payloadId}" aria-label="查看 ${title} 详情" title="查看详情">
         <img src="${posterUrl(item)}" alt="${escapeHtml(title)}" loading="lazy" />
         <div class="overlay">
@@ -66,10 +61,24 @@ function mediaGrid(items, type, options = {}) {
         <div class="title">${escapeHtml(title)}</div>
         <div class="meta"><span>${mediaType === "tv" ? "剧集" : "电影"} · ${year}</span></div>
       </div>
-      ${moreOverlay}
     </article>`;
-  }).join("");
-  return `<div class="media-grid">${cards}</div>`;
+  });
+  let html = '<div class="media-grid">';
+  if (cardHtmlList.length > 0 && options.more) {
+    html += cardHtmlList.slice(0, -1).join("");
+    html += '</div>';
+    html += `<div class="last-card-wrap">
+      <div class="more-section" data-more="${type}">
+        <span class="more-text">查看更多</span>
+        <span class="more-arrow">→</span>
+      </div>
+      ${cardHtmlList[cardHtmlList.length - 1]}
+    </div>`;
+  } else {
+    html += cardHtmlList.join("");
+    html += '</div>';
+  }
+  return html;
 }
 
 function bindMediaActions(root = document) {

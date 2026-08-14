@@ -6,7 +6,6 @@ LOG_TEXT_FILES = [
     Path("app/services/subscription/search/service.py"),
     Path("app/services/subscription/search/flow.py"),
     Path("app/services/subscription/search/selection.py"),
-    Path("app/services/subscription/delivery/link_validation.py"),
     Path("app/services/subscription/search/selection_logs.py"),
     Path("app/services/subscription/search/selection_fallback.py"),
     Path("app/services/subscription/search/discovery.py"),

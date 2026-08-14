@@ -1,26 +1,22 @@
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from app.db import add_log, db, utc_now
 from app.services.sources.rss_torznab import SearchResult
-from app.services.adapters.pan115 import PAN115_URL_RE, SHARE_UNAVAILABLE, SHARE_UNKNOWN
-from app.services.subscription.search.share115_cache import process_115_cache
 from app.services.subscription.match.candidate_decision import decide_resource_candidate
 from app.services.subscription.resource.ops import (
     existing_resource_rows,
     fallback_result_candidates,
     insert_resource_safely,
     matching_results,
-    resource_already_exists,
 )
 from app.services.subscription.search.selection_fallback import (
     attach_fallback_results_until_delivered,
     attach_first_fallback_result,
     match_fallback_groups,
 )
-from app.services.search_metrics import record_115_validation, record_attach_outcome
+from app.services.search_metrics import record_attach_outcome
 from app.services.subscription.search.selection_logs import (
     log_unmatched_fallback_groups,
     log_unmatched_results,
@@ -58,56 +54,13 @@ async def attach_telegram_results(
                 "samples": samples,
             },
         )
-    # Progressive validation with duplicate fall-through:
-    # order by missing-episode coverage, validate 115 with prefetch, skip expired and
-    # already-saved packs. Keep creating non-overlapping packs for remaining missing eps.
+
     ordered = fallback_result_candidates(raw_matched, subscription)
     matched: list[SearchResult] = []
-    recheck_results: list[SearchResult] = []
-    validation_started = time.perf_counter()
-    validation_report: dict[str, Any] = {"checked_115": 0, "expired_115": 0, "recheck_115": 0}
     created: list[dict] = []
     duplicate_count = 0
     save_failed_count = 0
-    recheck_saved_count = 0
-    # Phase 1: Validate 115 availability outside any DB transaction.
-    # Prefetch 115 states for top candidates with bounded concurrency.
-    share_cache = process_115_cache() if ordered else None
-    prefaced_states: dict[str, str] = {}
-    if share_cache is not None and ordered:
-        probe_urls = [
-            str(getattr(result, "url", "") or "")
-            for result in ordered[:16]
-            if PAN115_URL_RE.match(str(getattr(result, "url", "") or ""))
-        ]
-        if probe_urls:
-            prefaced_states = await share_cache.availability_many(probe_urls)
 
-    # Validate remaining 115 URLs individually, also outside transaction.
-    all_115_states: dict[str, str] = {}
-    if share_cache is not None:
-        for result in ordered:
-            url = str(getattr(result, "url", "") or "")
-            if not PAN115_URL_RE.match(url):
-                continue
-            state = prefaced_states.get(url)
-            if state is not None:
-                all_115_states[url] = state
-                validation_report["checked_115"] += 1
-                if state == SHARE_UNAVAILABLE:
-                    validation_report["expired_115"] += 1
-                elif state == SHARE_UNKNOWN:
-                    validation_report["recheck_115"] += 1
-                continue
-            state = await share_cache.availability(url)
-            all_115_states[url] = state
-            validation_report["checked_115"] += 1
-            if state == SHARE_UNAVAILABLE:
-                validation_report["expired_115"] += 1
-            elif state == SHARE_UNKNOWN:
-                validation_report["recheck_115"] += 1
-
-    # Phase 2: DB operations inside transaction (no network calls).
     with db() as conn:
         existing_rows = existing_resource_rows(conn, subscription_id)
         covered_missing: set[tuple[int, int]] = set()
@@ -117,48 +70,11 @@ async def attach_telegram_results(
                 subscription, result, covered_missing, bare_pack_saved=bare_pack_saved
             ):
                 continue
-            url = str(getattr(result, "url", "") or "")
-            mark_recheck = False
-            if share_cache is not None and PAN115_URL_RE.match(url):
-                state = all_115_states.get(url, SHARE_UNKNOWN)
-                if state == SHARE_UNAVAILABLE:
-                    add_log("debug",
-                        "subscription",
-                        "115 分享链接已失效，跳过保存和投递",
-                        {
-                            "url": url,
-                            "title": str(getattr(result, "title", "") or "")[:120],
-                            "source": getattr(result, "source", ""),
-                        },
-                    )
-                    continue
-                if state == SHARE_UNKNOWN:
-                    mark_recheck = True
-                    recheck_results.append(result)
-                    add_log(
-                        "warning",
-                        "subscription",
-                        "115 分享链接有效性待复检，先继续投递",
-                        {
-                            "url": url,
-                            "title": str(getattr(result, "title", "") or "")[:120],
-                            "source": getattr(result, "source", ""),
-                        },
-                    )
-            outcome = _save_telegram_result(
-                conn,
-                subscription,
-                result,
-                existing_rows,
-                mark_recheck=mark_recheck,
-            )
+            outcome = _save_telegram_result(conn, subscription, result, existing_rows)
             if outcome == "created":
                 matched.append(result)
                 created.append(getattr(result, "_saved_item"))
                 covered_missing |= _missing_coverage_for_result(subscription, result)
-                if mark_recheck:
-                    recheck_saved_count += 1
-                # Bare (no episode) packs already cover unknown scope; stop to avoid multi-save.
                 if not covered_missing:
                     bare_pack_saved = True
                     break
@@ -168,33 +84,10 @@ async def attach_telegram_results(
                 matched.append(result)
                 continue
             save_failed_count += 1
-        if not created:
-            bare_pack_saved = False
-            for result in recheck_results:
-                if covered_missing and _result_missing_already_covered(
-                    subscription, result, covered_missing, bare_pack_saved=bare_pack_saved
-                ):
-                    continue
-                outcome = _save_telegram_result(conn, subscription, result, existing_rows, mark_recheck=True)
-                if outcome == "created":
-                    matched.append(result)
-                    created.append(getattr(result, "_saved_item"))
-                    covered_missing |= _missing_coverage_for_result(subscription, result)
-                    recheck_saved_count += 1
-                    if not covered_missing:
-                        bare_pack_saved = True
-                        break
-                    continue
-                if outcome == "duplicate":
-                    duplicate_count += 1
-                else:
-                    save_failed_count += 1
         conn.execute(
             "UPDATE subscriptions SET last_checked_at = ?, updated_at = ? WHERE id = ?",
             (utc_now(), utc_now(), subscription_id),
         )
-
-    validation_report = {**validation_report, "115_ms": int((time.perf_counter() - validation_started) * 1000)}
 
     log_unmatched_results(facade, subscription, results, matched, source_label="TG 历史搜索")
     available_matched = len(created) + int(duplicate_count)
@@ -204,48 +97,19 @@ async def attach_telegram_results(
         "created": len(created),
         "duplicates": duplicate_count,
         "save_failed": save_failed_count,
-        "recheck_saved": recheck_saved_count,
         "from_index": any(
             str(getattr(result, "source", "") or "") == "TelegramIndex"
             or str(getattr(result, "source", "") or "").startswith("TelegramIndex:")
             for result in results
         ),
-        **validation_report,
     }
-    add_log("debug",
-        "subscription",
-        "TG 搜索指标",
-        {
-            "id": subscription_id,
-            "115_ms": summary.get("115_ms", 0),
-            "checked_115": summary.get("checked_115", 0),
-            "expired_115": summary.get("expired_115", 0),
-            "recheck_115": summary.get("recheck_115", 0),
-            "raw_matched": summary.get("raw_matched", 0),
-            "created": summary.get("created", 0),
-            "from_index": summary.get("from_index", False),
-        },
-    )
     _log_telegram_attach_summary(subscription_id, summary)
-    record_115_validation(
-        {
-            "id": subscription_id,
-            "115_ms": summary.get("115_ms", 0),
-            "checked_115": summary.get("checked_115", 0),
-            "expired_115": summary.get("expired_115", 0),
-            "recheck_115": summary.get("recheck_115", 0),
-            "created": summary.get("created", 0),
-            "from_index": summary.get("from_index", False),
-        }
-    )
     record_attach_outcome(
         {
             "id": subscription_id,
             "created": summary.get("created", 0),
             "duplicates": summary.get("duplicates", 0),
-            "expired_115": summary.get("expired_115", 0),
             "save_failed": summary.get("save_failed", 0),
-            "recheck_115": summary.get("recheck_115", 0),
             "raw_matched": summary.get("raw_matched", 0),
             "candidates": len(results),
             "from_index": summary.get("from_index", False),
@@ -263,8 +127,6 @@ async def attach_telegram_results(
                 "available_matched": summary.get("available_matched", 0),
                 "created": summary.get("created", 0),
                 "duplicates": summary.get("duplicates", 0),
-                "expired_115": summary.get("expired_115", 0),
-                "recheck_115": summary.get("recheck_115", 0),
                 "save_failed": summary.get("save_failed", 0),
                 "from_index": summary.get("from_index", False),
                 "samples": [
@@ -278,7 +140,6 @@ async def attach_telegram_results(
             },
         )
     return created, matched, summary
-
 
 
 
@@ -311,8 +172,6 @@ def _result_missing_already_covered(
     coverage = _missing_coverage_for_result(subscription, result)
     if coverage:
         return coverage.issubset(covered_missing)
-    # No explicit episode coverage: treat as whole-scope pack.
-    # Only skip if a bare pack was already saved in this pass.
     return bare_pack_saved
 
 

@@ -1,4 +1,4 @@
-"""Delivery and 115 recheck.
+"""Delivery service.
 
 Prefer concrete modules::
 
@@ -12,9 +12,9 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-__all__ = ['deliver_resource', 'deliver_resource_url', 'delivery_failed_status', 'list_due_recheck_resources', 'list_failed_resources', 'recheck_pending_115_resources', 'retry_failed_resources']
+__all__ = ['deliver_resource', 'deliver_resource_url', 'delivery_failed_status', 'list_failed_resources', 'retry_failed_resources']
 
-_RESOLVE = {'deliver_resource': 'app.services.subscription.delivery.service', 'list_failed_resources': 'app.services.subscription.delivery.service', 'retry_failed_resources': 'app.services.subscription.delivery.service', 'deliver_resource_url': 'app.services.subscription.delivery.executor', 'delivery_failed_status': 'app.services.subscription.delivery.state', 'list_due_recheck_resources': 'app.services.subscription.delivery.recheck', 'recheck_pending_115_resources': 'app.services.subscription.delivery.recheck'}
+_RESOLVE = {'deliver_resource': 'app.services.subscription.delivery.service', 'list_failed_resources': 'app.services.subscription.delivery.service', 'retry_failed_resources': 'app.services.subscription.delivery.service', 'deliver_resource_url': 'app.services.subscription.delivery.executor', 'delivery_failed_status': 'app.services.subscription.delivery.state'}
 
 
 def __getattr__(name: str) -> Any:

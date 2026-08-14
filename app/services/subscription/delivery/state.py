@@ -31,10 +31,6 @@ def _existing_effective_delivery(resource) -> dict[str, Any] | None:
     candidate_key = resource_dedupe_key(resource["url"] or "")
     if not candidate_key:
         return None
-    # 115/plain URLs are stored canonically at insert time: an exact equality
-    # lookup covers the common duplicate case with an index-friendly query.
-    # Magnet links can use different presentations for the same hash, so they
-    # still fall back to the full scan below.
     kind, value = candidate_key
     if kind != "magnet" and value:
         with db() as conn:
@@ -99,8 +95,6 @@ def _update_resource_delivery_status(resource_id: int, ok: bool, error_message: 
 
 def delivery_failed_status(error_message: str) -> str:
     kind = classify_delivery_failure(error_message)
-    if kind in {"recheck"}:
-        return "pending_recheck"
     if kind == "invalid":
         return "link_invalid"
     if kind in {"timeout", "network", "rate", "temporary", "auth", "flood"}:
@@ -112,7 +106,7 @@ def classify_delivery_failure(error_message: str) -> str:
     """Classify delivery errors for backoff / UI.
 
     Returns one of:
-    recheck | auth | flood | invalid | timeout | network | rate | temporary | final
+    auth | flood | invalid | timeout | network | rate | temporary | final
     """
     text = str(error_message or "").casefold()
     if not text.strip():
@@ -122,8 +116,6 @@ def classify_delivery_failure(error_message: str) -> str:
     if any(
         word in text
         for word in (
-            "待复检",
-            "recheck",
             "cookie",
             "auth_required",
             "未配置",
@@ -134,9 +126,7 @@ def classify_delivery_failure(error_message: str) -> str:
             "403",
         )
     ):
-        if any(word in text for word in ("cookie", "auth", "login", "未配置", "请先登录", "unauthorized", "401", "403")):
-            return "auth"
-        return "recheck"
+        return "auth"
     if "unknown" in text:
         return "temporary"
     if any(

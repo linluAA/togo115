@@ -103,12 +103,6 @@ def telegram_source_lock(source: str):
 
     return _lock(source)
 
-def schedule_recheck_pending_115(*args, **kwargs):
-    from app.services.subscription import schedule_recheck_pending_115 as _schedule
-
-    return _schedule(*args, **kwargs)
-
-
 def schedule_retry_failed_resources(*args, **kwargs):
     from app.services.subscription import schedule_retry_failed_resources as _schedule
 
