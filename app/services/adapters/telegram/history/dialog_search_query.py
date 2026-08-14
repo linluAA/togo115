@@ -15,7 +15,9 @@ from app.services.adapters.telegram.history.dialog_search_query_run import (
 from app.services.link import (
     TELEGRAM_HISTORY_MAX_RESULTS,
     context_for_115_link,
+    context_for_ed2k_link,
     extract_115_links,
+    extract_ed2k_links,
     local_text_matches_query,
     message_has_link_button_hint,
     telegram_message_text,
@@ -120,6 +122,7 @@ class TelegramDialogSearchQueryMixin(TelegramDialogQueryExecutorMixin):
         lowered = text.casefold()
         return bool(
             extract_115_links(text)
+            or extract_ed2k_links(text)
             or "magnet:?" in lowered
             or text_has_external_resource_page_hint(text)
             or message_has_link_button_hint(message)
@@ -143,6 +146,7 @@ class TelegramDialogSearchQueryMixin(TelegramDialogQueryExecutorMixin):
             return []
         text = telegram_message_text(message)
         urls = list(extract_115_links(text) or [])
+        urls.extend(extract_ed2k_links(text) or [])
         if "magnet:?" in text.casefold():
             for token in text.split():
                 token = token.strip().strip("<>\"'()[]")
@@ -154,11 +158,14 @@ class TelegramDialogSearchQueryMixin(TelegramDialogQueryExecutorMixin):
             return []
         hits: list[SearchResult] = []
         for url in urls:
-            scoped = context_for_115_link(text, url, max(len(urls), 2)) if "115" in url else text
+            if "ed2k://" in url.casefold():
+                scoped = context_for_ed2k_link(text, url)
+            else:
+                scoped = context_for_115_link(text, url, max(len(urls), 2)) if "115" in url else text
             scoped = _restore_query_title_context(text, scoped, [query]) if "115" in url else scoped
             title = (
                 _telegram_resource_title(scoped)
-                if "115" in url
+                if "115" in url or "ed2k://" in url.casefold()
                 else (scoped.splitlines()[0][:120] if scoped else query)
             )
             if not local_text_matches_query(scoped, query):

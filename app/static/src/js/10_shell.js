@@ -72,7 +72,7 @@ function renderApp() {
           <div class="topbar-actions">
             <div class="topbar-search${state.view === "tmdb" ? " hidden" : ""}">
               <span class="search-icon">⌕</span>
-              <input type="text" placeholder="搜索片名、关键词..." id="globalSearch">
+              <input type="text" placeholder="搜索片名、关键词..." id="globalSearch" autocomplete="off">
             </div>
             <div class="user-menu ${state.userMenuOpen ? "open" : ""}">
               <div class="topbar-avatar" id="userMenuBtn" title="账号菜单">${firstLetter}</div>

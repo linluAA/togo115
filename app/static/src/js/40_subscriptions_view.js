@@ -29,46 +29,52 @@ async function renderSubscriptions() {
   });
   const resources = (state.resources || []).slice(0, 20);
   const root = $("#view");
-  root.innerHTML = `
-    <div class="toolbar view-section">
-      <button class="btn btn-secondary" id="searchAllSubscriptions">搜索全部</button>
-      <button class="btn btn-secondary" id="syncEmbySubscriptions">同步媒体库</button>
-      <div class="toolbar-filters">
-        <select id="subscriptionStatusFilter" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--ink-soft);padding:6px 10px;font-size:12px;height:32px;outline:none">
-          <option value="all" ${state.subscriptionStatus === "all" ? "selected" : ""}>全部状态</option>
-          <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
-          <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
-        </select>
-        <select id="subscriptionTypeFilter" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--ink-soft);padding:6px 10px;font-size:12px;height:32px;outline:none">
-          <option value="all" ${state.subscriptionType === "all" ? "selected" : ""}>全部类型</option>
-          <option value="tv" ${state.subscriptionType === "tv" ? "selected" : ""}>剧集</option>
-          <option value="movie" ${state.subscriptionType === "movie" ? "selected" : ""}>电影</option>
-        </select>
-      </div>
-    </div>
-    ${subscriptionCards(filtered)}
+	  root.innerHTML = `
+	    <div class="toolbar view-section">
+	      <button class="btn btn-secondary" id="searchAllSubscriptions">搜索全部</button>
+	      <button class="btn btn-secondary" id="syncEmbySubscriptions">同步媒体库</button>
+	      <div class="toolbar-filters">
+	        <select id="subscriptionStatusFilter" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--ink-soft);padding:6px 10px;font-size:12px;height:32px;outline:none">
+	          <option value="all" ${state.subscriptionStatus === "all" ? "selected" : ""}>全部状态</option>
+	          <option value="active" ${state.subscriptionStatus === "active" ? "selected" : ""}>订阅中</option>
+	          <option value="paused" ${state.subscriptionStatus === "paused" ? "selected" : ""}>已暂停</option>
+	        </select>
+	        <select id="subscriptionTypeFilter" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--ink-soft);padding:6px 10px;font-size:12px;height:32px;outline:none">
+	          <option value="all" ${state.subscriptionType === "all" ? "selected" : ""}>全部类型</option>
+	          <option value="tv" ${state.subscriptionType === "tv" ? "selected" : ""}>剧集</option>
+	          <option value="movie" ${state.subscriptionType === "movie" ? "selected" : ""}>电影</option>
+	        </select>
+	      </div>
+	    </div>
+	    ${state.subscriptionResourceManage ? "" : subscriptionCards(filtered)}
+	    ${state.subscriptionResourceManage ? `
     <div class="section-header view-section">
-      <h2>最近资源</h2>
-      <button class="section-action" id="resourceManageBtn">管理资源 →</button>
+      <h2>资源管理</h2>
+      <button class="section-action" id="resourceManageBack">← 返回</button>
     </div>
-    <div class="resource-list view-section">
-      ${resources.length ? resources.map((item) => {
-        const status = String(item.status || "pending").toLowerCase();
-        const statusText = status === "delivered" ? "已投递" : (status === "failed" ? "下载失败" : "待确认");
-        const statusClass = status === "delivered" ? "delivered" : (status === "failed" ? "failed" : "pending");
-        const iconClass = item.source === "telegram" ? "telegram" : (item.source === "rss" ? "rss" : "magnet");
-        const iconText = item.source === "telegram" ? "TG" : (item.source === "rss" ? "RSS" : "M");
-        return `<div class="resource-item">
-          <div class="r-icon ${iconClass}">${iconText}</div>
-          <div class="r-info">
-            <div class="r-title">${escapeHtml(item.display_title || item.subscription_title || item.title || "资源")}</div>
-            <div class="r-meta"><span>${escapeHtml(item.source || "未知")}</span>${item.file_size ? `<span>${escapeHtml(item.file_size)}</span>` : ""}</div>
-          </div>
-          <span class="r-status ${statusClass}">${statusText}</span>
-        </div>`;
-      }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无资源</h3></div>`}
-    </div>
-  `;
+    ${resourceTable()}` : `
+	    <div class="section-header view-section">
+	      <h2>最近资源</h2>
+	      <button class="section-action" id="resourceManageBtn">管理资源 →</button>
+	    </div>
+	    <div class="resource-list view-section">
+	      ${resources.length ? resources.map((item) => {
+	        const status = String(item.status || "pending").toLowerCase();
+	        const statusText = status === "delivered" ? "已投递" : (status === "failed" ? "下载失败" : "待确认");
+	        const statusClass = status === "delivered" ? "delivered" : (status === "failed" ? "failed" : "pending");
+	        const iconClass = item.source === "telegram" ? "telegram" : (item.source === "rss" ? "rss" : "magnet");
+	        const iconText = item.source === "telegram" ? "TG" : (item.source === "rss" ? "RSS" : "M");
+	        return `<div class="resource-item">
+	          <div class="r-icon ${iconClass}">${iconText}</div>
+	          <div class="r-info">
+	            <div class="r-title">${escapeHtml(item.display_title || item.subscription_title || item.title || "资源")}</div>
+	            <div class="r-meta"><span>${escapeHtml(item.source || "未知")}</span>${item.file_size ? `<span>${escapeHtml(item.file_size)}</span>` : ""}</div>
+	          </div>
+	          <span class="r-status ${statusClass}">${statusText}</span>
+	        </div>`;
+	      }).join("") : `<div class="empty-state"><div class="empty-icon">◌</div><h3>暂无资源</h3></div>`}
+	    </div>`}
+	  `;
   bindSubscriptionEvents();
 }
 
@@ -153,12 +159,74 @@ function bindSubscriptionEvents() {
     btn.setAttribute("aria-expanded", "true");
   }));
   if (!window.__subscriptionStatusMenuBound) {
-    window.__subscriptionStatusMenuBound = true;
-    document.addEventListener("click", () => closeSubscriptionStatusMenus());
-    window.addEventListener("resize", () => closeSubscriptionStatusMenus());
-    window.addEventListener("scroll", () => closeSubscriptionStatusMenus(), true);
-  }
-}
+	    window.__subscriptionStatusMenuBound = true;
+	    document.addEventListener("click", () => closeSubscriptionStatusMenus());
+	    window.addEventListener("resize", () => closeSubscriptionStatusMenus());
+	    window.addEventListener("scroll", () => closeSubscriptionStatusMenus(), true);
+	  }
+	  $("[data-deliver]")?.addEventListener("click", async (event) => {
+	    const id = Number(event.currentTarget.dataset.deliver);
+	    if (!id) return;
+	    try {
+	      await api(`/api/resources/${id}/deliver`, { method: "POST" });
+	      toast("已重新投递");
+	      await refreshSubscriptionData();
+	      renderSubscriptions();
+	    } catch (error) {
+	      toast(`重新投递失败：${error.message}`);
+	    }
+	  });
+	  $("#resourceManageBtn")?.addEventListener("click", () => {
+	    state.subscriptionResourceManage = true;
+	    renderSubscriptions();
+	  });
+	  $("#resourceManageBack")?.addEventListener("click", () => {
+	    state.subscriptionResourceManage = false;
+	    renderSubscriptions();
+	  });
+	  $("#toggleResourceDelete")?.addEventListener("click", () => {
+	    state.resourceDeleteMode = !state.resourceDeleteMode;
+	    state.selectedResourceIds = new Set();
+	    renderSubscriptions();
+	  });
+	  $("#confirmResourceDelete")?.addEventListener("click", async () => {
+	    const ids = [...state.selectedResourceIds];
+	    if (!ids.length) return;
+	    try {
+	      await api("/api/resources/delete", { method: "POST", body: JSON.stringify({ ids }) });
+	      toast(`已删除 ${ids.length} 条资源`);
+	      state.resourceDeleteMode = false;
+	      state.selectedResourceIds = new Set();
+	      await refreshSubscriptionData();
+	      renderSubscriptions();
+	    } catch (error) {
+	      toast(`删除失败：${error.message}`);
+	    }
+	  });
+	  $("#clearResources")?.addEventListener("click", async () => {
+	    if (!confirm("确认清空所有资源？此操作不可撤销。")) return;
+	    try {
+	      await api("/api/resources", { method: "DELETE" });
+	      toast("已清空所有资源");
+	      state.resourceDeleteMode = false;
+	      state.selectedResourceIds = new Set();
+	      await refreshSubscriptionData();
+	      renderSubscriptions();
+	    } catch (error) {
+	      toast(`清空失败：${error.message}`);
+	    }
+	  });
+	  $("#loadMoreResources")?.addEventListener("click", () => {
+	    state.resourcesLimit += 40;
+	    renderSubscriptions();
+	  });
+	  document.querySelectorAll("[data-select-resource]").forEach((cb) => cb.addEventListener("change", (event) => {
+	    const id = Number(event.currentTarget.dataset.selectResource);
+	    if (!id) return;
+	    if (event.currentTarget.checked) state.selectedResourceIds.add(id);
+	    else state.selectedResourceIds.delete(id);
+	  }));
+	}
 
 async function editQualityRules(subscription) {
   const rules = subscription.quality_rules || {};

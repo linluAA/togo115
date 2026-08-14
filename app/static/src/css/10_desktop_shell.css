@@ -26,8 +26,13 @@
     background: transparent;
     color: var(--ink);
     font-size: 13px;
-    outline: none;
+    outline: none !important;
+    box-shadow: none !important;
     width: 100%;
+  }
+
+  .topbar-search input:focus-visible {
+    outline: none !important;
   }
 
   .topbar-search input::placeholder {
