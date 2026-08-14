@@ -21,6 +21,10 @@ METADATA_FIELD_LINE_RE = re.compile(
 EPISODE_QUALITY_RE = re.compile(r"(?i)(S\d{1,2}E\d{1,3}|\u7b2c\s*\d{1,3}\s*[\u96c6\u8bdd\u8a71]|1080p|2160p|4K|BluRay|WEB)")
 EPISODE_MARKER_RE = re.compile(r"(?i)(S\d{1,2}E\d{1,3}|第\s*\d{1,3}\s*[集话話]|更新至|全\s*\d{1,3}\s*[集话話])")
 YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+SENTENCE_PUNCT_RE = re.compile(r"[\u3002\uff01\uff1f]")  # 。！？
+# Unlabeled title lines longer than this are likely descriptions, not titles.
+# Even the longest Chinese movie/TV title is under 30 chars; 50 is a safe ceiling.
+UNLABELED_TITLE_MAX_LENGTH = 50
 
 def _telegram_resource_title(context: str | None) -> str:
     lines = [line.strip() for line in str(context or "").splitlines() if line.strip()]
@@ -82,12 +86,17 @@ def _scored_title_lines(lines: list[str]) -> list[tuple[int, str]]:
         title = _strip_title_label(line)
         if not _usable_title_line(title):
             continue
+        # Skip lines that look like natural-language sentences (contain 。！？)
+        if SENTENCE_PUNCT_RE.search(title):
+            continue
+        if len(title) > UNLABELED_TITLE_MAX_LENGTH:
+            continue
         score = 1
         if YEAR_RE.search(title):
             score += 4
         if EPISODE_QUALITY_RE.search(title):
             score += 2
-        if 4 <= len(title) <= 80:
+        if 4 <= len(title) <= UNLABELED_TITLE_MAX_LENGTH:
             score += 1
         scored.append((score, title[:120]))
     return scored
