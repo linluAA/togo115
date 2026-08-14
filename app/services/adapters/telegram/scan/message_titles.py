@@ -24,7 +24,7 @@ YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 SENTENCE_PUNCT_RE = re.compile(r"[\u3002\uff01\uff1f]")  # 。！？
 # Unlabeled title lines longer than this are likely descriptions, not titles.
 # Even the longest Chinese movie/TV title is under 30 chars; 50 is a safe ceiling.
-UNLABELED_TITLE_MAX_LENGTH = 50
+UNLABELED_TITLE_MAX_LENGTH = 80
 
 def _telegram_resource_title(context: str | None) -> str:
     lines = [line.strip() for line in str(context or "").splitlines() if line.strip()]
@@ -113,10 +113,16 @@ def _title_label_score(line: str) -> int:
     return 2 if YEAR_RE.search(value) else 1
 
 
+ED2K_FILENAME_RE = re.compile(r"ed2k://\|file\|([^|]+)\|\d+\|[A-Fa-f0-9]{32}\|(?:/.*)?", re.I)
+
+
 def _strip_title_label(line: str) -> str:
     value = str(line or "").strip()
     value = TITLE_CLEAN_RE.sub("", value)
     value = re.sub(r"https?://\S+", " ", value)
+    ed2k_match = ED2K_FILENAME_RE.match(value)
+    if ed2k_match:
+        value = ed2k_match.group(1)
     value = re.sub(r"(?:链接|地址|提取码|访问码|密码)\s*[:：].*$", " ", value, flags=re.I)
     return re.sub(r"\s+", " ", value).strip(" -_·|")
 
@@ -128,6 +134,8 @@ def _usable_title_line(line: str) -> bool:
     if _metadata_field_line(value) or TITLE_SKIP_RE.search(value):
         return False
     if "115.com/s/" in value or "115cdn.com/s/" in value or value.casefold().startswith("magnet:?"):
+        return False
+    if value.casefold().startswith("ed2k://"):
         return False
     if NON_TITLE_RE.search(value):
         return False

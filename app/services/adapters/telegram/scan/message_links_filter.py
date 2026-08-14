@@ -40,15 +40,20 @@ class TelegramMessageLinkFilterMixin:
             return link_contexts
         filtered: dict[str, str] = {}
         for link, context in link_contexts.items():
-            if link.casefold().startswith("ed2k://"):
+            is_ed2k = link.casefold().startswith("ed2k://")
+            if is_ed2k:
                 scoped = context_for_ed2k_link(context, link) or context
             else:
                 scoped = context_for_115_link(context, link, max(len(link_contexts), 2)) or context
             scoped = _restore_query_title_context(context, scoped, match_queries)
             title = _telegram_resource_title(scoped)
-            if not any(local_text_matches_query(scoped, query) for query in match_queries):
+            # ed2k links carry episode info in the filename itself; skip the
+            # strict text-level query match to avoid rejecting English-named
+            # files against Chinese subscription queries. The subscription
+            # matching pipeline handles episode-level filtering downstream.
+            if not is_ed2k and not any(local_text_matches_query(scoped, query) for query in match_queries):
                 continue
-            if title and not str(title).startswith("Telegram ") and not any(local_text_matches_query(title, query) for query in match_queries):
+            if title and not str(title).startswith("Telegram ") and not is_ed2k and not any(local_text_matches_query(title, query) for query in match_queries):
                 continue
             filtered[link] = scoped
         return filtered
