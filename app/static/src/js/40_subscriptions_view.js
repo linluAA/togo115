@@ -193,7 +193,7 @@ function bindSubscriptionEvents() {
 	    const ids = [...state.selectedResourceIds];
 	    if (!ids.length) return;
 	    try {
-	      await api("/api/resources/delete", { method: "POST", body: JSON.stringify({ ids }) });
+	      await api("/api/resources/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) });
 	      toast(`已删除 ${ids.length} 条资源`);
 	      state.resourceDeleteMode = false;
 	      state.selectedResourceIds = new Set();
