@@ -34,6 +34,8 @@ class RssTorznabConfigMixin:
             return "qmp4"
         if self._is_bt1207_url(url):
             return "bt1207"
+        if self._is_seedog_url(url):
+            return "generic_magnet"
         raw = str(source.get("plugin") or source.get("site_plugin") or "").strip().lower()
         plugin_id = self.SITE_PLUGIN_ALIASES.get(raw)
         if plugin_id:
