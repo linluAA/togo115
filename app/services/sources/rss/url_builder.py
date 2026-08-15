@@ -46,8 +46,6 @@ class RssTorznabUrlBuilderMixin:
             return urlunparse(parsed._replace(path="/index.php/ajax/suggest", query=urlencode({"mid": 1, "wd": query})))
         if (plugin_id == "bt1207" or self._is_bt1207_url(url)) and parsed.path.rstrip("/") in ("", "/search"):
             return urlunparse(parsed._replace(path="/search", query=urlencode({"keyword": query})))
-        if self._is_seedog_url(url):
-            return url
         if parsed.query:
             params = parse_qsl(parsed.query, keep_blank_values=True)
             if not any(key.lower() in ("q", "wd", "keyword", "search", "query") for key, _ in params):

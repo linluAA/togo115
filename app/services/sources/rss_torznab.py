@@ -92,19 +92,7 @@ class RssTorznabAdapter(
             "_builtin": True,
             "_haisou": True,
         },
-        {
-            "id": "builtin_seedog",
-            "name": "Seedog",
-            "type": "site_plugin",
-            "plugin": "generic_magnet",
-            "url": "https://seedog.cc/?order=update&page=1",
-            "enabled": True,
-            "use_proxy": False,
-            "priority": 0,
-            "refresh_interval": 30,
-            "_builtin": True,
-        },
-    )
+        )
 
 
 __all__ = ["RssTorznabAdapter", "SearchResult", "list_source_stats"]
