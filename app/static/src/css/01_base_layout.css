@@ -413,7 +413,7 @@
 /* ── Hero Banner ── */
 .hero-banner {
   position: relative;
-  height: 280px;
+  height: 340px;
   border-radius: var(--radius-xl);
   overflow: hidden;
   margin-bottom: 32px;
@@ -1180,7 +1180,7 @@
   .emby-side-section { grid-column: 1; }
   .settings-layout { grid-template-columns: 1fr; }
   .settings-row { grid-template-columns: 1fr; gap: 4px; }
-  .hero-banner { height: 200px; }
+  .hero-banner { height: 240px; }
   .hero-banner .hero-content { padding: 24px; }
   .hero-banner .hero-content h1 { font-size: 20px; }
   .topbar-search { width: 140px; }
@@ -1192,6 +1192,6 @@
 @media (max-width: 520px) {
   .stats-grid { grid-template-columns: 1fr; }
   .media-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .hero-banner { height: 160px; border-radius: var(--radius-lg); }
+  .hero-banner { height: 200px; border-radius: var(--radius-lg); }
   .hero-banner .hero-content h1 { font-size: 17px; }
 }

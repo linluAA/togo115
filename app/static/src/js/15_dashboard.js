@@ -58,7 +58,7 @@ function applyDashboardHero(item) {
     : "linear-gradient(160deg, rgba(11,17,23,.94), rgba(11,17,23,.72) 65%, rgba(11,17,23,.45))";
   hero.style.backgroundImage = `${heroOverlay}, url('${backdropUrl(item)}')`;
   hero.style.backgroundSize = "cover";
-  hero.style.backgroundPosition = "center";
+  hero.style.backgroundPosition = "center 25%";
   hero.querySelector(".hero-content").innerHTML = `
     <div class="hero-tag">✦ 今日推荐</div>
     <h1>${dashboardEscapeHtml(title)}</h1>
