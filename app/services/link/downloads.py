@@ -28,7 +28,7 @@ MAGNET_URL_RE = re.compile(r"magnet:\?[^\n\"'<>)]+", re.I)
 TORRENT_URL_RE = re.compile(r"https?://[^\s\"'<>)]+?\.torrent(?:\?[^\s\"'<>)]+)?", re.I)
 BTIH_HASH_RE = re.compile(r"(?:种子哈希|信息哈希|info\s*hash|btih|hash)\s*[：:]\s*([A-Fa-f0-9]{32,40})", re.I)
 # ed2k link format: ed2k://|file|filename|size|hash|/
-ED2K_URL_RE = re.compile(r"ed2k://\|file\|[^\r\n\"'<>|]+\|\d+\|[A-Fa-f0-9]{32}\|(?:/[^\r\n\"'<>]*)?", re.I)
+ED2K_URL_RE = re.compile(r"ed2k://\|?file\|[^\r\n\"'<>|]+\|\d+\|[A-Fa-f0-9]{32}\|(?:/[^\r\n\"'<>]*)?", re.I)
 # Match bare BTIH hash (without label prefix) for standalone hash extraction.
 BARE_BTIH_HASH_RE = re.compile(r"(?<![A-Za-z0-9])([A-Fa-f0-9]{40})(?![A-Za-z0-9])")
 PAN115_RECEIVE_CODE_RE = re.compile(

@@ -13,7 +13,7 @@ from app.services.subscription.episode.patterns import (
     UPDATE_TO_EPISODE_RE,
 )
 
-URL_LIKE_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+|magnet:\?\S+")
+URL_LIKE_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+|magnet:\?\S+|ed2k://\S+")
 SPLIT_115_SHARE_PATH_RE = re.compile(r"(?im)(?<!\S)/[A-Za-z0-9_-]{6,}(?:\?[^\s\"'<>)]+)?")
 
 CN_EPISODE_UNIT = "\u96c6\u8bdd\u8a71"
@@ -37,8 +37,8 @@ CN_UPDATE_TO_NATIVE_RE = re.compile(
     re.I,
 )
 
-EPISODE_DOTTED_TOKEN_RE = re.compile(r"(?i)(?<![a-z0-9])(?:s(?P<season>\d{1,2})[\s._-]*)?(?:e|ep)(?![a-z])[\s._-]*(?P<episode>\d{1,3})(?:\s*(?:-|~|\u2013|\u2014|\u81f3|\u5230)\s*(?:e|ep)?[\s._-]*(?P<episode_end>\d{1,3}))?")
-SEASON_DOTTED_EPISODE_RE = re.compile(r"(?i)(?<![a-z0-9])s(?P<season>\d{1,2})[\s._-]+(?P<episode>\d{1,3})(?:\s*(?:-|~|\u2013|\u2014|\u81f3|\u5230)\s*(?P<episode_end>\d{1,3}))?")
+EPISODE_DOTTED_TOKEN_RE = re.compile(r"(?i)(?<![a-z0-9])(?:s(?P<season>\d{1,2})[\s._-]*)?(?:e|ep)(?![a-z])[\s._-]*(?P<episode>\d{1,3})(?:\s*(?:-|~|\u2013|\u2014|\u81f3|\u5230)\s*(?:e|ep)?[\s._-]*(?P<episode_end>\d{1,3})(?![a-z0-9]))?")
+SEASON_DOTTED_EPISODE_RE = re.compile(r"(?i)(?<![a-z0-9])s(?P<season>\d{1,2})[\s._-]+(?P<episode>\d{1,3})(?:\s*(?:-|~|\u2013|\u2014|\u81f3|\u5230)\s*(?P<episode_end>\d{1,3})(?![a-z0-9]))?")
 CN_FULL_COUNT_NATIVE_RE = re.compile(
     rf"(?:\u5168|\u5171)\s*(?P<prefix>{CN_NUM_TOKEN})\s*[{CN_EPISODE_UNIT}]|(?P<suffix>{CN_NUM_TOKEN})\s*[{CN_EPISODE_UNIT}]\s*(?:\u5168|\u5b8c\u7ed3|\u5b8c\u7d50)",
     re.I,
