@@ -11,7 +11,9 @@ from app.services.adapters.telegram.scan.extract_cache import (
 )
 from app.services.link import (
     context_for_115_link,
+    context_for_ed2k_link,
     extract_115_links,
+    extract_ed2k_links,
     telegram_message_text,
 )
 from app.services.types import SearchResult
@@ -82,8 +84,13 @@ class TelegramFastMessageMixin:
         return [telegram_message_text(item) for item in items if item and getattr(item, "id", None) != getattr(message, "id", None)]
 
     def _fast_link_contexts(self, text: str) -> dict[str, str]:
+        contexts: dict[str, str] = {}
         links = extract_115_links(text)
-        return {link: context_for_115_link(text, link, len(links)) for link in links}
+        for link in links:
+            contexts[link] = context_for_115_link(text, link, len(links))
+        for link in extract_ed2k_links(text):
+            contexts.setdefault(link, context_for_ed2k_link(text, link))
+        return contexts
 
     async def _fast_button_link_contexts(self, message: Any, client: TelegramClient, entity: Any, texts: list[str]) -> dict[str, str]:
         contexts: dict[str, str] = {}

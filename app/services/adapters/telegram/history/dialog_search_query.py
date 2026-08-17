@@ -168,9 +168,13 @@ class TelegramDialogSearchQueryMixin(TelegramDialogQueryExecutorMixin):
                 if "115" in url or "ed2k://" in url.casefold()
                 else (scoped.splitlines()[0][:120] if scoped else query)
             )
-            if not local_text_matches_query(scoped, query):
+            # ed2k links carry episode info in the filename itself; skip the
+            # strict text-level query match to avoid rejecting English-named
+            # files against Chinese subscription queries.
+            is_ed2k = "ed2k://" in url.casefold()
+            if not is_ed2k and not local_text_matches_query(scoped, query):
                 continue
-            if title and not str(title).startswith("Telegram ") and not local_text_matches_query(title, query):
+            if title and not str(title).startswith("Telegram ") and not is_ed2k and not local_text_matches_query(title, query):
                 continue
             hits.append(
                 SearchResult(
