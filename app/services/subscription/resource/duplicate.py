@@ -26,7 +26,14 @@ def resource_already_exists(
     existing_rows: list[dict[str, Any]] | None = None,
 ) -> str | None:
     candidate_key = _resource_dedupe_key(result.url)
-    result_episodes = episode_keys_from_text_for_subscription(subscription, result_text(result))
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, parse episode from filename (title) only, ignore the
+    # message header in context which usually carries the full pack range.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        result_text_val = getattr(result, "title")
+    else:
+        result_text_val = result_text(result)
+    result_episodes = episode_keys_from_text_for_subscription(subscription, result_text_val)
     result_title_key = compact_match_text(title_without_year(getattr(result, "title", "")) or getattr(result, "title", ""))
     rows = existing_rows if existing_rows is not None else existing_resource_rows(conn, subscription_id)
     index = _memo_resource_row_index(rows, subscription)

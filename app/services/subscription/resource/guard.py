@@ -56,7 +56,14 @@ def resource_allowed_for_subscription(
 def _episode_skip_reason(subscription: dict, result: SearchResult) -> str:
     if subscription.get("media_type") != "tv":
         return "movie_already_in_library" if subscription.get("in_library") else ""
-    episodes = episode_keys_from_text_for_subscription(subscription, result_text(result))
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, parse episode from filename (title) only, ignore the
+    # message header in context which usually carries the full pack range.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        text = getattr(result, "title")
+    else:
+        text = result_text(result)
+    episodes = episode_keys_from_text_for_subscription(subscription, text)
     if not episodes:
         return ""
     missing = missing_episode_keys(subscription)

@@ -37,7 +37,14 @@ class ResourceDecision:
 
 def decide_resource_candidate(subscription: dict, result: SearchResult, *extra_texts: str) -> ResourceDecision:
     """Return a single explainable decision for subscription resource matching."""
-    episodes = frozenset(episode_keys_from_text_for_subscription(subscription, result_text(result, *extra_texts)))
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, parse episode from filename (title) only, ignore the
+    # message header in context which usually carries the full pack range.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        text = getattr(result, "title")
+    else:
+        text = result_text(result, *extra_texts)
+    episodes = frozenset(episode_keys_from_text_for_subscription(subscription, text))
     missing = frozenset(missing_episode_keys(subscription))
     coverage = frozenset(episodes & missing) if missing else frozenset()
     reason = _candidate_reject_reason(subscription, result, episodes, missing, coverage, *extra_texts)
