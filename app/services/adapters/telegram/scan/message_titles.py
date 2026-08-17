@@ -98,6 +98,11 @@ def _scored_title_lines(lines: list[str]) -> list[tuple[int, str]]:
             score += 2
         if 4 <= len(title) <= UNLABELED_TITLE_MAX_LENGTH:
             score += 1
+        # Prefer ed2k filenames over message headers so each ed2k link gets
+        # its own episode-specific title (e.g. "Show.S01E02.mp4" instead of
+        # the shared "Show S01E01-E08 (完结)" header).
+        if ED2K_FILENAME_RE.match(line):
+            score += 3
         scored.append((score, title[:120]))
     return scored
 
