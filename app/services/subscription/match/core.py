@@ -15,7 +15,16 @@ from app.services.types import SearchResult
 
 
 def result_matches_subscription(subscription: dict, result: SearchResult, *extra_texts: str) -> bool:
-    text = _subscription_match_text(result, *extra_texts)
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, match against filename (title) only, ignore context
+    # which usually contains the full pack header that may not match.
+    # Each ed2k line carries its own episode info in the filename.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        text = str(getattr(result, "title") or "").strip()
+        if extra_texts:
+            text += "\n" + "\n".join(str(t) for t in extra_texts if t)
+    else:
+        text = _subscription_match_text(result, *extra_texts)
     if not text:
         return False
     raw_haystack = text.casefold()

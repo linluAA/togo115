@@ -32,7 +32,14 @@ def _is_pack_result_text(text: str) -> bool:
 
 def _quality_rule_skip_reason(subscription: dict, result: SearchResult, *extra_texts: str) -> str:
     rules = normalize_quality_rules(subscription.get("quality_rules"))
-    text = result_text(result, *extra_texts)
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, check quality against filename (title) only.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        text = str(getattr(result, "title") or "").strip()
+        if extra_texts:
+            text += "\n" + "\n".join(str(t) for t in extra_texts if t)
+    else:
+        text = result_text(result, *extra_texts)
     exclude_words = rules.get("exclude_keywords") or []
     if exclude_words and _text_contains_any(text, exclude_words):
         return "命中排除词"

@@ -134,7 +134,12 @@ def fallback_candidate_sort_key(subscription: dict | None, result: SearchResult)
 
 def _full_pack_title_bonus(result: SearchResult) -> int:
     """Prefer explicit full-series/pack titles over bare titles or partial updates."""
-    text = result_text(result)
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, check pack info from filename (title) only.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        text = str(getattr(result, "title") or "").strip()
+    else:
+        text = result_text(result)
     if not text:
         return 0
     try:
@@ -155,9 +160,15 @@ def _full_pack_title_bonus(result: SearchResult) -> int:
 def _quality_preference_score(subscription: dict | None, result: SearchResult) -> int:
     if not subscription:
         return 0
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, check quality against filename (title) only.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        text = str(getattr(result, "title") or "").strip()
+    else:
+        text = result_text(result)
     rules = normalize_quality_rules(subscription.get("quality_rules"))
     preferred_quality = rules.get("preferred_quality") or []
-    if preferred_quality and _text_contains_any(result_text(result), preferred_quality):
+    if preferred_quality and _text_contains_any(text, preferred_quality):
         return 1
     if not _quality_rule_skip_reason(subscription, result):
         return 0
