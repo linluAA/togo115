@@ -136,7 +136,13 @@ def result_matches_missing_episodes(subscription: dict, result: SearchResult, *e
         return not bool(subscription.get("in_library"))
     if subscription.get("emby_snapshot_failed"):
         return True
-    text = result_text(result, *extra_texts)
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, parse episode from filename (title) only, ignore the
+    # message header in context which usually carries the full pack range.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        text = getattr(result, "title")
+    else:
+        text = result_text(result, *extra_texts)
     episodes = episode_keys_from_text_for_subscription(subscription, text)
     owned = _owned_episode_keys(subscription)
     if episodes and owned and episodes.issubset(owned):

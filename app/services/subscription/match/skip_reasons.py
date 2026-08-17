@@ -69,7 +69,15 @@ def _episode_skip_reason(subscription: dict, result: SearchResult, *extra_texts:
     missing = missing_episode_keys(subscription)
     if not missing:
         return "订阅已完整入库"
-    episodes = episode_keys_from_text_for_subscription(subscription, result_text(result, *extra_texts))
+    url = getattr(result, "url", "") or ""
+    # For ed2k links, parse episode from filename (title) only, ignore the
+    # message header in context which usually carries the full pack range
+    # (e.g. S01E01-E08) and causes all links to be treated as covering the
+    # same range, leading to all except the first being skipped.
+    if "ed2k://" in url.casefold() and getattr(result, "title", None):
+        episodes = episode_keys_from_text_for_subscription(subscription, getattr(result, "title"))
+    else:
+        episodes = episode_keys_from_text_for_subscription(subscription, result_text(result, *extra_texts))
     if not episodes:
         return "未识别到集数"
     if not (episodes & missing):
