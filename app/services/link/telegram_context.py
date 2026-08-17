@@ -122,9 +122,12 @@ def _metadata_field_line(line: str | None) -> bool:
 def context_for_ed2k_link(text: str | None, link: str) -> str:
     """Return the text segment around an ed2k link for title extraction.
 
-    ed2k links typically appear one per line in Telegraph pages.
-    Returns the link line plus one preceding line (which often carries
-    the episode/title info).
+    Returns only the link line itself so that title extraction always
+    derives the episode from the link's own filename.  Including the
+    preceding line is problematic when multiple ed2k links appear in
+    the same message — the preceding line is the previous ed2k link,
+    which causes every subsequent link to inherit the wrong filename
+    as its title, leading to off-by-one episode parsing.
     """
     message = text or ""
     if not message:
@@ -132,9 +135,7 @@ def context_for_ed2k_link(text: str | None, link: str) -> str:
     lines = message.splitlines()
     for i, line in enumerate(lines):
         if link in line:
-            start = max(0, i - 1)
-            end = min(len(lines), i + 2)
-            return "\n".join(lines[start:end])
+            return line
     # Fallback: return surrounding text
     position = message.find(link)
     if position < 0:
