@@ -4,6 +4,7 @@ from typing import Any
 
 from app.db import add_log
 from app.services.subscription.search.discovery import search_fallback_sources, search_telegram_history
+from app.services.subscription.search.ed2k import search_and_attach_ed2k
 from app.services.adapters.telegram.models import TelegramSearchSharedState
 from app.services.subscription.match.matching import subscription_search_title
 from app.services.subscription.search.selection import (
@@ -16,6 +17,7 @@ from app.services.subscription.search.selection import (
 
 
 async def _search_telegram_first(subscription: dict, incremental_telegram: bool) -> tuple[list[dict], list, dict[str, Any]]:
+    """Search Telegram for 115 share links (fast + full) and ed2k links (separate)."""
     search_title = subscription_search_title(subscription)
     shared_state = TelegramSearchSharedState()
     if not incremental_telegram:
@@ -27,16 +29,10 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
         )
         if created:
             # Fast search returns at most 1 result (TELEGRAM_FAST_RETURN_TARGET=1).
-            # For single-episode resources like ed2k links, this means only the
-            # first episode gets pushed.  When the subscription still has missing
-            # episodes, continue to the full search to find the remaining ones.
+            # When the subscription still has missing episodes, continue to the full
+            # search to find 115 share packs that the fast stage may have missed.
             if not _subscription_has_missing_episodes(subscription):
                 return created, matches, summary
-            # Clear seen message IDs AND seen URLs so the full search can
-            # re-process all messages and extract every ed2k link, not just
-            # the one that the fast search returned.  The database-level
-            # duplicate check in attach_telegram_results prevents re-saving
-            # the same resource.
             shared_state.seen_message_ids.clear()
             shared_state.seen_urls.clear()
             add_log("info",
@@ -68,11 +64,7 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
         if summary.get("from_index") and not summary.get("created"):
             shared_state.force_remote = True
             shared_state.set_preferred_sources_from_results(matches or [])
-            # If attach never saw matched results, fall back to any recent index hits
-            # recorded in shared state via seen sources is unavailable; prefer full
-            # force_remote across all dialogs only when no preferred source known.
             if not shared_state.preferred_sources:
-                # matches empty: use summary samples not available; keep force_remote global.
                 pass
             add_log(
                 "debug",
@@ -84,25 +76,41 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
                     "force_remote": True,
                 },
             )
-    add_log("debug",
-        "subscription",
-        "TG 即将开始完整搜索",
-        {
-            "id": subscription.get("id"),
-            "title": subscription.get("title"),
-            "seen_urls_count": len(shared_state.seen_urls),
-            "seen_message_ids_count": sum(len(v) for v in shared_state.seen_message_ids.values()),
-            "force_remote": shared_state.force_remote,
-            "preferred_sources": list(shared_state.preferred_sources),
-        },
-    )
-    return await _run_telegram_search_stage(
+    # ── 115 share full search ──────────────────────────────────────
+    _created, _matches, _summary = await _run_telegram_search_stage(
         subscription,
         search_title,
         fast=False,
         incremental=incremental_telegram,
         shared_state=shared_state,
     )
+    created = list(_created or [])
+    matches = list(_matches or [])
+    summary = dict(_summary or {})
+
+    # ── ed2k search (independent, no 1-result limit) ───────────────
+    ed2k_created, ed2k_matches, ed2k_summary = await search_and_attach_ed2k(
+        None, subscription, search_title,
+    )
+    if ed2k_created:
+        created.extend(ed2k_created)
+        matches.extend(ed2k_matches)
+        summary["created"] = (summary.get("created") or 0) + len(ed2k_created)
+        summary["raw_matched"] = (summary.get("raw_matched") or 0) + len(ed2k_matches)
+        summary["duplicates"] = (summary.get("duplicates") or 0) + ed2k_summary.get("duplicates", 0)
+        add_log("info",
+            "subscription",
+            "TG 搜索完成（含独立 ed2k 搜索）",
+            {
+                "id": subscription.get("id"),
+                "title": subscription.get("title"),
+                "115_created": len(_created or []),
+                "ed2k_created": len(ed2k_created),
+                "total_created": len(created),
+            },
+        )
+
+    return created, matches, summary
 
 
 async def _run_telegram_search_stage(
