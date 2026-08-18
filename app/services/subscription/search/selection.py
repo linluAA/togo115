@@ -61,6 +61,17 @@ async def attach_telegram_results(
     duplicate_count = 0
     save_failed_count = 0
 
+    add_log("debug",
+        "subscription",
+        "TG attach_telegram_results 开始处理",
+        {
+            "id": subscription_id,
+            "title": subscription.get("title"),
+            "raw_matched": len(raw_matched),
+            "ordered": len(ordered),
+        },
+    )
+
     with db() as conn:
         existing_rows = existing_resource_rows(conn, subscription_id)
         covered_missing: set[tuple[int, int]] = set()
@@ -69,6 +80,16 @@ async def attach_telegram_results(
             if covered_missing and _result_missing_already_covered(
                 subscription, result, covered_missing, bare_pack_saved=bare_pack_saved
             ):
+                add_log("debug",
+                    "subscription",
+                    "TG 结果已被覆盖，跳过",
+                    {
+                        "id": subscription_id,
+                        "url": str(getattr(result, "url", "") or "")[:160],
+                        "title": str(getattr(result, "title", "") or "")[:120],
+                        "covered_missing": [f"{s}x{e}" for s, e in sorted(covered_missing)],
+                    },
+                )
                 continue
             outcome = _save_telegram_result(conn, subscription, result, existing_rows)
             if outcome == "created":

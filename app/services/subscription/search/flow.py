@@ -45,6 +45,8 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
                     "title": subscription.get("title"),
                     "created": len(created),
                     "missing": _subscription_has_missing_episodes(subscription),
+                    "seen_urls_count": len(shared_state.seen_urls),
+                    "seen_message_ids_count": sum(len(v) for v in shared_state.seen_message_ids.values()),
                 },
             )
         elif _telegram_should_skip_full_after_fast(summary, subscription):
@@ -82,6 +84,18 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
                     "force_remote": True,
                 },
             )
+    add_log("debug",
+        "subscription",
+        "TG 即将开始完整搜索",
+        {
+            "id": subscription.get("id"),
+            "title": subscription.get("title"),
+            "seen_urls_count": len(shared_state.seen_urls),
+            "seen_message_ids_count": sum(len(v) for v in shared_state.seen_message_ids.values()),
+            "force_remote": shared_state.force_remote,
+            "preferred_sources": list(shared_state.preferred_sources),
+        },
+    )
     return await _run_telegram_search_stage(
         subscription,
         search_title,

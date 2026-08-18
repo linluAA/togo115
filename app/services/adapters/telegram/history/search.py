@@ -147,7 +147,22 @@ class TelegramHistorySearchMixin(TelegramDialogSearchMixin, TelegramFastSearchMi
             3,
         )
 
+        before_remember = len(all_results)
         results = self._dedupe_results(state.remember_results(all_results))
+        if before_remember > 0:
+            add_log("debug",
+                "telegram",
+                "TG 完整搜索 remember_results 过滤统计",
+                {
+                    "title": title,
+                    "before": before_remember,
+                    "after": len(results),
+                    "indexed": len(indexed_results),
+                    "remote": len(remote_results),
+                    "seen_urls": len(state.seen_urls),
+                    "seen_message_ids": sum(len(v) for v in state.seen_message_ids.values()),
+                },
+            )
         payload = {
             "title": title,
             "count": len(results),

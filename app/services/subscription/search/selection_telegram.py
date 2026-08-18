@@ -9,6 +9,17 @@ from app.services.subscription.resource.ops import insert_resource_safely, resou
 
 def _save_telegram_result(conn, subscription: dict, result: SearchResult, existing_rows: list[dict[str, Any]]) -> str:
     subscription_id = int(subscription["id"])
+    add_log("debug",
+        "subscription",
+        "TG 尝试保存资源",
+        {
+            "id": subscription_id,
+            "url": str(getattr(result, "url", "") or "")[:160],
+            "title": str(getattr(result, "title", "") or "")[:120],
+            "source": str(getattr(result, "source", "") or "")[:80],
+            "message_id": str(getattr(result, "message_id", "") or ""),
+        },
+    )
     duplicate_reason = resource_already_exists(conn, subscription_id, result, subscription, existing_rows)
     if duplicate_reason:
         add_log(
