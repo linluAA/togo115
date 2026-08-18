@@ -26,10 +26,27 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
             shared_state=shared_state,
         )
         if created:
-            return created, matches, summary
-        # Fast stage already resolved the library state for this subscription.
-        # Skip full TG search when there is nothing new to fetch remotely.
-        if _telegram_should_skip_full_after_fast(summary, subscription):
+            # Fast search returns at most 1 result (TELEGRAM_FAST_RETURN_TARGET=1).
+            # For single-episode resources like ed2k links, this means only the
+            # first episode gets pushed.  When the subscription still has missing
+            # episodes, continue to the full search to find the remaining ones.
+            if not _subscription_has_missing_episodes(subscription):
+                return created, matches, summary
+            # Clear seen message IDs so the full search can re-process
+            # messages that the fast search only partially extracted.
+            # seen_urls and dialog_hit_scores are preserved for dedup and ranking.
+            shared_state.seen_message_ids.clear()
+            add_log("debug",
+                "subscription",
+                "TG 快速搜索已创建资源但仍有缺失剧集，继续完整搜索",
+                {
+                    "id": subscription.get("id"),
+                    "title": subscription.get("title"),
+                    "created": len(created),
+                },
+            )
+            # Skip the "skip full" checks below since we need to find more episodes.
+        elif _telegram_should_skip_full_after_fast(summary, subscription):
             add_log("debug",
                 "subscription",
                 "TG 快速搜索已足够，跳过完整历史搜索",
@@ -42,7 +59,7 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
                 },
             )
             return created, matches, summary
-        if summary.get("raw_matched") and not _telegram_summary_needs_full_retry(summary, subscription):
+        elif summary.get("raw_matched") and not _telegram_summary_needs_full_retry(summary, subscription):
             return created, matches, summary
         # Targeted remote recheck only for sources that produced index hits.
         if summary.get("from_index") and not summary.get("created"):

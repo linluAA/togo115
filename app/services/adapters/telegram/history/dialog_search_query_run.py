@@ -41,11 +41,13 @@ def _elapsed_ms(start: float) -> int:
 def _cached_results_matching_query(results: list[SearchResult], query: str) -> list[SearchResult]:
     accepted: list[SearchResult] = []
     for result in results:
+        url = str(getattr(result, "url", "") or "")
+        is_ed2k = "ed2k://" in url.casefold()
         context = str(getattr(result, "context", "") or getattr(result, "title", "") or "")
-        if not local_text_matches_query(context, query):
+        if not is_ed2k and not local_text_matches_query(context, query):
             continue
         title = str(getattr(result, "title", "") or "")
-        if title and not title.startswith("Telegram ") and not local_text_matches_query(title, query):
+        if title and not title.startswith("Telegram ") and not is_ed2k and not local_text_matches_query(title, query):
             continue
         accepted.append(result)
     return accepted
