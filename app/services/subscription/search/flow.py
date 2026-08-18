@@ -32,12 +32,14 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
             # episodes, continue to the full search to find the remaining ones.
             if not _subscription_has_missing_episodes(subscription):
                 return created, matches, summary
-            # Clear seen message IDs so the full search can re-process
-            # messages that the fast search only partially extracted.
-            # seen_urls and dialog_hit_scores are preserved for dedup and ranking.
+            # Clear seen message IDs AND seen URLs so the full search can
+            # re-process all messages and extract every ed2k link, not just
+            # the one that the fast search returned.  The database-level
+            # duplicate check in attach_telegram_results prevents re-saving
+            # the same resource.
             shared_state.seen_message_ids.clear()
-            # Skip the "skip full" checks below since we need to find more episodes.
-            add_log("debug",
+            shared_state.seen_urls.clear()
+            add_log("info",
                 "subscription",
                 "TG 快速搜索已创建资源，继续完整搜索寻找剩余剧集",
                 {
@@ -45,8 +47,6 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
                     "title": subscription.get("title"),
                     "created": len(created),
                     "missing": _subscription_has_missing_episodes(subscription),
-                    "seen_urls_count": len(shared_state.seen_urls),
-                    "seen_message_ids_count": sum(len(v) for v in shared_state.seen_message_ids.values()),
                 },
             )
         elif _telegram_should_skip_full_after_fast(summary, subscription):
