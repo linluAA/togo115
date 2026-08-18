@@ -36,16 +36,17 @@ async def _search_telegram_first(subscription: dict, incremental_telegram: bool)
             # messages that the fast search only partially extracted.
             # seen_urls and dialog_hit_scores are preserved for dedup and ranking.
             shared_state.seen_message_ids.clear()
+            # Skip the "skip full" checks below since we need to find more episodes.
             add_log("debug",
                 "subscription",
-                "TG 快速搜索已创建资源但仍有缺失剧集，继续完整搜索",
+                "TG 快速搜索已创建资源，继续完整搜索寻找剩余剧集",
                 {
                     "id": subscription.get("id"),
                     "title": subscription.get("title"),
                     "created": len(created),
+                    "missing": _subscription_has_missing_episodes(subscription),
                 },
             )
-            # Skip the "skip full" checks below since we need to find more episodes.
         elif _telegram_should_skip_full_after_fast(summary, subscription):
             add_log("debug",
                 "subscription",
@@ -109,7 +110,30 @@ async def _run_telegram_search_stage(
     # Remember which dialogs produced index hits for later targeted recheck.
     if shared_state is not None and telegram_results:
         shared_state.set_preferred_sources_from_results(telegram_results)
+    if not fast and telegram_results:
+        add_log("debug",
+            "subscription",
+            "TG 完整搜索已提取到资源",
+            {
+                "id": subscription.get("id"),
+                "title": subscription.get("title"),
+                "count": len(telegram_results),
+            },
+        )
     created, telegram_matches, summary = await attach_telegram_results(None, subscription, telegram_results)
+    if not fast:
+        add_log("debug",
+            "subscription",
+            "TG 完整搜索结果处理完成",
+            {
+                "id": subscription.get("id"),
+                "title": subscription.get("title"),
+                "raw": len(telegram_results),
+                "matched": len(telegram_matches),
+                "created": len(created),
+                "duplicates": summary.get("duplicates", 0),
+            },
+        )
     _log_telegram_stage_result(subscription, created, telegram_matches, summary, fast=fast)
     return created, telegram_matches, summary
 
