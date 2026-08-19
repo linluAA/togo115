@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Callable
 
 from app.db import add_log, db, row_to_dict, utc_now
@@ -20,6 +21,12 @@ from app.services.subscription.delivery.state import (
 from app.services.subscription.resource.guard import SKIP_REASONS, resource_allowed_for_subscription
 from app.services.resource_queries import invalidate_recent_resources_cache
 from app.services.subscription.resource.resources import resource_dedupe_key
+
+# Maximum time to wait for a single delivery attempt before marking it as
+# timed out.  Long-running transfers (115 share) or offline downloads (ed2k,
+# magnet) can hang indefinitely; the timeout prevents resources from being
+# stuck in "pending" status forever.
+DELIVERY_TIMEOUT_SECONDS = 300
 
 
 
@@ -140,14 +147,26 @@ async def _perform_delivery(
     pan115_adapter_cls: type,
     telegram_bot_adapter_cls: type,
 ) -> tuple[bool, str]:
+    url = resource["url"] or ""
     try:
-        return await deliver_resource_url(resource, delivery_mode, pan115_adapter_cls, telegram_bot_adapter_cls)
+        return await asyncio.wait_for(
+            deliver_resource_url(resource, delivery_mode, pan115_adapter_cls, telegram_bot_adapter_cls),
+            timeout=DELIVERY_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        add_log(
+            "warning",
+            "delivery",
+            "资源投递超时",
+            {"resource_id": resource_id, "mode": delivery_mode, "url": url, "timeout": DELIVERY_TIMEOUT_SECONDS},
+        )
+        return False, f"投递超时（{DELIVERY_TIMEOUT_SECONDS} 秒）"
     except Exception as exc:
         add_log(
             "error",
             "delivery",
             "资源投递失败，已记录错误",
-            {"resource_id": resource_id, "mode": delivery_mode, "url": resource["url"] or "", "error": str(exc)},
+            {"resource_id": resource_id, "mode": delivery_mode, "url": url, "error": str(exc)},
         )
         return False, str(exc)
 

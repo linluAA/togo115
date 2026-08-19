@@ -21,6 +21,44 @@ def list_failed_resources(limit: int = 100) -> list[dict]:
         ).fetchall()
     return [row_to_dict(row) or {} for row in rows]
 
+
+def list_stuck_pending_resources(subscription_id: int | None = None, limit: int = 50) -> list[dict]:
+    """Return resources stuck in 'pending' status for over 10 minutes.
+
+    These are resources whose delivery was never completed (e.g. the
+    delivery call timed out without updating the status, or the process
+    died before the status was updated).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+    with db() as conn:
+        if subscription_id:
+            rows = conn.execute(
+                """
+                SELECT r.*, s.title AS subscription_title, s.poster_url AS subscription_poster_url
+                FROM resources r
+                JOIN subscriptions s ON s.id = r.subscription_id
+                WHERE r.status = 'pending' AND r.created_at < ? AND r.subscription_id = ?
+                ORDER BY r.created_at DESC
+                LIMIT ?
+                """,
+                (cutoff, subscription_id, max(1, min(int(limit or 50), 200))),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT r.*, s.title AS subscription_title, s.poster_url AS subscription_poster_url
+                FROM resources r
+                JOIN subscriptions s ON s.id = r.subscription_id
+                WHERE r.status = 'pending' AND r.created_at < ?
+                ORDER BY r.created_at DESC
+                LIMIT ?
+                """,
+                (cutoff, max(1, min(int(limit or 50), 200))),
+            ).fetchall()
+    return [row_to_dict(row) or {} for row in rows]
+
 async def retry_failed_resources(limit: int, deliver: Callable[[int], Any]) -> dict:
     """Retry failed deliveries with classification-aware selection and soft backoff."""
     candidates = select_retryable_failed_resources(limit)

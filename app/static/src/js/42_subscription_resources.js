@@ -82,10 +82,11 @@ function resourceTable() {
         const status = resourceStatusLabel(item.status);
         const statusClass = resourceStatusClass(item.status);
         const url = String(item.url || "");
-        const checked = state.selectedResourceIds.has(Number(item.id)) ? "checked" : "";
+        const groupIds = item.group_ids && item.group_ids.length > 1 ? item.group_ids : [item.id];
+        const checked = groupIds.some(id => state.selectedResourceIds.has(Number(id))) ? "checked" : "";
         return `<details class="resource-item">
           <summary>
-            ${state.resourceDeleteMode ? `<label class="resource-select" onclick="event.stopPropagation()"><input type="checkbox" data-select-resource="${item.id}" ${checked} /><span></span></label>` : ""}
+            ${state.resourceDeleteMode ? `<label class="resource-select" onclick="event.stopPropagation()"><input type="checkbox" data-select-resource="${groupIds.join(",")}" ${checked} /><span></span></label>` : ""}
             <span class="resource-source">${resourceSourceHtml(item.source)}</span>
             <span class="resource-title-cell"><strong>${escapeHtml(title)}</strong>${groupCount > 1 ? `<span class="resource-group-count">${groupCount}</span>` : ""}</span>
             <span class="resource-status ${statusClass}">${escapeHtml(status)}</span>

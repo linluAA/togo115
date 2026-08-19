@@ -206,7 +206,7 @@ function bindSubscriptionEvents() {
 	  $("#clearResources")?.addEventListener("click", async () => {
 	    if (!confirm("确认清空所有资源？此操作不可撤销。")) return;
 	    try {
-	      await api("/api/resources", { method: "DELETE" });
+	      await api("/api/resources/clear", { method: "POST" });
 	      toast("已清空所有资源");
 	      state.resourceDeleteMode = false;
 	      state.selectedResourceIds = new Set();
@@ -221,11 +221,17 @@ function bindSubscriptionEvents() {
 	    renderSubscriptions();
 	  });
 	  document.querySelectorAll("[data-select-resource]").forEach((cb) => cb.addEventListener("change", (event) => {
-	    const id = Number(event.currentTarget.dataset.selectResource);
-	    if (!id) return;
-	    if (event.currentTarget.checked) state.selectedResourceIds.add(id);
-	    else state.selectedResourceIds.delete(id);
-	  }));
+          const raw = event.currentTarget.dataset.selectResource || "";
+          const ids = raw.split(",").map(Number).filter(Boolean);
+          if (!ids.length) return;
+          ids.forEach(id => {
+            if (event.currentTarget.checked) state.selectedResourceIds.add(id);
+            else state.selectedResourceIds.delete(id);
+          });
+          // Update the toolbar counter display.
+          const counter = document.querySelector(".resource-toolbar span");
+          if (counter) counter.textContent = `已选 ${state.selectedResourceIds.size} 条`;
+        }));
 	}
 
 async function editQualityRules(subscription) {

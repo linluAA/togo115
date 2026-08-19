@@ -6,6 +6,7 @@ from typing import Any
 from app.db import add_log, db, utc_now
 from app.services.subscription.crud.service import get_subscription
 from app.services.subscription.delivery.service import deliver_resource
+from app.services.subscription.delivery.retry import list_stuck_pending_resources
 from app.services.subscription.episode.summary import subscription_episode_snapshot
 from app.services.subscription.episode.parser import _all_tmdb_episode_keys, missing_episode_keys
 from app.services.subscription.library.service import mark_completed_subscription, subscription_should_hide, enrich_subscription_with_library
@@ -50,6 +51,11 @@ async def search_and_attach_resources(
                 },
             )
             return []
+        
+        # Retry any resources stuck in "pending" status for over 10 minutes.
+        # These are resources from previous runs whose delivery timed out
+        # or was interrupted before the status was updated.
+        _retry_stuck_pending_resources(subscription_id)
 
         created, telegram_matches, telegram_summary = await _search_telegram_first(
             subscription, incremental_telegram
@@ -157,6 +163,39 @@ def _mark_resource_failed_if_pending(resource_id: int, error: str) -> None:
             """,
             (error[:500], utc_now(), resource_id),
         )
+
+
+def _retry_stuck_pending_resources(subscription_id: int) -> None:
+    """Mark resources stuck in 'pending' for over 10 minutes as 'failed'.
+
+    This allows the normal retry mechanism (``retry_failed_resources``) to
+    pick them up on the next retry cycle.  The timeout fix in
+    ``_perform_delivery`` prevents future resources from getting stuck, but
+    any resources that were already stuck before the fix need to be
+    unblocked by moving them out of "pending" so they can be retried.
+    """
+    stuck = list_stuck_pending_resources(subscription_id=subscription_id, limit=20)
+    if not stuck:
+        return
+    with db() as conn:
+        for item in stuck:
+            resource_id = int(item["id"])
+            conn.execute(
+                """
+                UPDATE resources
+                SET status = 'failed',
+                    last_error = '资源投递卡住（pending 超时），已标记为失败等待重试',
+                    updated_at = ?
+                WHERE id = ? AND status = 'pending'
+                """,
+                (utc_now(), resource_id),
+            )
+    add_log(
+        "info",
+        "subscription",
+        "发现卡住的待处理资源，已标记为失败等待重试",
+        {"subscription_id": subscription_id, "count": len(stuck)},
+    )
 
 
 from app.services.subscription.attach.service import attach_results_to_matching_subscriptions, refresh_rss_sources

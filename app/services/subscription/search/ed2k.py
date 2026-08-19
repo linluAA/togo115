@@ -11,12 +11,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.db import add_log, db, utc_now
+from app.db import add_log, db, flush_log_buffer, utc_now
 from app.services.subscription.search.discovery import search_telegram_history
 from app.services.adapters.telegram.models import TelegramSearchSharedState
 from app.services.sources.rss_torznab import SearchResult
 from app.services.subscription.match.matching import (
-    episode_keys_from_text_for_subscription,
+    episode_keys_from_text_for_subscription as _episode_keys_from_text,
     missing_episode_keys,
     subscription_search_title,
 )
@@ -45,26 +45,43 @@ def _ed2k_match_text(result: SearchResult) -> str:
     return str(getattr(result, "title", "") or "")
 
 
-def _resource_exists(
-    conn,
-    subscription_id: int,
-    result: SearchResult,
+def _resource_url_exists(
+    url: str,
     existing_rows: list[dict[str, Any]],
-) -> str | None:
-    """Check whether an ed2k resource already exists for this subscription.
+) -> bool:
+    """Check whether the URL already exists (by dedup key) in existing rows."""
+    candidate_key = _resource_dedupe_key(url)
+    if not candidate_key:
+        return False
+    for row in existing_rows:
+        if not _resource_status_is_effective(row.get("status")):
+            continue
+        if _resource_dedupe_key(row.get("url") or "") == candidate_key:
+            return True
+    return False
 
-    Uses the ed2k URL as the dedup key.  Unlike the 115 pipeline, we do
-    NOT perform title-similarity matching here — each ed2k link has a
-    unique URL per episode, and the filename already encodes the episode.
+
+def _build_covered_episodes(
+    subscription: dict,
+    existing_rows: list[dict[str, Any]],
+) -> set[tuple[int, int]]:
+    """Build a set of episode keys already covered by existing resources.
+
+    Parses episode numbers from the titles of existing resource rows.
+    This catches episodes that have 115-share resources but are not yet
+    reflected in the Emby-owned set used by ``missing_episode_keys``.
     """
-    candidate_key = _resource_dedupe_key(result.url)
-    if candidate_key:
-        for row in existing_rows:
-            if not _resource_status_is_effective(row.get("status")):
-                continue
-            if _resource_dedupe_key(row.get("url") or "") == candidate_key:
-                return f"same_url"
-    return None
+    covered: set[tuple[int, int]] = set()
+    for row in existing_rows:
+        if not _resource_status_is_effective(row.get("status")):
+            continue
+        title = str(row.get("title") or "")
+        if not title:
+            continue
+        row_episodes = _episode_keys_from_text(subscription, title)
+        if row_episodes:
+            covered.update(row_episodes)
+    return covered
 
 
 async def search_and_attach_ed2k(
@@ -144,30 +161,51 @@ async def search_and_attach_ed2k(
     matched: list[SearchResult] = []
     duplicate_count = 0
     save_failed_count = 0
+    skip_missing_count = 0
+    skip_no_title_count = 0
+    skip_validation_count = 0
 
     with db() as conn:
         existing_rows = _existing_resource_rows(conn, subscription_id)
+        # Build set of episode keys already covered by existing resources
+        # (e.g. from 115-share saves in the same run or previous runs).
+        covered_episodes = _build_covered_episodes(subscription, existing_rows)
+        # Emby-based missing episodes.
         missing = set(missing_episode_keys(subscription) or [])
+        # Combine: an episode is truly needed only when it's in the Emby
+        # missing range AND not already covered by a resource.
+        needed_episodes = missing - covered_episodes if missing else set()
+
         for result in ed2k_results:
             # Parse episode from filename (title) only.
             text = _ed2k_match_text(result)
-            episodes = episode_keys_from_text_for_subscription(subscription, text)
+            episodes = _episode_keys_from_text(subscription, text)
 
-            # Skip if episode is not missing.
-            if episodes and missing and not (episodes & missing):
+            # ── Skip if episode is not needed ─────────────────────
+            # If needed_episodes is empty (all episodes collected), skip everything.
+            # If no episodes parsed from filename, we can't match needed range, skip.
+            if (not needed_episodes) or (episodes and not (episodes & needed_episodes)):
+                if not text:
+                    skip_no_title_count += 1
+                else:
+                    skip_missing_count += 1
                 add_log("debug",
                     "subscription",
                     "ed2k 剧集不在缺集范围，跳过",
                     {
                         "id": subscription_id,
                         "title": text[:120],
-                        "episodes": [f"{s}x{e}" for s, e in sorted(episodes)],
+                        "episodes": [f"{s}x{e}" for s, e in sorted(episodes)] if episodes else [],
+                        "needed_count": len(needed_episodes),
+                        "missing_count": len(missing),
+                        "covered_count": len(covered_episodes),
                     },
                 )
                 continue
 
             # Validate the link.
             if not is_valid_download_link(result.url):
+                skip_validation_count += 1
                 add_log("debug",
                     "subscription",
                     "ed2k 链接格式无效，跳过",
@@ -180,8 +218,8 @@ async def search_and_attach_ed2k(
                 save_failed_count += 1
                 continue
 
-            # Duplicate check.
-            if _resource_exists(conn, subscription_id, result, existing_rows):
+            # URL duplicate check.
+            if _resource_url_exists(result.url, existing_rows):
                 duplicate_count += 1
                 matched.append(result)
                 continue
@@ -224,11 +262,32 @@ async def search_and_attach_ed2k(
         "save_failed": save_failed_count,
     }
 
+    add_log("info",
+        "subscription",
+        "ed2k 搜索统计",
+        {
+            "id": subscription_id,
+            "total_results": len(telegram_results),
+            "ed2k_found": len(ed2k_results),
+            "skip_no_title": skip_no_title_count,
+            "skip_missing": skip_missing_count,
+            "skip_validation": skip_validation_count,
+            "duplicates": duplicate_count,
+            "save_failed": save_failed_count,
+            "created": len(created),
+            "missing_count": len(missing),
+            "covered_episodes": len(covered_episodes),
+            "needed_episodes": len(needed_episodes),
+        },
+    )
+    flush_log_buffer()
+
     if created:
         add_log("info",
             "subscription",
             "发现新的 ed2k 资源链接",
             {"id": subscription_id, "count": len(created)},
         )
+        flush_log_buffer()
 
     return created, matched, summary
